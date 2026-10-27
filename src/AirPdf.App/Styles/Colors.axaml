@@ -1,0 +1,96 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="AppBackgroundBrush" Color="#F1EEE7" />
+      <SolidColorBrush x:Key="ToolbarBackgroundBrush" Color="#F9F7F2" />
+      <SolidColorBrush x:Key="StatusBackgroundBrush" Color="#F9F7F2" />
+      <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#EAE5DC" />
+      <SolidColorBrush x:Key="SurfaceBrush" Color="#FBFAF7" />
+      <SolidColorBrush x:Key="SurfaceAltBrush" Color="#F6F2EB" />
+      <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#EDE7DD" />
+      <SolidColorBrush x:Key="SurfacePressedBrush" Color="#E3DCCF" />
+      <SolidColorBrush x:Key="PagePlaceholderBrush" Color="#F3EFE7" />
+      <SolidColorBrush x:Key="BorderBrush" Color="#DED7CB" />
+      <SolidColorBrush x:Key="BorderStrongBrush" Color="#C7BEB0" />
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="#1D232C" />
+      <SolidColorBrush x:Key="TextSecondaryBrush" Color="#69645C" />
+      <SolidColorBrush x:Key="TextTertiaryBrush" Color="#9A9286" />
+      <SolidColorBrush x:Key="InverseTextBrush" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="AccentBrush" Color="#E3563B" />
+      <SolidColorBrush x:Key="AccentHoverBrush" Color="#C9482F" />
+      <SolidColorBrush x:Key="AccentSoftBrush" Color="#FBE4DD" />
+      <SolidColorBrush x:Key="AccentTextBrush" Color="#A93620" />
+      <SolidColorBrush x:Key="TealBrush" Color="#2E6F63" />
+      <SolidColorBrush x:Key="TealSoftBrush" Color="#E2EFEB" />
+      <SolidColorBrush x:Key="ShadowBrush" Color="#240E1720" />
+      <SolidColorBrush x:Key="PageShadowBrush" Color="#330E1720" />
+      <SolidColorBrush x:Key="OverlayScrimBrush" Color="#660D1117" />
+      <SolidColorBrush x:Key="SearchHighlightBrush" Color="#66F2C14E" />
+      <SolidColorBrush x:Key="SearchActiveBrush" Color="#CCF28C28" />
+      <SolidColorBrush x:Key="DangerBrush" Color="#B23A2B" />
+      <SolidColorBrush x:Key="DangerSoftBrush" Color="#F8E2DD" />
+
+      <Color x:Key="SystemAccentColor">#E3563B</Color>
+      <SolidColorBrush x:Key="SystemAccentColorBrush" Color="#E3563B" />
+      <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#1D232C" />
+      <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#69645C" />
+      <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#9A9286" />
+      <SolidColorBrush x:Key="TextControlBackground" Color="#FBFAF7" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="#DED7CB" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#C7BEB0" />
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#E3563B" />
+      <SolidColorBrush x:Key="TextControlForeground" Color="#1D232C" />
+    </ResourceDictionary>
+
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="AppBackgroundBrush" Color="#13171C" />
+      <SolidColorBrush x:Key="ToolbarBackgroundBrush" Color="#181D23" />
+      <SolidColorBrush x:Key="StatusBackgroundBrush" Color="#181D23" />
+      <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#171C22" />
+      <SolidColorBrush x:Key="SurfaceBrush" Color="#1C222A" />
+      <SolidColorBrush x:Key="SurfaceAltBrush" Color="#202831" />
+      <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#2A333D" />
+      <SolidColorBrush x:Key="SurfacePressedBrush" Color="#333E4A" />
+      <SolidColorBrush x:Key="PagePlaceholderBrush" Color="#242B34" />
+      <SolidColorBrush x:Key="BorderBrush" Color="#2C343E" />
+      <SolidColorBrush x:Key="BorderStrongBrush" Color="#43505D" />
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F3EFE6" />
+      <SolidColorBrush x:Key="TextSecondaryBrush" Color="#ABA49A" />
+      <SolidColorBrush x:Key="TextTertiaryBrush" Color="#7B756D" />
+      <SolidColorBrush x:Key="InverseTextBrush" Color="#13171C" />
+      <SolidColorBrush x:Key="AccentBrush" Color="#FF6B4E" />
+      <SolidColorBrush x:Key="AccentHoverBrush" Color="#FF8368" />
+      <SolidColorBrush x:Key="AccentSoftBrush" Color="#3A241F" />
+      <SolidColorBrush x:Key="AccentTextBrush" Color="#FF9E8A" />
+      <SolidColorBrush x:Key="TealBrush" Color="#69B3A4" />
+      <SolidColorBrush x:Key="TealSoftBrush" Color="#1E312E" />
+      <SolidColorBrush x:Key="ShadowBrush" Color="#66000000" />
+      <SolidColorBrush x:Key="PageShadowBrush" Color="#99000000" />
+      <SolidColorBrush x:Key="OverlayScrimBrush" Color="#99000000" />
+      <SolidColorBrush x:Key="SearchHighlightBrush" Color="#66F2C14E" />
+      <SolidColorBrush x:Key="SearchActiveBrush" Color="#CCFF9F43" />
+      <SolidColorBrush x:Key="DangerBrush" Color="#FF8E79" />
+      <SolidColorBrush x:Key="DangerSoftBrush" Color="#39221F" />
+
+      <Color x:Key="SystemAccentColor">#FF6B4E</Color>
+      <SolidColorBrush x:Key="SystemAccentColorBrush" Color="#FF6B4E" />
+      <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#F3EFE6" />
+      <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#ABA49A" />
+      <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#7B756D" />
+      <SolidColorBrush x:Key="TextControlBackground" Color="#1C222A" />
+      <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#202831" />
+      <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#202831" />
+      <SolidColorBrush x:Key="TextControlBorderBrush" Color="#2C343E" />
+      <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#43505D" />
+      <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#FF6B4E" />
+      <SolidColorBrush x:Key="TextControlForeground" Color="#F3EFE6" />
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+
+  <FontFamily x:Key="AppFontFamily">Inter, Segoe UI, Microsoft YaHei UI, Noto Sans CJK SC, PingFang SC, sans-serif</FontFamily>
+  <CornerRadius x:Key="CardCornerRadius">14</CornerRadius>
+  <CornerRadius x:Key="SmallCornerRadius">9</CornerRadius>
+</ResourceDictionary>

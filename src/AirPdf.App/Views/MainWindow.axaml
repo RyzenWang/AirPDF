@@ -1,0 +1,730 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:AirPdf.App.ViewModels"
+        xmlns:views="using:AirPdf.App.Views"
+        xmlns:controls="using:AirPdf.App.Controls"
+        x:Class="AirPdf.App.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="{Binding WindowTitle}"
+        Icon="avares://AirPdf/Assets/airpdf.ico"
+        Width="1240"
+        Height="860"
+        MinWidth="920"
+        MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AppBackgroundBrush}">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <!-- Top bar -->
+    <Border Grid.Row="0"
+            Background="{DynamicResource ToolbarBackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="14,9">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <Border Width="31" Height="31" CornerRadius="8" Background="{DynamicResource AccentBrush}">
+            <Path Data="{StaticResource IconPlane}"
+                  Fill="White"
+                  Stretch="Uniform"
+                  Width="18"
+                  Height="18"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center" />
+          </Border>
+          <TextBlock Text="AirPDF"
+                     FontSize="15.5"
+                     FontWeight="Bold"
+                     VerticalAlignment="Center"
+                     LetterSpacing="-0.2" />
+          <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="4,0" VerticalAlignment="Center" />
+          <Button Classes="soft" Command="{Binding OpenCommand}" ToolTip.Tip="Open a PDF (Ctrl+O)">
+            <StackPanel Orientation="Horizontal" Spacing="7">
+              <Path Classes="icon small"
+                    Data="{StaticResource IconFolderOpen}"
+                    Stroke="{DynamicResource AccentTextBrush}" />
+              <TextBlock Text="Open" FontWeight="SemiBold" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+
+        <StackPanel Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="5"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding IsDocumentOpen}">
+          <Button Classes="icon"
+                  Command="{Binding PreviousPageCommand}"
+                  IsEnabled="{Binding CanGoPrevious}"
+                  ToolTip.Tip="Previous page">
+            <Path Classes="icon" Data="{StaticResource IconChevronLeft}" />
+          </Button>
+          <Border Background="{DynamicResource SurfaceBrush}"
+                  BorderBrush="{DynamicResource BorderBrush}"
+                  BorderThickness="1"
+                  CornerRadius="8"
+                  Padding="2,0"
+                  Margin="2,0">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <TextBox x:Name="PageNumberBox"
+                       Classes="pageBox"
+                       Text="{Binding PageNumberInput, Mode=TwoWay}"
+                       KeyDown="OnPageNumberKeyDown"
+                       LostFocus="OnPageNumberLostFocus" />
+              <TextBlock Text="/"
+                         Foreground="{DynamicResource TextTertiaryBrush}"
+                         VerticalAlignment="Center"
+                         FontSize="11" />
+              <TextBlock Text="{Binding PageCount}"
+                         Foreground="{DynamicResource TextSecondaryBrush}"
+                         VerticalAlignment="Center"
+                         FontSize="11.5"
+                         FontWeight="SemiBold"
+                         MinWidth="22"
+                         Margin="4,0,5,0" />
+            </StackPanel>
+          </Border>
+          <Button Classes="icon"
+                  Command="{Binding NextPageCommand}"
+                  IsEnabled="{Binding CanGoNext}"
+                  ToolTip.Tip="Next page">
+            <Path Classes="icon" Data="{StaticResource IconChevronRight}" />
+          </Button>
+
+          <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="8,0" VerticalAlignment="Center" />
+
+          <Button Classes="zoom" Command="{Binding ZoomOutCommand}" ToolTip.Tip="Zoom out">
+            <Border Width="12" Height="1.5" CornerRadius="1" Background="{DynamicResource TextPrimaryBrush}" />
+          </Button>
+          <Button Classes="chip" Content="{Binding ZoomText}" Padding="9,5" MinWidth="58" ToolTip.Tip="Zoom preset">
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                <MenuItem Header="Fit width" Command="{Binding FitWidthCommand}" />
+                <MenuItem Header="Fit page" Command="{Binding FitPageCommand}" />
+                <MenuItem Header="Actual size — 100%" Command="{Binding ActualSizeCommand}" />
+                <MenuItem Header="50%" Command="{Binding SetZoomCommand}" CommandParameter="0.5" />
+                <MenuItem Header="75%" Command="{Binding SetZoomCommand}" CommandParameter="0.75" />
+                <MenuItem Header="125%" Command="{Binding SetZoomCommand}" CommandParameter="1.25" />
+                <MenuItem Header="150%" Command="{Binding SetZoomCommand}" CommandParameter="1.5" />
+                <MenuItem Header="200%" Command="{Binding SetZoomCommand}" CommandParameter="2" />
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+          <Button Classes="zoom" Command="{Binding ZoomInCommand}" ToolTip.Tip="Zoom in">
+            <Path Classes="icon small" Data="{StaticResource IconPlus}" />
+          </Button>
+          <Button Classes="icon" Command="{Binding FitWidthCommand}" ToolTip.Tip="Fit width">
+            <Path Classes="icon" Data="{StaticResource IconFitWidth}" />
+          </Button>
+          <Button Classes="icon" Command="{Binding FitPageCommand}" ToolTip.Tip="Fit page">
+            <Path Classes="icon" Data="{StaticResource IconFitPage}" />
+          </Button>
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+          <Button Classes="icon"
+                  Command="{Binding ToggleSearchCommand}"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  ToolTip.Tip="Find in document (Ctrl+F)">
+            <Path Classes="icon" Data="{StaticResource IconSearch}" />
+          </Button>
+          <Button Classes="icon"
+                  Command="{Binding ToggleSidebarCommand}"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  ToolTip.Tip="Toggle thumbnails">
+            <Path Classes="icon" Data="{StaticResource IconSidebar}" />
+          </Button>
+          <Button Classes="icon" Command="{Binding ToggleThemeCommand}" ToolTip.Tip="Toggle light and dark theme">
+            <Panel>
+              <Path Classes="icon" Data="{StaticResource IconMoon}" IsVisible="{Binding IsLightTheme}" />
+              <Path Classes="icon" Data="{StaticResource IconSun}" IsVisible="{Binding IsDarkTheme}" />
+            </Panel>
+          </Button>
+          <Button Classes="icon" IsVisible="{Binding IsDocumentOpen}" ToolTip.Tip="Document details">
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedRight">
+                <Border Width="326" Padding="14">
+                  <StackPanel Spacing="14">
+                    <StackPanel Spacing="3">
+                      <TextBlock Text="Document details" Classes="h3" />
+                      <TextBlock Text="{Binding FileName}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <ItemsControl ItemsSource="{Binding Metadata}">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:MetadataRow">
+                          <Grid ColumnDefinitions="92,*" Margin="0,0,0,7">
+                            <TextBlock Text="{Binding Label}" Classes="caption" />
+                            <TextBlock Grid.Column="1"
+                                       Text="{Binding Value}"
+                                       TextWrapping="Wrap"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource TextPrimaryBrush}" />
+                          </Grid>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Border>
+              </Flyout>
+            </Button.Flyout>
+            <Path Classes="icon" Data="{StaticResource IconInfo}" />
+          </Button>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- Body -->
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
+      <!-- Thumbnail / outline rail -->
+      <Border Grid.Column="0"
+              Width="252"
+              IsVisible="{Binding IsSidebarShown}"
+              Background="{DynamicResource SidebarBackgroundBrush}"
+              BorderBrush="{DynamicResource BorderBrush}"
+              BorderThickness="0,0,1,0">
+        <Grid RowDefinitions="Auto,*">
+          <Grid Margin="15,13,12,8" ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="8">
+              <TextBlock Text="NAVIGATE" Classes="eyebrow" />
+              <StackPanel Orientation="Horizontal" Spacing="2">
+                <Button Classes="tab"
+                        Classes.active="{Binding IsPagesTabSelected}"
+                        Content="Pages"
+                        Command="{Binding ShowPagesTabCommand}" />
+                <Button Classes="tab"
+                        Classes.active="{Binding IsContentsTabSelected}"
+                        Content="Contents"
+                        Command="{Binding ShowContentsTabCommand}" />
+              </StackPanel>
+            </StackPanel>
+            <Button Grid.Column="1"
+                    Classes="icon"
+                    Command="{Binding ToggleSidebarCommand}"
+                    ToolTip.Tip="Hide sidebar"
+                    VerticalAlignment="Top">
+              <Path Classes="icon small" Data="{StaticResource IconChevronLeft}" />
+            </Button>
+          </Grid>
+
+          <Grid Grid.Row="1">
+            <ListBox x:Name="ThumbnailList"
+                     Classes="thumbnailList"
+                     ItemsSource="{Binding Thumbnails}"
+                     IsVisible="{Binding IsPagesTabSelected}"
+                     SelectionChanged="OnThumbnailSelectionChanged">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:ThumbnailViewModel">
+                  <views:ThumbnailView />
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+
+            <Grid IsVisible="{Binding IsContentsTabSelected}">
+              <TreeView x:Name="OutlineTree"
+                        Classes="outlineTree"
+                        ItemsSource="{Binding Bookmarks}"
+                        Margin="8,2,8,16"
+                        SelectionChanged="OnOutlineSelectionChanged">
+                <TreeView.ItemTemplate>
+                  <TreeDataTemplate x:DataType="vm:BookmarkViewModel" ItemsSource="{Binding Children}">
+                    <Grid ColumnDefinitions="*,Auto" Height="29" Margin="0,1">
+                      <TextBlock Text="{Binding Title}"
+                                 FontSize="12.5"
+                                 TextTrimming="CharacterEllipsis"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1"
+                                 Text="{Binding PageLabel}"
+                                 Classes="pageNumber"
+                                 VerticalAlignment="Center"
+                                 Margin="8,0,3,0" />
+                    </Grid>
+                  </TreeDataTemplate>
+                </TreeView.ItemTemplate>
+              </TreeView>
+              <StackPanel IsVisible="{Binding HasNoBookmarks}"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Spacing="9"
+                          Margin="26">
+                <Border Width="42" Height="42" CornerRadius="11" Background="{DynamicResource SurfaceBrush}">
+                  <Path Classes="icon muted" Data="{StaticResource IconBook}" />
+                </Border>
+                <TextBlock Text="No outline in this PDF"
+                           Classes="caption"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center" />
+              </StackPanel>
+            </Grid>
+          </Grid>
+        </Grid>
+      </Border>
+
+      <!-- Reader canvas -->
+      <Grid Grid.Column="1" ClipToBounds="True">
+        <controls:PdfPageList x:Name="PagesList"
+                              ItemsSource="{Binding Pages}"
+                              IsVisible="{Binding IsDocumentOpen}"
+                              ViewerScrollChanged="OnPagesScrollChanged">
+          <controls:PdfPageList.ItemTemplate>
+            <DataTemplate x:DataType="vm:PageViewModel">
+              <views:PdfPageView Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}" />
+            </DataTemplate>
+          </controls:PdfPageList.ItemTemplate>
+        </controls:PdfPageList>
+
+        <!-- Welcome -->
+        <ScrollViewer IsVisible="{Binding IsWelcomeVisible}"
+                      HorizontalScrollBarVisibility="Disabled"
+                      VerticalScrollBarVisibility="Auto">
+          <Grid MaxWidth="1020"
+                MinHeight="560"
+                Margin="46,34"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                ColumnDefinitions="1.15*,0.85*">
+            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="0" Margin="0,0,36,0">
+              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,17">
+                <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="A FEATHER-LIGHT PDF READER" Classes="eyebrow" />
+              </StackPanel>
+
+              <TextBlock Text="Your PDFs," Classes="h1" />
+              <TextBlock Text="without the weight." Classes="h1" />
+
+              <TextBlock Text="Fast, quiet, and native on Windows, macOS, and Linux. No account, no clutter — just the page in front of you."
+                         Foreground="{DynamicResource TextSecondaryBrush}"
+                         FontSize="14"
+                         LineHeight="22"
+                         TextWrapping="Wrap"
+                         MaxWidth="490"
+                         Margin="0,16,0,26" />
+
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <Button Classes="primary" Command="{Binding OpenCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Path Data="{StaticResource IconFolderOpen}"
+                          Stroke="White"
+                          StrokeThickness="1.8"
+                          StrokeLineCap="Round"
+                          StrokeJoin="Round"
+                          Stretch="Uniform"
+                          Width="17"
+                          Height="17"
+                          VerticalAlignment="Center" />
+                    <TextBlock Text="Open a PDF" FontWeight="SemiBold" />
+                  </StackPanel>
+                </Button>
+                <Border Background="{DynamicResource SurfaceBrush}"
+                        BorderBrush="{DynamicResource BorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="11,0"
+                        VerticalAlignment="Stretch">
+                  <StackPanel Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+                    <TextBlock Text="Ctrl" Classes="caption" FontWeight="SemiBold" />
+                    <TextBlock Text="O" Classes="caption" FontWeight="SemiBold" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+
+              <TextBlock Text="PDFium  ·  .NET 10  ·  MIT licensed"
+                         Classes="caption"
+                         Margin="1,18,0,0" />
+
+              <StackPanel IsVisible="{Binding HasRecentFiles}" Margin="0,34,0,0" Spacing="9">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="RECENT" Classes="eyebrow" VerticalAlignment="Center" />
+                  <Button Grid.Column="1"
+                          Content="Clear"
+                          Classes="caption"
+                          Command="{Binding ClearRecentCommand}"
+                          Padding="7,2"
+                          MinHeight="24"
+                          Foreground="{DynamicResource TextTertiaryBrush}" />
+                </Grid>
+                <ItemsControl ItemsSource="{Binding RecentFiles}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:RecentFileViewModel">
+                      <Button Classes="recent" Command="{Binding OpenCommand}">
+                        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,1">
+                          <Border Width="32" Height="32"
+                                  CornerRadius="7"
+                                  Background="{DynamicResource SurfaceAltBrush}"
+                                  BorderBrush="{DynamicResource BorderBrush}"
+                                  BorderThickness="1"
+                                  VerticalAlignment="Center">
+                            <Path Classes="icon small muted" Data="{StaticResource IconFile}" />
+                          </Border>
+                          <StackPanel Grid.Column="1" Margin="10,0" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding FileName}"
+                                       FontSize="12.5"
+                                       FontWeight="SemiBold"
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding Directory}"
+                                       Classes="caption"
+                                       TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                          <TextBlock Grid.Column="2"
+                                     Text="{Binding LastOpenedText}"
+                                     Classes="caption tertiary"
+                                     VerticalAlignment="Center" />
+                        </Grid>
+                      </Button>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </StackPanel>
+
+            <!-- Paper stack artwork -->
+            <Viewbox Grid.Column="1"
+                     Stretch="Uniform"
+                     MaxWidth="370"
+                     HorizontalAlignment="Center"
+                     VerticalAlignment="Center">
+              <Grid Width="370"
+                    Height="414"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+              <Ellipse Width="265" Height="265"
+                       Fill="{DynamicResource AccentSoftBrush}"
+                       HorizontalAlignment="Right"
+                       VerticalAlignment="Top"
+                       Margin="0,22,8,0" />
+
+              <Border Width="190" Height="254"
+                      Background="#FCFAF6"
+                      BorderBrush="#E1D9CD"
+                      BorderThickness="1"
+                      CornerRadius="6"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Margin="14,46,0,0"
+                      RenderTransformOrigin="0.5,0.5"
+                      BoxShadow="0 14 34 0 #26000000">
+                <Border.RenderTransform>
+                  <RotateTransform Angle="-12" />
+                </Border.RenderTransform>
+                <StackPanel Margin="24,28" Spacing="8">
+                  <Border Height="6" Width="48" CornerRadius="3" Background="#E3563B" />
+                  <Border Height="4" Width="118" CornerRadius="2" Background="#D9D2C7" />
+                  <Border Height="4" Width="96" CornerRadius="2" Background="#E6DFD4" />
+                  <Border Height="4" Width="110" CornerRadius="2" Background="#E6DFD4" />
+                </StackPanel>
+              </Border>
+
+              <Border Width="206" Height="274"
+                      Background="#FBF8F2"
+                      BorderBrush="#DED5C7"
+                      BorderThickness="1"
+                      CornerRadius="6"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Margin="-6,22,0,0"
+                      RenderTransformOrigin="0.5,0.5"
+                      BoxShadow="0 16 38 0 #33000000">
+                <Border.RenderTransform>
+                  <RotateTransform Angle="7" />
+                </Border.RenderTransform>
+                <StackPanel Margin="26,32" Spacing="9">
+                  <TextBlock Text="AIRPDF / 01" FontSize="8.5" FontWeight="Bold" LetterSpacing="1.4" Foreground="#A83A27" />
+                  <Border Height="4" Width="122" CornerRadius="2" Background="#D7D0C5" Margin="0,5,0,0" />
+                  <Border Height="4" Width="98" CornerRadius="2" Background="#E8E0D4" />
+                  <Border Height="4" Width="116" CornerRadius="2" Background="#E8E0D4" />
+                </StackPanel>
+              </Border>
+
+              <Border Width="220" Height="294"
+                      Background="#FFFDF9"
+                      BorderBrush="#D9D0C2"
+                      BorderThickness="1"
+                      CornerRadius="6"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Margin="0,0,8,0"
+                      RenderTransformOrigin="0.5,0.5"
+                      BoxShadow="0 22 50 0 #40000000">
+                <Border.RenderTransform>
+                  <RotateTransform Angle="-2.5" />
+                </Border.RenderTransform>
+                <Grid Margin="26,28,26,24" RowDefinitions="Auto,Auto,*,Auto">
+                  <TextBlock Text="AIRPDF  /  READER"
+                             FontSize="8.5"
+                             FontWeight="Bold"
+                             LetterSpacing="1.4"
+                             Foreground="#B0442F" />
+                  <TextBlock Grid.Row="1"
+                             Text="Read without the noise."
+                             FontFamily="Georgia, Times New Roman, serif"
+                             FontSize="24"
+                             FontWeight="Bold"
+                             LineHeight="27"
+                             Foreground="#1D232C"
+                             TextWrapping="Wrap"
+                             Margin="0,16,0,0" />
+                  <StackPanel Grid.Row="2" Spacing="8" Margin="0,24,0,0">
+                    <Border Height="3.5" Width="148" CornerRadius="2" Background="#D8D0C4" />
+                    <Border Height="3.5" Width="162" CornerRadius="2" Background="#E5DDD1" />
+                    <Border Height="3.5" Width="126" CornerRadius="2" Background="#E5DDD1" />
+                    <Border Height="3.5" Width="152" CornerRadius="2" Background="#E5DDD1" />
+                  </StackPanel>
+                  <Grid Grid.Row="3" ColumnDefinitions="*,Auto" Margin="0,18,0,0">
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                      <Border Width="18" Height="18" CornerRadius="5" Background="#E3563B">
+                        <Path Data="{StaticResource IconPlane}"
+                              Fill="White"
+                              Width="10"
+                              Height="10"
+                              Stretch="Uniform"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center" />
+                      </Border>
+                      <TextBlock Text="AirPDF" FontSize="9" FontWeight="Bold" Foreground="#3B352E" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="2026" FontSize="8" Foreground="#A69D90" VerticalAlignment="Center" />
+                  </Grid>
+                </Grid>
+              </Border>
+              </Grid>
+            </Viewbox>
+          </Grid>
+        </ScrollViewer>
+
+        <!-- Busy -->
+        <Border IsVisible="{Binding IsBusy}"
+                Background="{DynamicResource OverlayScrimBrush}">
+          <Border Background="{DynamicResource SurfaceBrush}"
+                  BorderBrush="{DynamicResource BorderBrush}"
+                  BorderThickness="1"
+                  CornerRadius="14"
+                  Padding="26,22"
+                  Width="280"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  BoxShadow="0 18 48 0 #33000000">
+            <StackPanel Spacing="13">
+              <ProgressBar IsIndeterminate="True" Width="228" />
+              <TextBlock Text="{Binding BusyText}"
+                         Classes="caption"
+                         HorizontalAlignment="Center"
+                         TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+          </Border>
+        </Border>
+
+        <!-- Error banner -->
+        <Border IsVisible="{Binding HasError}"
+                Background="{DynamicResource DangerSoftBrush}"
+                BorderBrush="{DynamicResource DangerBrush}"
+                BorderThickness="1"
+                CornerRadius="10"
+                Padding="13,9"
+                MaxWidth="680"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Margin="20,16,20,0"
+                BoxShadow="0 10 28 0 #22000000">
+          <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="9">
+            <Path Classes="icon" Data="{StaticResource IconInfo}" Stroke="{DynamicResource DangerBrush}" VerticalAlignment="Top" Margin="0,1,0,0" />
+            <TextBlock Grid.Column="1"
+                       Text="{Binding ErrorMessage}"
+                       Foreground="{DynamicResource DangerBrush}"
+                       TextWrapping="Wrap"
+                       FontSize="12.5" />
+            <Button Grid.Column="2"
+                    Classes="icon"
+                    Width="26"
+                    Height="26"
+                    MinHeight="26"
+                    Command="{Binding DismissErrorCommand}"
+                    ToolTip.Tip="Dismiss">
+              <Path Data="{StaticResource IconClose}"
+                    Stroke="{DynamicResource DangerBrush}"
+                    StrokeThickness="1.8"
+                    StrokeLineCap="Round"
+                    Stretch="Uniform"
+                    Width="12"
+                    Height="12" />
+            </Button>
+          </Grid>
+        </Border>
+
+        <!-- Drop target -->
+        <Border IsVisible="{Binding IsDragOver}"
+                Background="#E6FBF4EE"
+                BorderBrush="{DynamicResource AccentBrush}"
+                BorderThickness="2"
+                CornerRadius="16"
+                Margin="22"
+                IsHitTestVisible="False">
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="13">
+            <Border Width="62" Height="62" CornerRadius="18" Background="{DynamicResource AccentSoftBrush}">
+              <Path Classes="icon accent" Data="{StaticResource IconFolderOpen}" Width="28" Height="28" />
+            </Border>
+            <TextBlock Text="Drop to open" Classes="h2" />
+            <TextBlock Text="Release the PDF anywhere in this window"
+                       Classes="caption" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- Search panel -->
+      <Border Grid.Column="1"
+              Width="342"
+              IsVisible="{Binding IsSearchOpen}"
+              HorizontalAlignment="Right"
+              Background="{DynamicResource SurfaceBrush}"
+              BorderBrush="{DynamicResource BorderBrush}"
+              BorderThickness="1,0,0,0"
+              BoxShadow="-14 0 36 0 #26000000">
+        <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+          <Grid Margin="16,14,12,8" ColumnDefinitions="*,Auto">
+            <StackPanel Spacing="2">
+              <TextBlock Text="Find in document" Classes="h3" />
+              <TextBlock Text="Searches the PDF text layer" Classes="caption" />
+            </StackPanel>
+            <Button Grid.Column="1"
+                    Classes="icon"
+                    Command="{Binding CloseSearchCommand}"
+                    ToolTip.Tip="Close search">
+              <Path Classes="icon small" Data="{StaticResource IconClose}" />
+            </Button>
+          </Grid>
+
+          <Grid Grid.Row="1" Margin="16,4,16,9" ColumnDefinitions="*,Auto" ColumnSpacing="7">
+            <Grid>
+              <TextBox x:Name="SearchBox"
+                       Classes="searchBox"
+                       Text="{Binding SearchQuery, Mode=TwoWay}"
+                       Watermark="Search this PDF…"
+                       KeyDown="OnSearchKeyDown" />
+              <Path Classes="icon small muted"
+                    Data="{StaticResource IconSearch}"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Center"
+                    Margin="11,0,0,0"
+                    IsHitTestVisible="False" />
+              <Button Classes="icon"
+                      Width="27"
+                      Height="27"
+                      MinHeight="27"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Center"
+                      Margin="0,0,3,0"
+                      Command="{Binding ClearSearchCommand}"
+                      IsVisible="{Binding HasSearchQuery}"
+                      ToolTip.Tip="Clear">
+                <Path Data="{StaticResource IconClose}"
+                      Stroke="{DynamicResource TextTertiaryBrush}"
+                      StrokeThickness="1.7"
+                      StrokeLineCap="Round"
+                      Stretch="Uniform"
+                      Width="11"
+                      Height="11" />
+              </Button>
+            </Grid>
+            <Button Grid.Column="1" Classes="soft" Command="{Binding SearchCommand}" Content="Find" MinWidth="58" />
+          </Grid>
+
+          <Grid Grid.Row="2" Margin="16,2,14,8" ColumnDefinitions="*,Auto">
+            <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+              <TextBlock Text="{Binding SearchSummary}" Classes="caption" />
+              <ProgressBar IsIndeterminate="True"
+                           Width="54"
+                           IsVisible="{Binding IsSearching}" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+              <Button Classes="zoom" Command="{Binding PreviousSearchResultCommand}" IsEnabled="{Binding HasSearchResults}" ToolTip.Tip="Previous match">
+                <Path Classes="icon small" Data="{StaticResource IconChevronLeft}" />
+              </Button>
+              <Button Classes="zoom" Command="{Binding NextSearchResultCommand}" IsEnabled="{Binding HasSearchResults}" ToolTip.Tip="Next match">
+                <Path Classes="icon small" Data="{StaticResource IconChevronRight}" />
+              </Button>
+            </StackPanel>
+          </Grid>
+
+          <Grid Grid.Row="3">
+            <ListBox Classes="searchResults"
+                     ItemsSource="{Binding SearchResults}"
+                     SelectedItem="{Binding SelectedSearchResult, Mode=TwoWay}"
+                     Margin="10,0,8,0">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:SearchResultViewModel">
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="{Binding PageLabel}"
+                               FontSize="9.5"
+                               FontWeight="Bold"
+                               LetterSpacing="1.1"
+                               Foreground="{DynamicResource AccentTextBrush}" />
+                    <TextBlock Text="{Binding Snippet}"
+                               FontSize="12"
+                               LineHeight="18"
+                               TextWrapping="Wrap"
+                               MaxLines="3"
+                               TextTrimming="CharacterEllipsis" />
+                  </StackPanel>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+
+            <StackPanel IsVisible="{Binding HasNoSearchResults}"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Spacing="9"
+                        Margin="24">
+              <Border Width="44" Height="44" CornerRadius="12" Background="{DynamicResource SurfaceAltBrush}">
+                <Path Classes="icon muted" Data="{StaticResource IconSearch}" />
+              </Border>
+              <TextBlock Text="No matches reached the page"
+                         FontWeight="SemiBold"
+                         HorizontalAlignment="Center" />
+              <TextBlock Text="Try a shorter word or a different spelling."
+                         Classes="caption"
+                         TextWrapping="Wrap"
+                         TextAlignment="Center"
+                         MaxWidth="220" />
+            </StackPanel>
+          </Grid>
+
+          <Border Grid.Row="4"
+                  BorderBrush="{DynamicResource BorderBrush}"
+                  BorderThickness="0,1,0,0"
+                  Padding="16,9">
+            <TextBlock Text="Enter to search  ·  Esc to close"
+                       Classes="caption tertiary"
+                       FontSize="10.5" />
+          </Border>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <!-- Status bar -->
+    <Border Grid.Row="2"
+            Height="30"
+            Background="{DynamicResource StatusBackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,1,0,0"
+            Padding="14,0">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+          <Ellipse Width="6" Height="6" Fill="{DynamicResource TealBrush}" />
+          <TextBlock Text="{Binding DocumentSubtitle}"
+                     Classes="caption"
+                     FontSize="11"
+                     VerticalAlignment="Center"
+                     TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <TextBlock Text="{Binding PageStatusText}"
+                     Classes="caption"
+                     FontSize="11"
+                     IsVisible="{Binding IsDocumentOpen}" />
+          <Border Width="1" Height="12" Background="{DynamicResource BorderBrush}" IsVisible="{Binding IsDocumentOpen}" />
+          <TextBlock Text="PDFium"
+                     Classes="caption tertiary"
+                     FontSize="10.5" />
+        </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
+</Window>

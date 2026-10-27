@@ -1,0 +1,42 @@
+name: Feature request
+description: Suggest a focused improvement for AirPDF.
+title: "[Feature]: "
+labels: ["enhancement", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        AirPDF is deliberately small. Please describe the problem first; a
+        concrete use case is more persuasive than a long feature list.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the reader workflow that is currently awkward or missing.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: How should it work? Include keyboard or UI details if relevant.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This keeps AirPDF a reader rather than an editor.
+          required: true
+        - label: I checked the roadmap and existing issues.
+          required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other apps or approaches that solve this well.

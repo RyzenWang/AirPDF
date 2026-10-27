@@ -1,0 +1,30 @@
+# Build output
+bin/
+obj/
+artifacts/
+publish/
+*.user
+*.suo
+*.userprefs
+
+# IDE
+.vs/
+.idea/
+.vscode/
+*.swp
+*.sln.docstates
+
+# Test / coverage
+TestResults/
+coverage/
+*.coverage
+*.trx
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local runtime files
+*.log
+settings.local.json

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=AirPDF
+GenericName=PDF Reader
+Comment=A feather-light PDF reader
+Exec=airpdf %f
+Icon=airpdf
+Terminal=false
+Categories=Office;Viewer;
+MimeType=application/pdf;
+Keywords=pdf;reader;document;viewer;
+StartupNotify=true

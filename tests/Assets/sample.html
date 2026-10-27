@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>AirPDF Field Notes</title>
+<style>
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1d232c; }
+  .page {
+    width: 210mm; height: 297mm; padding: 22mm 20mm 18mm;
+    page-break-after: always; position: relative; overflow: hidden;
+    background: #f6f2ea;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .page:last-child { page-break-after: auto; }
+  .dark { background: #1e2a38; color: #f4efe4; }
+  .eyebrow { font-size: 8.5pt; letter-spacing: 2.4pt; font-weight: 700; color: #b0442f; text-transform: uppercase; }
+  .dark .eyebrow { color: #ff8a70; }
+  h1 { font-family: Georgia, "Times New Roman", serif; font-size: 38pt; line-height: 1.02; margin: 10mm 0 0; font-weight: 700; letter-spacing: -1pt; }
+  h2 { font-family: Georgia, "Times New Roman", serif; font-size: 25pt; line-height: 1.12; margin: 6mm 0 4mm; font-weight: 700; }
+  h3 { font-size: 10pt; letter-spacing: 1.1pt; text-transform: uppercase; margin: 0 0 3mm; color: #2e6f63; }
+  p { font-size: 11pt; line-height: 1.65; margin: 0 0 4.2mm; color: #4d4a44; }
+  .lead { font-size: 14pt; line-height: 1.55; color: #2c333c; }
+  .dark p { color: #c9c4ba; }
+  .dark .lead { color: #e9e3d7; }
+  .small { font-size: 8.5pt; line-height: 1.5; color: #8a8378; }
+  .rule { width: 100%; height: 1px; background: #d9d1c5; margin: 8mm 0; }
+  .footer { position: absolute; left: 20mm; right: 20mm; bottom: 10mm; display: flex; justify-content: space-between; font-size: 7.5pt; letter-spacing: 1.2pt; color: #a49b8e; text-transform: uppercase; }
+  .dark .footer { color: #7e8997; }
+  .cover-mark { position: absolute; right: 18mm; top: 22mm; width: 58mm; height: 58mm; border-radius: 50%; background: #e3563b; }
+  .cover-plane { position: absolute; right: 25mm; top: 32mm; width: 42mm; height: 42mm; }
+  .cover-plane div { position: absolute; background: #fff7ea; }
+  .plane-a { width: 40mm; height: 20mm; clip-path: polygon(0 100%, 100% 0, 62% 100%, 42% 63%); }
+  .kicker { margin-top: 44mm; }
+  .cover-title { font-family: Georgia, serif; font-size: 52pt; line-height: .98; letter-spacing: -2pt; margin-top: 14mm; color: #f7f1e5; }
+  .cover-title em { color: #ff8a70; font-style: normal; }
+  .cover-bottom { position: absolute; left: 20mm; right: 20mm; bottom: 22mm; display: flex; align-items: flex-end; justify-content: space-between; border-top: 1px solid #3a4655; padding-top: 6mm; }
+  .tag { display: inline-block; border: 1px solid #4b5867; border-radius: 20px; padding: 2.4mm 4mm; margin-right: 2mm; font-size: 8pt; letter-spacing: .8pt; color: #d4cec2; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10mm; margin-top: 8mm; }
+  .card { background: #fffdf8; border: 1px solid #ded5c7; border-radius: 3mm; padding: 6mm; }
+  .card .num { font-family: Georgia, serif; font-size: 26pt; color: #e3563b; }
+  .card h4 { margin: 2mm 0 1.5mm; font-size: 11pt; }
+  .card p { font-size: 9.5pt; margin: 0; }
+  .diagram { margin: 9mm 0; border: 1px solid #d8cfc1; border-radius: 3mm; background: #fffdf8; padding: 9mm 8mm; }
+  .flow { display: flex; align-items: center; justify-content: space-between; }
+  .node { text-align: center; width: 27%; }
+  .node .dot { width: 14mm; height: 14mm; margin: 0 auto 3mm; border-radius: 50%; background: #f6dfd7; color: #b0442f; font-family: Georgia, serif; font-size: 16pt; line-height: 14mm; }
+  .node strong { display: block; font-size: 9.5pt; }
+  .node span { font-size: 8pt; color: #8b8479; }
+  .arrow { color: #bdb3a4; font-size: 18pt; }
+  table { width: 100%; border-collapse: collapse; margin-top: 7mm; }
+  th { text-align: left; font-size: 8pt; letter-spacing: 1.2pt; text-transform: uppercase; color: #8a8378; padding: 0 3mm 3mm 0; border-bottom: 1px solid #cfc6b8; }
+  td { font-size: 10pt; padding: 4mm 3mm 4mm 0; border-bottom: 1px solid #e2dacd; vertical-align: top; }
+  td:first-child { width: 28%; font-weight: 600; }
+  .stat-row { display: flex; gap: 8mm; margin: 8mm 0 2mm; }
+  .stat { flex: 1; border-top: 2px solid #e3563b; padding-top: 3mm; }
+  .stat b { display: block; font-family: Georgia, serif; font-size: 28pt; color: #1d232c; line-height: 1; }
+  .stat span { font-size: 8pt; letter-spacing: .8pt; color: #8a8378; text-transform: uppercase; }
+  .quote { font-family: Georgia, serif; font-size: 27pt; line-height: 1.22; color: #1d232c; margin: 14mm 0 9mm; }
+  .quote em { color: #e3563b; font-style: italic; }
+  .colophon { margin-top: 20mm; }
+  .colophon .big { font-family: Georgia, serif; font-size: 20pt; color: #1d232c; }
+  .cn { font-family: "Microsoft YaHei", "Noto Sans CJK SC", sans-serif; }
+  .cn h1 { font-family: "Microsoft YaHei", sans-serif; font-size: 34pt; letter-spacing: -1pt; }
+  .cn p { font-size: 11.5pt; line-height: 1.95; }
+  .bars { margin-top: 7mm; }
+  .bar { height: 2.2mm; border-radius: 2mm; background: #ddd4c6; margin-bottom: 2.6mm; }
+  .bar.coral { background: #e3563b; height: 2.6mm; }
+  .two-col { column-count: 2; column-gap: 10mm; }
+  .two-col p { margin-bottom: 3.4mm; }
+</style>
+</head>
+<body>
+
+<section class="page dark">
+  <div class="cover-mark"></div>
+  <div class="cover-plane"><div class="plane-a"></div></div>
+  <div class="kicker">
+    <div class="eyebrow">AirPDF Field Notes &nbsp;/&nbsp; 2026</div>
+    <div class="cover-title">The quiet<br />PDF reader<br /><em>for every desk.</em></div>
+    <p class="lead" style="max-width: 105mm; margin-top: 14mm;">A feather-light reader for the documents that matter. Built with .NET and Avalonia. Open source, from the first line.</p>
+  </div>
+  <div class="cover-bottom">
+    <div>
+      <span class="tag">PDFium</span><span class="tag">Avalonia</span><span class="tag">.NET 10</span>
+    </div>
+    <div class="small" style="text-align:right;">A sample document<br />for the AirPDF test suite</div>
+  </div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">Chapter one &nbsp;·&nbsp; Less, but better</div>
+  <h1>Reading should feel<br />like nothing at all.</h1>
+  <p class="lead" style="margin-top: 9mm;">Most PDF apps ask for a login, a cloud account, a subscription, and a slice of your attention before they show you a single page. AirPDF starts with the page.</p>
+  <div class="rule"></div>
+  <div class="two-col">
+    <p>There is a particular kind of calm that comes from opening a document and simply reading it. No onboarding tour. No sidebar of recommendations. No modal asking whether you would like to try the premium plan.</p>
+    <p>AirPDF is an attempt to preserve that calm. It renders with PDFium, the same open-source engine behind browsers, so the page in front of you is the page the author intended.</p>
+    <p>The interface is deliberately small: a rail of thumbnails, a quietly persistent toolbar, and a canvas that gets out of the way. The keyboard does the rest.</p>
+    <p>Lightweight is not a number on a download page. It is the feeling that the tool has already finished loading before you have decided what to read.</p>
+  </div>
+  <div class="stat-row">
+    <div class="stat"><b>8</b><span>pages in this note</span></div>
+    <div class="stat"><b>1</b><span>keyboard shortcut to focus</span></div>
+    <div class="stat"><b>0</b><span>accounts required</span></div>
+  </div>
+  <div class="footer"><span>AirPDF / Field Notes</span><span>02</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">Chapter two &nbsp;·&nbsp; The engine</div>
+  <h2>Rendering without<br />the weight.</h2>
+  <p>PDFium turns the document into pixels. Skia moves those pixels to the screen. Avalonia gives the whole thing a native window on Windows, macOS, and Linux. Each piece is open source, and each has one job.</p>
+  <div class="diagram">
+    <div class="flow">
+      <div class="node"><div class="dot">1</div><strong>PDF file</strong><span>pages, fonts, vectors</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="dot">2</div><strong>PDFium</strong><span>raster at display scale</span></div>
+      <div class="arrow">→</div>
+      <div class="node"><div class="dot">3</div><strong>AirPDF</strong><span>cache, scroll, read</span></div>
+    </div>
+  </div>
+  <h3>Why this stack</h3>
+  <p>Avalonia compiles the same XAML into a native window on every desktop. .NET gives us one runtime, one build pipeline, and a mature package ecosystem. PDFium keeps rendering predictable across platforms, including the awkward documents that older libraries struggle with.</p>
+  <p>The result is a reader that opens in under a second on a normal laptop and stays out of the way while you scroll. Text search is handled by PdfPig, which reads the PDF content stream directly and returns match boxes for highlights.</p>
+  <div class="grid2">
+    <div class="card"><div class="num">01</div><h4>Native rendering</h4><p>Pages are rasterized at the exact display scale, so text stays crisp when you zoom.</p></div>
+    <div class="card"><div class="num">02</div><h4>Virtualized pages</h4><p>Only the pages near the viewport are decoded. Long documents stay light.</p></div>
+  </div>
+  <div class="footer"><span>AirPDF / Field Notes</span><span>03</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">Chapter three &nbsp;·&nbsp; Everywhere</div>
+  <h2>The same page<br />on every desk.</h2>
+  <p>Windows, macOS, and Linux share the same reader, the same shortcuts, and the same typography. There is no “web version” with a different set of bugs.</p>
+  <table>
+    <thead><tr><th>Platform</th><th>Window</th><th>Renderer</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td>Windows 10 / 11</td><td>Win32</td><td>PDFium</td><td>Supported</td></tr>
+      <tr><td>macOS 13+</td><td>AppKit</td><td>PDFium</td><td>Supported</td></tr>
+      <tr><td>Linux x64</td><td>X11 / Wayland</td><td>PDFium</td><td>Supported</td></tr>
+      <tr><td>Linux arm64</td><td>X11 / Wayland</td><td>PDFium</td><td>Build from source</td></tr>
+    </tbody>
+  </table>
+  <div class="rule"></div>
+  <h3>One codebase, no compromises</h3>
+  <p>Cross-platform does not have to mean lowest-common-denominator. AirPDF uses native file pickers, native window chrome, and platform-aware keyboard conventions. On macOS, Command replaces Control. On every platform, the page is the same.</p>
+  <p>The project is designed to be read as well as used. The core document service has no UI dependencies. The Avalonia layer only knows how to present pages and respond to input.</p>
+  <div class="footer"><span>AirPDF / Field Notes</span><span>04</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">Chapter four &nbsp;·&nbsp; Find</div>
+  <div class="quote">Search should feel like <em>turning a page,</em> not filing a request.</div>
+  <p>Press <strong>Ctrl+F</strong> and the document becomes a conversation. Results appear as fragments, ordered by page, with the active match highlighted in warm amber. The rest of the document fades to the background.</p>
+  <p>AirPDF reads the PDF text layer with PdfPig, then maps each match back to the rendered page. That means highlights line up with the words you can see, even in multi-column layouts. It is a small piece of geometry that makes a large difference.</p>
+  <div class="grid2">
+    <div class="card"><h4>Feather-light</h4><p>No background indexer, no database. Search starts when you ask and stops when you close the panel.</p></div>
+    <div class="card"><h4>Page-aware</h4><p>Matches are grouped by page, so you can move through a long report without losing your place.</p></div>
+  </div>
+  <div class="rule"></div>
+  <p class="small">Tip: press Enter to search, then use the arrows in the panel to move between matches. Escape returns you to the page.</p>
+  <div class="footer"><span>AirPDF / Field Notes</span><span>05</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">Chapter five &nbsp;·&nbsp; The long read</div>
+  <h2>Built for the<br />documents you keep.</h2>
+  <p class="lead">A paper, a contract, a manual, a book you return to every winter. These are not disposable files, and the reader should not treat them that way.</p>
+  <div class="bars">
+    <div class="bar coral" style="width: 22%"></div>
+    <div class="bar" style="width: 92%"></div>
+    <div class="bar" style="width: 86%"></div>
+    <div class="bar" style="width: 96%"></div>
+    <div class="bar" style="width: 74%"></div>
+    <div class="bar" style="width: 90%"></div>
+    <div class="bar" style="width: 58%"></div>
+  </div>
+  <p style="margin-top: 8mm;">The thumbnail rail is a map, not a menu. It stays out of the way until you need it, and it follows the page you are reading. The outline, when a document has one, is a single click away.</p>
+  <p>Zoom to fit width, fit page, or actual size. Move through pages with the arrow keys, or type a page number and press Enter. Every action is reversible, and nothing is hidden behind a paywall.</p>
+  <div class="footer"><span>AirPDF / Field Notes</span><span>06</span></div>
+</section>
+
+<section class="page cn">
+  <div class="eyebrow">第六章 &nbsp;·&nbsp; 轻量</div>
+  <h1>轻量，<br />是一种阅读方式。</h1>
+  <p class="lead" style="margin-top: 9mm;">打开一份 PDF，不应该先经过登录、订阅和一连串弹窗。AirPDF 把页面放在最前面，其余的都退到背景里。</p>
+  <div class="rule"></div>
+  <p>它使用 PDFium 渲染，使用 Avalonia 构建界面，在 Windows、macOS 和 Linux 上保持一致。没有云端，没有账号，也没有隐藏的付费功能。</p>
+  <p>阅读是一种安静的注意力。好的阅读器不会要求你注意它。缩略图、目录、搜索和缩放都在手边，但它们不会主动打断你。</p>
+  <p>这个项目会以开源的方式继续生长。代码、设计决策和路线图都会放在 GitHub 上，欢迎每一个愿意让阅读更轻的人参与。</p>
+  <div class="stat-row">
+    <div class="stat"><b>0</b><span>账号</span></div>
+    <div class="stat"><b>3</b><span>桌面平台</span></div>
+    <div class="stat"><b>1</b><span>个页面</span></div>
+  </div>
+  <div class="footer"><span>AIRPDF / 轻量阅读</span><span>07</span></div>
+</section>
+
+<section class="page">
+  <div class="eyebrow">Colophon</div>
+  <h2>Made to be<br />opened again.</h2>
+  <p class="lead">AirPDF is a small, open-source reader for the PDFs you actually live with. It is built in public, under the MIT license.</p>
+  <div class="colophon">
+    <div class="big">AirPDF 0.1</div>
+    <p class="small" style="margin-top: 4mm;">Field Notes, first edition · 2026<br />Set in Georgia and Segoe UI · Rendered with PDFium</p>
+    <div class="rule"></div>
+    <p class="small">This document is part of the AirPDF test suite. It contains searchable text, mixed typography, a Chinese-language page, and enough pages to exercise virtualized scrolling. The words “AirPDF”, “feather-light”, and “PDFium” appear throughout for search testing.</p>
+  </div>
+  <div class="footer"><span>AirPDF / Field Notes</span><span>08</span></div>
+</section>
+
+</body>
+</html>

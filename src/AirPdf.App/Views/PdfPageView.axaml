@@ -1,0 +1,57 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AirPdf.App.ViewModels"
+             xmlns:controls="using:AirPdf.App.Controls"
+             x:Class="AirPdf.App.Views.PdfPageView"
+             x:DataType="vm:PageViewModel">
+  <Grid>
+    <Border Background="White"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="1"
+            CornerRadius="2"
+            BoxShadow="0 8 26 0 #26000000"
+            ClipToBounds="True">
+      <Panel>
+        <Image Source="{Binding Image}"
+               Stretch="Fill"
+               RenderOptions.BitmapInterpolationMode="HighQuality" />
+
+        <controls:SearchHighlightOverlay Rects="{Binding HighlightRects}"
+                                         ActiveRects="{Binding ActiveHighlightRects}"
+                                         IsVisible="{Binding HasHighlights}" />
+
+        <Border IsVisible="{Binding ShowPlaceholder}" Background="{DynamicResource PagePlaceholderBrush}">
+          <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
+            <ProgressBar IsIndeterminate="True"
+                         Width="96"
+                         IsVisible="{Binding IsRendering}" />
+            <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">
+              <Path Width="15" Height="15"
+                    Data="{StaticResource IconFile}"
+                    Stroke="{DynamicResource TextTertiaryBrush}"
+                    StrokeThickness="1.5"
+                    StrokeLineCap="Round"
+                    StrokeJoin="Round"
+                    Stretch="Uniform" />
+              <TextBlock Text="{Binding PageLabel, StringFormat='Page {0}'}"
+                         Foreground="{DynamicResource TextTertiaryBrush}"
+                         FontSize="12" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <Border IsVisible="{Binding HasRenderError}"
+                Background="{DynamicResource DangerSoftBrush}"
+                CornerRadius="6"
+                Margin="14"
+                Padding="14"
+                VerticalAlignment="Bottom">
+          <TextBlock Text="{Binding RenderError}"
+                     Foreground="{DynamicResource DangerBrush}"
+                     TextWrapping="Wrap"
+                     FontSize="12" />
+        </Border>
+      </Panel>
+    </Border>
+  </Grid>
+</UserControl>

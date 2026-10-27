@@ -1,0 +1,47 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>AirPdf.App</RootNamespace>
+    <AssemblyName>AirPdf</AssemblyName>
+    <ApplicationIcon>Assets/airpdf.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Version>0.1.0</Version>
+    <AssemblyTitle>AirPDF</AssemblyTitle>
+    <Product>AirPDF</Product>
+    <Description>A feather-light, cross-platform PDF reader built with .NET and Avalonia.</Description>
+    <Authors>AirPDF contributors</Authors>
+    <Copyright>Copyright (c) AirPDF contributors</Copyright>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>None</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+    <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\AirPdf.Core\AirPdf.Core.csproj" />
+  </ItemGroup>
+
+  <Target Name="RemovePdbsFromPublish" AfterTargets="Publish">
+    <ItemGroup>
+      <PublishPdbs Include="$(PublishDir)**\*.pdb" />
+    </ItemGroup>
+    <Delete Files="@(PublishPdbs)" />
+  </Target>
+</Project>

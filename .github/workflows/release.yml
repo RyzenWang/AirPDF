@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+            archive: zip
+          - os: ubuntu-latest
+            rid: linux-x64
+            archive: tar
+          - os: macos-latest
+            rid: osx-arm64
+            archive: tar
+          - os: macos-15-intel
+            rid: osx-x64
+            archive: tar
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Publish
+        run: >
+          dotnet publish src/AirPdf.App/AirPdf.App.csproj
+          -c Release
+          -r ${{ matrix.rid }}
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -o publish/${{ matrix.rid }}
+
+      - name: Package (Windows)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "publish/${{ matrix.rid }}/*" `
+            -DestinationPath "AirPDF-$env:GITHUB_REF_NAME-${{ matrix.rid }}.zip"
+
+      - name: Package (Unix)
+        if: matrix.archive == 'tar'
+        shell: bash
+        run: |
+          tar -czf "AirPDF-${GITHUB_REF_NAME}-${{ matrix.rid }}.tar.gz" \
+            -C "publish/${{ matrix.rid }}" .
+
+      - name: Upload archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: AirPDF-${{ matrix.rid }}
+          path: |
+            AirPDF-*.zip
+            AirPDF-*.tar.gz
+
+  release:
+    name: Create GitHub release
+    needs: publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download archives
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/AirPDF-*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-preview') }}

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>AirPdf.Core</RootNamespace>
+    <AssemblyName>AirPdf.Core</AssemblyName>
+    <Description>PDF document services for AirPDF.</Description>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="PDFtoImage" Version="5.4.0" />
+    <PackageReference Include="PdfPig" Version="0.1.16" />
+  </ItemGroup>
+</Project>

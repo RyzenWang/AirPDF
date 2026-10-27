@@ -1,0 +1,62 @@
+name: Bug report
+description: Something is broken in AirPDF.
+title: "[Bug]: "
+labels: ["bug", "needs triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Please do not attach confidential PDFs.
+        A synthetic reproduction or a redacted excerpt is much more useful.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the actual behavior and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open ...
+        2. Scroll to ...
+        3. Press ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: AirPDF version or commit
+      placeholder: "0.1.0, or the commit SHA"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - macOS
+        - Linux (X11)
+        - Linux (Wayland)
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: dotnet
+    attributes:
+      label: .NET runtime
+      description: Output of `dotnet --version`, if you built from source.
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Paste relevant output. Remove personal information first.

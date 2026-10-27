@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:AirPdf.App.ViewModels"
+             x:Class="AirPdf.App.Views.ThumbnailView"
+             x:DataType="vm:ThumbnailViewModel">
+  <StackPanel Spacing="5" HorizontalAlignment="Center">
+    <Border Width="{Binding Width}"
+            Height="{Binding Height}"
+            Background="White"
+            BorderBrush="{DynamicResource BorderStrongBrush}"
+            BorderThickness="1"
+            CornerRadius="3"
+            BoxShadow="0 2 6 0 #1F000000"
+            ClipToBounds="True">
+      <Panel>
+        <Image Source="{Binding Image}" Stretch="Fill" RenderOptions.BitmapInterpolationMode="MediumQuality" />
+        <Border IsVisible="{Binding ShowPlaceholder}" Background="{DynamicResource PagePlaceholderBrush}">
+          <ProgressBar IsIndeterminate="True"
+                       Width="54"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding IsRendering}" />
+        </Border>
+      </Panel>
+    </Border>
+    <TextBlock Text="{Binding PageLabel}"
+               Classes="pageNumber"
+               HorizontalAlignment="Center" />
+  </StackPanel>
+</UserControl>
