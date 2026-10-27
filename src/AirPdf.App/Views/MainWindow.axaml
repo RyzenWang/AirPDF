@@ -37,12 +37,12 @@
                      VerticalAlignment="Center"
                      LetterSpacing="-0.2" />
           <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="4,0" VerticalAlignment="Center" />
-          <Button Classes="soft" Command="{Binding OpenCommand}" ToolTip.Tip="Open a PDF (Ctrl+O)">
+          <Button Classes="soft" Command="{Binding OpenCommand}" ToolTip.Tip="{DynamicResource L.OpenTooltip}">
             <StackPanel Orientation="Horizontal" Spacing="7">
               <Path Classes="icon small"
                     Data="{StaticResource IconFolderOpen}"
                     Stroke="{DynamicResource AccentTextBrush}" />
-              <TextBlock Text="Open" FontWeight="SemiBold" />
+              <TextBlock Text="{DynamicResource L.Open}" FontWeight="SemiBold" />
             </StackPanel>
           </Button>
         </StackPanel>
@@ -56,7 +56,7 @@
           <Button Classes="icon"
                   Command="{Binding PreviousPageCommand}"
                   IsEnabled="{Binding CanGoPrevious}"
-                  ToolTip.Tip="Previous page">
+                  ToolTip.Tip="{DynamicResource L.PreviousPage}">
             <Path Classes="icon" Data="{StaticResource IconChevronLeft}" />
           </Button>
           <Border Background="{DynamicResource SurfaceBrush}"
@@ -87,36 +87,36 @@
           <Button Classes="icon"
                   Command="{Binding NextPageCommand}"
                   IsEnabled="{Binding CanGoNext}"
-                  ToolTip.Tip="Next page">
+                  ToolTip.Tip="{DynamicResource L.NextPage}">
             <Path Classes="icon" Data="{StaticResource IconChevronRight}" />
           </Button>
 
           <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="8,0" VerticalAlignment="Center" />
 
-          <Button Classes="zoom" Command="{Binding ZoomOutCommand}" ToolTip.Tip="Zoom out">
+          <Button Classes="zoom" Command="{Binding ZoomOutCommand}" ToolTip.Tip="{DynamicResource L.ZoomOut}">
             <Border Width="12" Height="1.5" CornerRadius="1" Background="{DynamicResource TextPrimaryBrush}" />
           </Button>
-          <Button Classes="chip" Content="{Binding ZoomText}" Padding="9,5" MinWidth="58" ToolTip.Tip="Zoom preset">
+          <Button Classes="chip" Content="{Binding ZoomText}" Padding="9,5" MinWidth="58" ToolTip.Tip="{DynamicResource L.ZoomPreset}">
             <Button.Flyout>
               <MenuFlyout Placement="BottomEdgeAlignedRight">
-                <MenuItem Header="Fit width" Command="{Binding FitWidthCommand}" />
-                <MenuItem Header="Fit page" Command="{Binding FitPageCommand}" />
-                <MenuItem Header="Actual size — 100%" Command="{Binding ActualSizeCommand}" />
-                <MenuItem Header="50%" Command="{Binding SetZoomCommand}" CommandParameter="0.5" />
-                <MenuItem Header="75%" Command="{Binding SetZoomCommand}" CommandParameter="0.75" />
-                <MenuItem Header="125%" Command="{Binding SetZoomCommand}" CommandParameter="1.25" />
-                <MenuItem Header="150%" Command="{Binding SetZoomCommand}" CommandParameter="1.5" />
-                <MenuItem Header="200%" Command="{Binding SetZoomCommand}" CommandParameter="2" />
+                <MenuItem Header="{DynamicResource L.FitWidth}" Tag="fit-width" Click="OnFitWidthMenuClick" />
+                <MenuItem Header="{DynamicResource L.FitPage}" Tag="fit-page" Click="OnFitPageMenuClick" />
+                <MenuItem Header="{DynamicResource L.ActualSize}" Tag="actual" Click="OnActualSizeMenuClick" />
+                <MenuItem Header="50%" Tag="0.5" Click="OnZoomPresetMenuClick" />
+                <MenuItem Header="75%" Tag="0.75" Click="OnZoomPresetMenuClick" />
+                <MenuItem Header="125%" Tag="1.25" Click="OnZoomPresetMenuClick" />
+                <MenuItem Header="150%" Tag="1.5" Click="OnZoomPresetMenuClick" />
+                <MenuItem Header="200%" Tag="2" Click="OnZoomPresetMenuClick" />
               </MenuFlyout>
             </Button.Flyout>
           </Button>
-          <Button Classes="zoom" Command="{Binding ZoomInCommand}" ToolTip.Tip="Zoom in">
+          <Button Classes="zoom" Command="{Binding ZoomInCommand}" ToolTip.Tip="{DynamicResource L.ZoomIn}">
             <Path Classes="icon small" Data="{StaticResource IconPlus}" />
           </Button>
-          <Button Classes="icon" Command="{Binding FitWidthCommand}" ToolTip.Tip="Fit width">
+          <Button Classes="icon" Command="{Binding FitWidthCommand}" ToolTip.Tip="{DynamicResource L.FitWidth}">
             <Path Classes="icon" Data="{StaticResource IconFitWidth}" />
           </Button>
-          <Button Classes="icon" Command="{Binding FitPageCommand}" ToolTip.Tip="Fit page">
+          <Button Classes="icon" Command="{Binding FitPageCommand}" ToolTip.Tip="{DynamicResource L.FitPage}">
             <Path Classes="icon" Data="{StaticResource IconFitPage}" />
           </Button>
         </StackPanel>
@@ -125,28 +125,42 @@
           <Button Classes="icon"
                   Command="{Binding ToggleSearchCommand}"
                   IsVisible="{Binding IsDocumentOpen}"
-                  ToolTip.Tip="Find in document (Ctrl+F)">
+                  ToolTip.Tip="{DynamicResource L.FindInDocument}">
             <Path Classes="icon" Data="{StaticResource IconSearch}" />
           </Button>
           <Button Classes="icon"
                   Command="{Binding ToggleSidebarCommand}"
                   IsVisible="{Binding IsDocumentOpen}"
-                  ToolTip.Tip="Toggle thumbnails">
+                  ToolTip.Tip="{DynamicResource L.ToggleThumbnails}">
             <Path Classes="icon" Data="{StaticResource IconSidebar}" />
           </Button>
-          <Button Classes="icon" Command="{Binding ToggleThemeCommand}" ToolTip.Tip="Toggle light and dark theme">
+          <Button Classes="chip"
+                  Width="43"
+                  MinHeight="30"
+                  Padding="0,5"
+                  Content="{Binding LanguageShortLabel}"
+                  FontWeight="SemiBold"
+                  ToolTip.Tip="{DynamicResource L.Language}">
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                <MenuItem Header="English" Tag="en" Click="OnLanguageMenuItemClick" />
+                <MenuItem Header="简体中文" Tag="zh-CN" Click="OnLanguageMenuItemClick" />
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+          <Button Classes="icon" Command="{Binding ToggleThemeCommand}" ToolTip.Tip="{DynamicResource L.ToggleTheme}">
             <Panel>
               <Path Classes="icon" Data="{StaticResource IconMoon}" IsVisible="{Binding IsLightTheme}" />
               <Path Classes="icon" Data="{StaticResource IconSun}" IsVisible="{Binding IsDarkTheme}" />
             </Panel>
           </Button>
-          <Button Classes="icon" IsVisible="{Binding IsDocumentOpen}" ToolTip.Tip="Document details">
+          <Button x:Name="InfoButton" Classes="icon" IsVisible="{Binding IsDocumentOpen}" ToolTip.Tip="{DynamicResource L.DocumentDetails}">
             <Button.Flyout>
-              <Flyout Placement="BottomEdgeAlignedRight">
+              <Flyout Placement="BottomEdgeAlignedRight" Opened="OnInfoFlyoutOpened">
                 <Border Width="326" Padding="14">
                   <StackPanel Spacing="14">
                     <StackPanel Spacing="3">
-                      <TextBlock Text="Document details" Classes="h3" />
+                      <TextBlock Text="{DynamicResource L.DocumentDetails}" Classes="h3" />
                       <TextBlock Text="{Binding FileName}" Classes="caption" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
                     <ItemsControl ItemsSource="{Binding Metadata}">
@@ -185,22 +199,22 @@
         <Grid RowDefinitions="Auto,*">
           <Grid Margin="15,13,12,8" ColumnDefinitions="*,Auto">
             <StackPanel Spacing="8">
-              <TextBlock Text="NAVIGATE" Classes="eyebrow" />
+              <TextBlock Text="{DynamicResource L.Navigate}" Classes="eyebrow" />
               <StackPanel Orientation="Horizontal" Spacing="2">
                 <Button Classes="tab"
                         Classes.active="{Binding IsPagesTabSelected}"
-                        Content="Pages"
+                        Content="{DynamicResource L.Pages}"
                         Command="{Binding ShowPagesTabCommand}" />
                 <Button Classes="tab"
                         Classes.active="{Binding IsContentsTabSelected}"
-                        Content="Contents"
+                        Content="{DynamicResource L.Contents}"
                         Command="{Binding ShowContentsTabCommand}" />
               </StackPanel>
             </StackPanel>
             <Button Grid.Column="1"
                     Classes="icon"
                     Command="{Binding ToggleSidebarCommand}"
-                    ToolTip.Tip="Hide sidebar"
+                    ToolTip.Tip="{DynamicResource L.HideSidebar}"
                     VerticalAlignment="Top">
               <Path Classes="icon small" Data="{StaticResource IconChevronLeft}" />
             </Button>
@@ -249,7 +263,7 @@
                 <Border Width="42" Height="42" CornerRadius="11" Background="{DynamicResource SurfaceBrush}">
                   <Path Classes="icon muted" Data="{StaticResource IconBook}" />
                 </Border>
-                <TextBlock Text="No outline in this PDF"
+                <TextBlock Text="{DynamicResource L.NoOutline}"
                            Classes="caption"
                            HorizontalAlignment="Center"
                            TextAlignment="Center" />
@@ -285,13 +299,13 @@
             <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="0" Margin="0,0,36,0">
               <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,17">
                 <Border Width="6" Height="6" CornerRadius="3" Background="{DynamicResource AccentBrush}" VerticalAlignment="Center" />
-                <TextBlock Text="A FEATHER-LIGHT PDF READER" Classes="eyebrow" />
+                <TextBlock Text="{DynamicResource L.Tagline}" Classes="eyebrow" />
               </StackPanel>
 
-              <TextBlock Text="Your PDFs," Classes="h1" />
-              <TextBlock Text="without the weight." Classes="h1" />
+              <TextBlock Text="{DynamicResource L.WelcomeTitle1}" Classes="h1" />
+              <TextBlock Text="{DynamicResource L.WelcomeTitle2}" Classes="h1" />
 
-              <TextBlock Text="Fast, quiet, and native on Windows, macOS, and Linux. No account, no clutter — just the page in front of you."
+              <TextBlock Text="{DynamicResource L.WelcomeSubtitle}"
                          Foreground="{DynamicResource TextSecondaryBrush}"
                          FontSize="14"
                          LineHeight="22"
@@ -311,7 +325,7 @@
                           Width="17"
                           Height="17"
                           VerticalAlignment="Center" />
-                    <TextBlock Text="Open a PDF" FontWeight="SemiBold" />
+                    <TextBlock Text="{DynamicResource L.OpenPdf}" FontWeight="SemiBold" />
                   </StackPanel>
                 </Button>
                 <Border Background="{DynamicResource SurfaceBrush}"
@@ -327,15 +341,15 @@
                 </Border>
               </StackPanel>
 
-              <TextBlock Text="PDFium  ·  .NET 10  ·  MIT licensed"
+              <TextBlock Text="{DynamicResource L.WelcomeMeta}"
                          Classes="caption"
                          Margin="1,18,0,0" />
 
               <StackPanel IsVisible="{Binding HasRecentFiles}" Margin="0,34,0,0" Spacing="9">
                 <Grid ColumnDefinitions="*,Auto">
-                  <TextBlock Text="RECENT" Classes="eyebrow" VerticalAlignment="Center" />
+                  <TextBlock Text="{DynamicResource L.Recent}" Classes="eyebrow" VerticalAlignment="Center" />
                   <Button Grid.Column="1"
-                          Content="Clear"
+                          Content="{DynamicResource L.Clear}"
                           Classes="caption"
                           Command="{Binding ClearRecentCommand}"
                           Padding="7,2"
@@ -537,7 +551,7 @@
                     Height="26"
                     MinHeight="26"
                     Command="{Binding DismissErrorCommand}"
-                    ToolTip.Tip="Dismiss">
+                    ToolTip.Tip="{DynamicResource L.Dismiss}">
               <Path Data="{StaticResource IconClose}"
                     Stroke="{DynamicResource DangerBrush}"
                     StrokeThickness="1.8"
@@ -561,8 +575,8 @@
             <Border Width="62" Height="62" CornerRadius="18" Background="{DynamicResource AccentSoftBrush}">
               <Path Classes="icon accent" Data="{StaticResource IconFolderOpen}" Width="28" Height="28" />
             </Border>
-            <TextBlock Text="Drop to open" Classes="h2" />
-            <TextBlock Text="Release the PDF anywhere in this window"
+            <TextBlock Text="{DynamicResource L.DropToOpen}" Classes="h2" />
+            <TextBlock Text="{DynamicResource L.DropHint}"
                        Classes="caption" />
           </StackPanel>
         </Border>
@@ -580,13 +594,13 @@
         <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
           <Grid Margin="16,14,12,8" ColumnDefinitions="*,Auto">
             <StackPanel Spacing="2">
-              <TextBlock Text="Find in document" Classes="h3" />
-              <TextBlock Text="Searches the PDF text layer" Classes="caption" />
+              <TextBlock Text="{DynamicResource L.SearchTitle}" Classes="h3" />
+              <TextBlock Text="{DynamicResource L.SearchSubtitle}" Classes="caption" />
             </StackPanel>
             <Button Grid.Column="1"
                     Classes="icon"
                     Command="{Binding CloseSearchCommand}"
-                    ToolTip.Tip="Close search">
+                    ToolTip.Tip="{DynamicResource L.CloseSearch}">
               <Path Classes="icon small" Data="{StaticResource IconClose}" />
             </Button>
           </Grid>
@@ -596,7 +610,7 @@
               <TextBox x:Name="SearchBox"
                        Classes="searchBox"
                        Text="{Binding SearchQuery, Mode=TwoWay}"
-                       Watermark="Search this PDF…"
+                       Watermark="{DynamicResource L.SearchPlaceholder}"
                        KeyDown="OnSearchKeyDown" />
               <Path Classes="icon small muted"
                     Data="{StaticResource IconSearch}"
@@ -613,7 +627,7 @@
                       Margin="0,0,3,0"
                       Command="{Binding ClearSearchCommand}"
                       IsVisible="{Binding HasSearchQuery}"
-                      ToolTip.Tip="Clear">
+                      ToolTip.Tip="{DynamicResource L.ClearSearch}">
                 <Path Data="{StaticResource IconClose}"
                       Stroke="{DynamicResource TextTertiaryBrush}"
                       StrokeThickness="1.7"
@@ -623,7 +637,7 @@
                       Height="11" />
               </Button>
             </Grid>
-            <Button Grid.Column="1" Classes="soft" Command="{Binding SearchCommand}" Content="Find" MinWidth="58" />
+            <Button Grid.Column="1" Classes="soft" Command="{Binding SearchCommand}" Content="{DynamicResource L.Find}" MinWidth="58" />
           </Grid>
 
           <Grid Grid.Row="2" Margin="16,2,14,8" ColumnDefinitions="*,Auto">
@@ -634,10 +648,10 @@
                            IsVisible="{Binding IsSearching}" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
-              <Button Classes="zoom" Command="{Binding PreviousSearchResultCommand}" IsEnabled="{Binding HasSearchResults}" ToolTip.Tip="Previous match">
+              <Button Classes="zoom" Command="{Binding PreviousSearchResultCommand}" IsEnabled="{Binding HasSearchResults}" ToolTip.Tip="{DynamicResource L.PreviousMatch}">
                 <Path Classes="icon small" Data="{StaticResource IconChevronLeft}" />
               </Button>
-              <Button Classes="zoom" Command="{Binding NextSearchResultCommand}" IsEnabled="{Binding HasSearchResults}" ToolTip.Tip="Next match">
+              <Button Classes="zoom" Command="{Binding NextSearchResultCommand}" IsEnabled="{Binding HasSearchResults}" ToolTip.Tip="{DynamicResource L.NextMatch}">
                 <Path Classes="icon small" Data="{StaticResource IconChevronRight}" />
               </Button>
             </StackPanel>
@@ -675,10 +689,10 @@
               <Border Width="44" Height="44" CornerRadius="12" Background="{DynamicResource SurfaceAltBrush}">
                 <Path Classes="icon muted" Data="{StaticResource IconSearch}" />
               </Border>
-              <TextBlock Text="No matches reached the page"
+              <TextBlock Text="{DynamicResource L.NoMatchesTitle}"
                          FontWeight="SemiBold"
                          HorizontalAlignment="Center" />
-              <TextBlock Text="Try a shorter word or a different spelling."
+              <TextBlock Text="{DynamicResource L.NoMatchesHint}"
                          Classes="caption"
                          TextWrapping="Wrap"
                          TextAlignment="Center"
@@ -690,7 +704,7 @@
                   BorderBrush="{DynamicResource BorderBrush}"
                   BorderThickness="0,1,0,0"
                   Padding="16,9">
-            <TextBlock Text="Enter to search  ·  Esc to close"
+            <TextBlock Text="{DynamicResource L.SearchFooter}"
                        Classes="caption tertiary"
                        FontSize="10.5" />
           </Border>

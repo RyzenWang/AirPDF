@@ -45,6 +45,8 @@ small .NET application with a hand-built Avalonia interface.
 - **Zoom** with fit width, fit page, actual size, presets, and `Ctrl` + wheel.
 - **Password-protected PDFs** with a proper unlock prompt.
 - **Light and dark themes**, following the system on first launch.
+- **English by default, Simplified Chinese on demand** — switch live from the
+  toolbar or with `Ctrl+Shift+L`.
 - **Drag and drop**, command-line opening, and a recent-files shelf.
 - **Keyboard-first navigation** and a quiet, information-dense status bar.
 - **Zero network access** from the reading path.
@@ -132,6 +134,7 @@ Supported runtime identifiers include `win-x64`, `win-arm64`, `linux-x64`,
 | `Ctrl+1` | Actual size |
 | `Ctrl+2` | Fit width |
 | `Ctrl` + wheel | Zoom |
+| `Ctrl+Shift+L` | Toggle English / 简体中文 |
 | `F11` | Toggle full screen |
 | `Page Up` / `Page Down` | Scroll the document |
 

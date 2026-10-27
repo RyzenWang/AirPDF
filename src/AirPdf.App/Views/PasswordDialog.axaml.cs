@@ -1,20 +1,26 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using AirPdf.App.Services;
 
 namespace AirPdf.App.Views;
 
 public partial class PasswordDialog : Window
 {
+    private LocalizationService _localization;
+
     public PasswordDialog()
     {
+        _localization = new LocalizationService();
         InitializeComponent();
     }
 
-    public PasswordDialog(string fileName, bool isRetry)
+    public PasswordDialog(string fileName, bool isRetry, LocalizationService localization)
         : this()
     {
+        _localization = localization;
         FileNameText.Text = fileName;
+        ErrorText.Text = localization.T("L.PasswordRetry");
         ErrorText.IsVisible = isRetry;
         Opened += (_, _) => PasswordBox.Focus();
     }
@@ -42,7 +48,7 @@ public partial class PasswordDialog : Window
         var password = PasswordBox.Text ?? string.Empty;
         if (password.Length == 0)
         {
-            ErrorText.Text = "Enter a password to continue.";
+            ErrorText.Text = _localization.T("L.PasswordEmpty");
             ErrorText.IsVisible = true;
             PasswordBox.Focus();
             return;

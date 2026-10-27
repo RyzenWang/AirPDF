@@ -6,6 +6,18 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+### Added
+
+- Simplified Chinese interface with live switching from the toolbar or
+  `Ctrl+Shift+L`. English remains the default on a fresh install, and the
+  choice is persisted.
+
+### Fixed
+
+- Zooming in and out could terminate the process. Cancellation tokens are now
+  retired safely, and replaced page bitmaps are released after the compositor
+  has had a chance to finish the frame.
+
 ### Planned
 
 - Text selection and copy.

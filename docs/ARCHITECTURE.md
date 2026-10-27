@@ -104,6 +104,16 @@ the page offset, placing the highlight near the upper third of the viewport.
 - The document page always renders on white; only the application chrome changes
   with the theme.
 
+## Localization
+
+`LocalizationService` holds the English and Simplified Chinese catalogs. Applying
+a language swaps a runtime `ResourceDictionary` in the application resources, so
+XAML text bound with `DynamicResource` keys (`L.Open`, `L.SearchTitle`, …)
+updates without recreating the window. Strings that include counts, dates, or
+failure details go through `T` / `Format` in the view model. The selection is
+stored as `language` in the settings file; English is the default when the key
+is missing.
+
 ## Deliberate limits
 
 - No PDF editing. AirPDF is a reader.

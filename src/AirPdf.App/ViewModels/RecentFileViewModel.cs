@@ -1,12 +1,21 @@
 using System.Windows.Input;
+using AirPdf.App.Services;
 using CommunityToolkit.Mvvm.Input;
 
 namespace AirPdf.App.ViewModels;
 
 public sealed class RecentFileViewModel
 {
-    public RecentFileViewModel(string filePath, DateTimeOffset lastOpened, Func<string, Task> openAsync, Func<string, Task> removeAsync)
+    private readonly LocalizationService _localization;
+
+    public RecentFileViewModel(
+        string filePath,
+        DateTimeOffset lastOpened,
+        LocalizationService localization,
+        Func<string, Task> openAsync,
+        Func<string, Task> removeAsync)
     {
+        _localization = localization;
         FilePath = filePath;
         FileName = Path.GetFileName(filePath);
         Directory = Path.GetDirectoryName(filePath) ?? string.Empty;
@@ -32,29 +41,31 @@ public sealed class RecentFileViewModel
 
     public ICommand RemoveCommand { get; }
 
-    private static string FormatRelative(DateTimeOffset value)
+    private string FormatRelative(DateTimeOffset value)
     {
         var age = DateTimeOffset.UtcNow - value;
         if (age < TimeSpan.FromMinutes(1))
         {
-            return "just now";
+            return _localization.T("L.RecentJustNow");
         }
 
         if (age < TimeSpan.FromHours(1))
         {
-            return $"{(int)age.TotalMinutes} min ago";
+            return _localization.Format("L.RecentMinutes", (int)age.TotalMinutes);
         }
 
         if (age < TimeSpan.FromDays(1))
         {
-            return $"{(int)age.TotalHours} hr ago";
+            return _localization.Format("L.RecentHours", (int)age.TotalHours);
         }
 
         if (age < TimeSpan.FromDays(7))
         {
-            return $"{(int)age.TotalDays} d ago";
+            return _localization.Format("L.RecentDays", (int)age.TotalDays);
         }
 
-        return value.LocalDateTime.ToString("MMM d");
+        return value.LocalDateTime.ToString(
+            _localization.IsChinese ? "M月d日" : "MMM d",
+            _localization.Culture);
     }
 }

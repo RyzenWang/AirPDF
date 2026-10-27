@@ -7,10 +7,12 @@ namespace AirPdf.App.Services;
 public sealed class DialogService : IUserDialogService
 {
     private readonly Func<Window?> _ownerProvider;
+    private readonly LocalizationService _localization;
 
-    public DialogService(Func<Window?> ownerProvider)
+    public DialogService(Func<Window?> ownerProvider, LocalizationService localization)
     {
         _ownerProvider = ownerProvider;
+        _localization = localization;
     }
 
     public async Task<string?> PickPdfAsync()
@@ -23,11 +25,11 @@ public sealed class DialogService : IUserDialogService
 
         var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Open a PDF",
+            Title = _localization.T("L.OpenDialogTitle"),
             AllowMultiple = false,
             FileTypeFilter =
             [
-                new FilePickerFileType("PDF documents")
+                new FilePickerFileType(_localization.T("L.PdfDocuments"))
                 {
                     Patterns = ["*.pdf", "*.PDF"],
                     MimeTypes = ["application/pdf"],
@@ -47,7 +49,7 @@ public sealed class DialogService : IUserDialogService
             return null;
         }
 
-        var dialog = new PasswordDialog(fileName, isRetry);
+        var dialog = new PasswordDialog(fileName, isRetry, _localization);
         return await dialog.ShowDialog<string?>(owner);
     }
 

@@ -25,17 +25,31 @@ public partial class MainWindow : Window
 
     public MainWindow(string? initialFile)
     {
+        _settingsService = new SettingsService();
+        var settings = _settingsService.Load();
+        var localization = new LocalizationService();
+        localization.Apply(settings.Language);
+
         InitializeComponent();
 
         _initialFile = initialFile;
-        _settingsService = new SettingsService();
-        var settings = _settingsService.Load();
         var documentService = new PdfDocumentService();
         var searchService = new PdfSearchService();
-        var dialogs = new DialogService(() => this);
+        var dialogs = new DialogService(() => this, localization);
 
-        _viewModel = new MainWindowViewModel(documentService, searchService, _settingsService, dialogs);
+        _viewModel = new MainWindowViewModel(
+            documentService,
+            searchService,
+            _settingsService,
+            dialogs,
+            settings,
+            localization);
         DataContext = _viewModel;
+
+        if (InfoButton.Flyout is Flyout { Content: Control infoContent })
+        {
+            infoContent.DataContext = _viewModel;
+        }
 
         Width = Math.Max(MinWidth, settings.WindowWidth);
         Height = Math.Max(MinHeight, settings.WindowHeight);
@@ -310,6 +324,39 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnFitWidthMenuClick(object? sender, RoutedEventArgs e) =>
+        _viewModel.FitWidthCommand.Execute(null);
+
+    private void OnFitPageMenuClick(object? sender, RoutedEventArgs e) =>
+        _viewModel.FitPageCommand.Execute(null);
+
+    private void OnActualSizeMenuClick(object? sender, RoutedEventArgs e) =>
+        _viewModel.ActualSizeCommand.Execute(null);
+
+    private void OnZoomPresetMenuClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: string value })
+        {
+            _viewModel.SetZoomCommand.Execute(value);
+        }
+    }
+
+    private void OnLanguageMenuItemClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: string language })
+        {
+            _viewModel.SetLanguageCommand.Execute(language);
+        }
+    }
+
+    private void OnInfoFlyoutOpened(object? sender, EventArgs e)
+    {
+        if (sender is Flyout { Content: Control content })
+        {
+            content.DataContext = _viewModel;
+        }
+    }
+
     private void OnPagesPointerWheel(object? sender, PointerWheelEventArgs e)
     {
         if ((e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0)
@@ -364,6 +411,13 @@ public partial class MainWindow : Window
                 _viewModel.ToggleSearchCommand.Execute(null);
             }
 
+            e.Handled = true;
+            return;
+        }
+
+        if (ctrl && e.KeyModifiers.HasFlag(KeyModifiers.Shift) && e.Key == Key.L)
+        {
+            _viewModel.ToggleLanguageCommand.Execute(null);
             e.Handled = true;
             return;
         }

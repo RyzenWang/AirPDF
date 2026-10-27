@@ -67,16 +67,35 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
     public void Deactivate()
     {
         _isActive = false;
-        _renderCancellation?.Cancel();
+        CancelRender();
         IsRendering = false;
     }
 
     public void Dispose()
     {
-        _renderCancellation?.Cancel();
+        CancelRender();
         var image = Image;
         Image = null;
-        image?.Dispose();
+        DisposeBitmapLater(image);
+    }
+
+    private void CancelRender()
+    {
+        var cancellation = _renderCancellation;
+        _renderCancellation = null;
+        if (cancellation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            cancellation.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The render has already completed and disposed its own lifetime.
+        }
     }
 
     private void QueueRender()
@@ -86,7 +105,7 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
             return;
         }
 
-        _renderCancellation?.Cancel();
+        CancelRender();
         var cancellation = new CancellationTokenSource();
         _renderCancellation = cancellation;
         var generation = ++_generation;
@@ -112,7 +131,7 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
 
             var previous = Image;
             Image = bitmap;
-            previous?.Dispose();
+            DisposeBitmapLater(previous);
         }
         catch (OperationCanceledException)
         {
@@ -129,7 +148,32 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
                 IsRendering = false;
             }
 
+            if (ReferenceEquals(_renderCancellation, cancellation))
+            {
+                _renderCancellation = null;
+            }
+
             cancellation.Dispose();
         }
+    }
+
+    private static void DisposeBitmapLater(WriteableBitmap? bitmap)
+    {
+        if (bitmap is null)
+        {
+            return;
+        }
+
+        DispatcherTimer.RunOnce(() =>
+        {
+            try
+            {
+                bitmap.Dispose();
+            }
+            catch
+            {
+                // A shutdown race must not take down the process.
+            }
+        }, TimeSpan.FromMilliseconds(300));
     }
 }

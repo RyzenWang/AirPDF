@@ -33,7 +33,7 @@
                     StrokeLineCap="Round"
                     StrokeJoin="Round"
                     Stretch="Uniform" />
-              <TextBlock Text="{Binding PageLabel, StringFormat='Page {0}'}"
+              <TextBlock Text="{Binding PagePlaceholderText}"
                          Foreground="{DynamicResource TextTertiaryBrush}"
                          FontSize="12" />
             </StackPanel>

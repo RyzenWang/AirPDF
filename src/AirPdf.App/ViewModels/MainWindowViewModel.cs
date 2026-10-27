@@ -19,6 +19,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly PdfSearchService _searchService;
     private readonly SettingsService _settingsService;
     private readonly IUserDialogService _dialogs;
+    private readonly LocalizationService _localization;
     private readonly AppSettings _settings;
     private CancellationTokenSource? _loadCancellation;
     private CancellationTokenSource? _searchCancellation;
@@ -29,19 +30,26 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private int _currentPage = 1;
     private SearchResultViewModel? _selectedSearchResult;
     private string? _errorMessage;
+    private string? _errorKey;
+    private string? _busyFileName;
+    private bool _searchFailed;
 
     public MainWindowViewModel(
         PdfDocumentService documentService,
         PdfSearchService searchService,
         SettingsService settingsService,
-        IUserDialogService dialogs)
+        IUserDialogService dialogs,
+        AppSettings settings,
+        LocalizationService localization)
     {
         _documentService = documentService;
         _searchService = searchService;
         _settingsService = settingsService;
         _dialogs = dialogs;
-        _settings = settingsService.Load();
+        _localization = localization;
+        _settings = settings;
         _isSidebarVisible = _settings.SidebarVisible;
+        _documentSubtitle = _localization.T("L.Ready");
 
         var systemVariant = Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant;
         var systemIsDark = systemVariant == Avalonia.Platform.PlatformThemeVariant.Dark;
@@ -53,6 +61,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         };
         ApplyTheme();
 
+        _localization.LanguageChanged += OnLanguageChanged;
         RefreshRecentFiles();
     }
 
@@ -153,9 +162,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public string ZoomText => $"{(int)Math.Round(Zoom * 100)}%";
 
-    public string PageStatusText => PageCount == 0 ? "No document" : $"Page {CurrentPage} of {PageCount}";
+    public string LanguageShortLabel => _localization.LanguageShortLabel;
 
-    public string PageCountText => PageCount == 1 ? "1 page" : $"{PageCount} pages";
+    public string PageStatusText => PageCount == 0
+        ? _localization.T("L.NoDocument")
+        : _localization.Format("L.PageStatusFormat", CurrentPage, PageCount);
+
+    public string PageCountText => PageCount == 1
+        ? _localization.T("L.PageCountOne")
+        : _localization.Format("L.PageCountMany", PageCount);
 
     public bool HasRecentFiles => RecentFiles.Count > 0;
 
@@ -298,8 +313,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void CloseDocument()
     {
-        _loadCancellation?.Cancel();
-        _searchCancellation?.Cancel();
+        CancelSafely(_loadCancellation);
+        CancelSafely(_searchCancellation);
         CloseDocumentCore();
     }
 
@@ -317,6 +332,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsDarkTheme = !IsDarkTheme;
         _settings.Theme = IsDarkTheme ? "Dark" : "Light";
         _settingsService.Save(_settings);
+    }
+
+    [RelayCommand]
+    private void SetLanguage(string? language)
+    {
+        _localization.Apply(language);
+        _settings.Language = _localization.Language;
+        _settingsService.Save(_settings);
+    }
+
+    [RelayCommand]
+    private void ToggleLanguage()
+    {
+        SetLanguage(_localization.IsChinese ? LocalizationService.English : LocalizationService.ChineseSimplified);
     }
 
     [RelayCommand]
@@ -434,14 +463,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        _searchCancellation?.Cancel();
+        CancelSafely(_searchCancellation);
         var cancellation = new CancellationTokenSource();
         _searchCancellation = cancellation;
 
         IsSearching = true;
         HasSearched = true;
         HasSearchResults = false;
-        SearchSummary = "Searching…";
+        _searchFailed = false;
+        SetSearchSummary();
         SearchResults = [];
         SelectedSearchResult = null;
         ClearAllHighlights();
@@ -456,18 +486,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
             }
 
             var results = hits
-                .Select((hit, index) => new SearchResultViewModel(hit, index + 1))
+                .Select((hit, index) => new SearchResultViewModel(hit, index + 1, _localization))
                 .ToList();
 
             SearchResults = results;
             HasSearchResults = results.Count > 0;
             OnPropertyChanged(nameof(HasNoSearchResults));
-            SearchSummary = results.Count switch
-            {
-                0 => "No matches found",
-                1 => "1 match",
-                _ => $"{results.Count} matches"
-            };
+            SetSearchSummary();
 
             if (results.Count > 0)
             {
@@ -480,13 +505,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         catch (PdfDocumentException ex)
         {
-            SearchSummary = "Search failed";
-            ErrorMessage = ex.Message;
+            _searchFailed = true;
+            SearchSummary = _localization.T("L.SearchFailed");
+            SetErrorFromFailure(ex.Failure);
         }
         catch
         {
-            SearchSummary = "Search failed";
-            ErrorMessage = "AirPDF could not search this document.";
+            _searchFailed = true;
+            SearchSummary = _localization.T("L.SearchFailed");
+            SetError("L.SearchError");
         }
         finally
         {
@@ -494,6 +521,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             {
                 IsSearching = false;
                 _searchCancellation = null;
+                SetSearchSummary();
                 OnPropertyChanged(nameof(HasNoSearchResults));
             }
 
@@ -530,7 +558,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private void DismissError() => ErrorMessage = string.Empty;
+    private void DismissError() => ClearError();
 
     public async Task OpenPathAsync(string filePath, bool recordRecent = true)
     {
@@ -539,13 +567,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        _loadCancellation?.Cancel();
+        CancelSafely(_loadCancellation);
         var cancellation = new CancellationTokenSource();
         _loadCancellation = cancellation;
 
         IsBusy = true;
-        BusyText = $"Opening {Path.GetFileName(filePath)}…";
-        ErrorMessage = string.Empty;
+        _busyFileName = Path.GetFileName(filePath);
+        BusyText = _localization.Format("L.BusyOpening", _busyFileName);
+        ClearError();
         OnPropertyChanged(nameof(IsWelcomeVisible));
 
         try
@@ -574,7 +603,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
             if (info is null)
             {
-                ErrorMessage = "The password is incorrect.";
+                SetError("L.ErrorInvalidPassword");
                 return;
             }
 
@@ -594,18 +623,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         catch (PdfDocumentException ex)
         {
-            ErrorMessage = ex.Message;
+            SetErrorFromFailure(ex.Failure);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            ErrorMessage = "AirPDF could not open this document.";
-            _ = _dialogs.ShowErrorAsync("Could not open PDF", ex.Message);
+            SetError("L.OpenError");
+            _ = _dialogs.ShowErrorAsync(_localization.T("L.CouldNotOpen"), _localization.T("L.OpenError"));
         }
         finally
         {
             if (ReferenceEquals(_loadCancellation, cancellation))
             {
                 IsBusy = false;
+                _busyFileName = null;
                 _loadCancellation = null;
                 OnPropertyChanged(nameof(IsWelcomeVisible));
             }
@@ -690,7 +720,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _password = password;
         _pageRenderer = new PdfPageRenderer(_documentService, info.FilePath, password);
 
-        Pages = info.Pages.Select(page => new PageViewModel(_pageRenderer, page)).ToList();
+        Pages = info.Pages.Select(page => new PageViewModel(_pageRenderer, page, _localization)).ToList();
         Thumbnails = info.Pages.Select(page => new ThumbnailViewModel(_pageRenderer, page)).ToList();
         Bookmarks = info.Bookmarks.Select(bookmark => new BookmarkViewModel(bookmark)).ToList();
         Metadata = BuildMetadata(info);
@@ -756,9 +786,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
         FilePath = string.Empty;
         FileDirectory = string.Empty;
         FileSizeText = string.Empty;
-        DocumentSubtitle = "Ready";
+        DocumentSubtitle = _localization.T("L.Ready");
         WindowTitle = "AirPDF";
-        ErrorMessage = string.Empty;
+        ClearError();
         OnPropertyChanged(nameof(HasBookmarks));
         OnPropertyChanged(nameof(HasMetadata));
         OnPropertyChanged(nameof(PageStatusText));
@@ -861,8 +891,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private void ClearSearchState()
     {
-        _searchCancellation?.Cancel();
+        CancelSafely(_searchCancellation);
         _searchCancellation = null;
+        _searchFailed = false;
         SearchResults = [];
         SelectedSearchResult = null;
         HasSearchResults = false;
@@ -871,6 +902,78 @@ public sealed partial class MainWindowViewModel : ObservableObject
         IsSearching = false;
         ClearAllHighlights();
         OnPropertyChanged(nameof(HasNoSearchResults));
+    }
+
+    private void SetSearchSummary()
+    {
+        if (_searchFailed)
+        {
+            SearchSummary = _localization.T("L.SearchFailed");
+            return;
+        }
+
+        if (!HasSearched)
+        {
+            SearchSummary = string.Empty;
+            return;
+        }
+
+        if (IsSearching)
+        {
+            SearchSummary = _localization.T("L.Searching");
+            return;
+        }
+
+        SearchSummary = SearchResults.Count switch
+        {
+            0 => _localization.T("L.NoMatches"),
+            1 => _localization.T("L.MatchOne"),
+            _ => _localization.Format("L.MatchMany", SearchResults.Count)
+        };
+    }
+
+    private void SetError(string key)
+    {
+        _errorKey = key;
+        ErrorMessage = _localization.T(key);
+    }
+
+    private void SetErrorFromFailure(PdfFailure failure)
+    {
+        _errorKey = failure switch
+        {
+            PdfFailure.NotFound => "L.ErrorNotFound",
+            PdfFailure.AccessDenied => "L.ErrorAccessDenied",
+            PdfFailure.PasswordRequired => "L.ErrorPasswordRequired",
+            PdfFailure.InvalidPassword => "L.ErrorInvalidPassword",
+            PdfFailure.Corrupt => "L.ErrorCorrupt",
+            PdfFailure.Unsupported => "L.ErrorUnsupported",
+            _ => "L.ErrorUnknown"
+        };
+        ErrorMessage = _localization.T(_errorKey);
+    }
+
+    private void ClearError()
+    {
+        _errorKey = null;
+        ErrorMessage = string.Empty;
+    }
+
+    private static void CancelSafely(CancellationTokenSource? cancellation)
+    {
+        if (cancellation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            cancellation.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The operation already completed and disposed its lifetime.
+        }
     }
 
     private void RefreshRecentFiles()
@@ -882,6 +985,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             .Select(entry => new RecentFileViewModel(
                 entry.FilePath,
                 entry.LastOpened,
+                _localization,
                 OpenRecentFromItemAsync,
                 RemoveRecentFromItemAsync))
             .ToList();
@@ -922,21 +1026,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
         return $"{bytes / (1024.0 * 1024.0):0.#} MB";
     }
 
-    private static IReadOnlyList<MetadataRow> BuildMetadata(PdfDocumentInfo info)
+    private IReadOnlyList<MetadataRow> BuildMetadata(PdfDocumentInfo info)
     {
         var rows = new List<MetadataRow>();
         var metadata = info.Metadata;
+        var dateFormat = _localization.IsChinese ? "yyyy年M月d日" : "MMM d, yyyy";
 
-        Add("Title", metadata.Title);
-        Add("Author", metadata.Author);
-        Add("Subject", metadata.Subject);
-        Add("Created", metadata.CreatedAt?.LocalDateTime.ToString("MMM d, yyyy", CultureInfo.CurrentCulture));
-        Add("Creator", metadata.Creator);
-        Add("Producer", metadata.Producer);
-        rows.Add(new MetadataRow("Pages", info.PageCount.ToString(CultureInfo.InvariantCulture)));
-        rows.Add(new MetadataRow("PDF version", info.PdfVersion.ToString("0.0", CultureInfo.InvariantCulture)));
-        rows.Add(new MetadataRow("File size", FormatFileSize(info.FileSizeBytes)));
-        Add("Keywords", metadata.Keywords);
+        Add(_localization.T("L.MetaTitle"), metadata.Title);
+        Add(_localization.T("L.MetaAuthor"), metadata.Author);
+        Add(_localization.T("L.MetaSubject"), metadata.Subject);
+        Add(_localization.T("L.MetaCreated"), metadata.CreatedAt?.LocalDateTime.ToString(dateFormat, _localization.Culture));
+        Add(_localization.T("L.MetaCreator"), metadata.Creator);
+        Add(_localization.T("L.MetaProducer"), metadata.Producer);
+        rows.Add(new MetadataRow(_localization.T("L.MetaPages"), info.PageCount.ToString(CultureInfo.InvariantCulture)));
+        rows.Add(new MetadataRow(
+            _localization.T("L.MetaPdfVersion"),
+            info.PdfVersion.ToString("0.0", CultureInfo.InvariantCulture)));
+        rows.Add(new MetadataRow(_localization.T("L.MetaFileSize"), FormatFileSize(info.FileSizeBytes)));
+        Add(_localization.T("L.MetaKeywords"), metadata.Keywords);
 
         return rows;
 
@@ -979,6 +1086,48 @@ public sealed partial class MainWindowViewModel : ObservableObject
     partial void OnSearchQueryChanged(string value) => OnPropertyChanged(nameof(HasSearchQuery));
 
     partial void OnIsSearchingChanged(bool value) => OnPropertyChanged(nameof(HasNoSearchResults));
+
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(LanguageShortLabel));
+        OnPropertyChanged(nameof(PageStatusText));
+        OnPropertyChanged(nameof(PageCountText));
+
+        if (_document is not null)
+        {
+            WindowTitle = $"{_document.FileName} — AirPDF";
+            DocumentSubtitle = $"{PageCountText} · {FileSizeText}";
+            Metadata = BuildMetadata(_document);
+        }
+        else
+        {
+            WindowTitle = "AirPDF";
+            DocumentSubtitle = _localization.T("L.Ready");
+        }
+
+        if (IsBusy && !string.IsNullOrEmpty(_busyFileName))
+        {
+            BusyText = _localization.Format("L.BusyOpening", _busyFileName);
+        }
+
+        if (!string.IsNullOrEmpty(_errorKey))
+        {
+            ErrorMessage = _localization.T(_errorKey);
+        }
+
+        foreach (var result in SearchResults)
+        {
+            result.RefreshLanguage();
+        }
+
+        foreach (var page in Pages)
+        {
+            page.RefreshLanguage();
+        }
+
+        SetSearchSummary();
+        RefreshRecentFiles();
+    }
 
     partial void OnBookmarksChanged(IReadOnlyList<BookmarkViewModel> value) =>
         NotifyBookmarksChanged();

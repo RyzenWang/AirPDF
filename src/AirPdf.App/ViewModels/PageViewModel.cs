@@ -1,6 +1,7 @@
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using AirPdf.App.Rendering;
+using AirPdf.App.Services;
 using AirPdf.Core.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 
@@ -15,6 +16,7 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     private const long MaxRenderPixels = 7_000_000;
 
     private readonly PdfPageRenderer _renderer;
+    private readonly LocalizationService _localization;
     private CancellationTokenSource? _renderCancellation;
     private readonly int _rotation;
     private double _renderScale = 1;
@@ -29,9 +31,10 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     private IReadOnlyList<PdfSearchRect> _highlightRects = [];
     private IReadOnlyList<PdfSearchRect> _activeHighlightRects = [];
 
-    public PageViewModel(PdfPageRenderer renderer, PdfPageInfo pageInfo)
+    public PageViewModel(PdfPageRenderer renderer, PdfPageInfo pageInfo, LocalizationService localization)
     {
         _renderer = renderer;
+        _localization = localization;
         Number = pageInfo.Number;
         WidthPoints = pageInfo.Width;
         HeightPoints = pageInfo.Height;
@@ -48,6 +51,8 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     public bool CanHighlight => _rotation % 360 == 0;
 
     public string PageLabel => Number.ToString();
+
+    public string PagePlaceholderText => _localization.Format("L.PageLabelFormat", Number);
 
     public string DimensionsLabel => $"{Math.Round(WidthPoints)} × {Math.Round(HeightPoints)} pt";
 
@@ -146,7 +151,7 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     public void Deactivate()
     {
         _isActive = false;
-        _renderCancellation?.Cancel();
+        CancelRender();
         IsRendering = false;
     }
 
@@ -162,6 +167,8 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         ActiveHighlightRects = [];
     }
 
+    public void RefreshLanguage() => OnPropertyChanged(nameof(PagePlaceholderText));
+
     public void TrimImage()
     {
         if (_isActive)
@@ -171,17 +178,35 @@ public sealed class PageViewModel : ObservableObject, IDisposable
 
         var image = Image;
         Image = null;
-        image?.Dispose();
+        DisposeBitmapLater(image);
         _renderedWidth = 0;
     }
 
     public void Dispose()
     {
-        _renderCancellation?.Cancel();
-        _renderCancellation = null;
+        CancelRender();
         var image = Image;
         Image = null;
-        image?.Dispose();
+        DisposeBitmapLater(image);
+    }
+
+    private void CancelRender()
+    {
+        var cancellation = _renderCancellation;
+        _renderCancellation = null;
+        if (cancellation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            cancellation.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The render has already completed and disposed its own lifetime.
+        }
     }
 
     private void QueueRender()
@@ -191,7 +216,7 @@ public sealed class PageViewModel : ObservableObject, IDisposable
             return;
         }
 
-        _renderCancellation?.Cancel();
+        CancelRender();
         var cancellation = new CancellationTokenSource();
         _renderCancellation = cancellation;
         var generation = ++_renderGeneration;
@@ -229,7 +254,7 @@ public sealed class PageViewModel : ObservableObject, IDisposable
             var previous = Image;
             Image = bitmap;
             _renderedWidth = targetWidth;
-            previous?.Dispose();
+            DisposeBitmapLater(previous);
         }
         catch (OperationCanceledException)
         {
@@ -239,7 +264,9 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         {
             if (generation == _renderGeneration && !cancellation.IsCancellationRequested)
             {
-                RenderError = ex.Message;
+                RenderError = ex is PdfDocumentException
+                    ? _localization.GetPdfFailureMessage(((PdfDocumentException)ex).Failure)
+                    : _localization.T("L.RenderError");
             }
         }
         finally
@@ -249,7 +276,35 @@ public sealed class PageViewModel : ObservableObject, IDisposable
                 IsRendering = false;
             }
 
+            if (ReferenceEquals(_renderCancellation, cancellation))
+            {
+                _renderCancellation = null;
+            }
+
             cancellation.Dispose();
         }
+    }
+
+    private static void DisposeBitmapLater(WriteableBitmap? bitmap)
+    {
+        if (bitmap is null)
+        {
+            return;
+        }
+
+        // Avalonia's compositor may still hold the previous bitmap for a frame.
+        // Disposing immediately during a zoom can tear down the image underneath
+        // the render thread, so let the visual tree release it first.
+        DispatcherTimer.RunOnce(() =>
+        {
+            try
+            {
+                bitmap.Dispose();
+            }
+            catch
+            {
+                // A shutdown race must not take down the process.
+            }
+        }, TimeSpan.FromMilliseconds(300));
     }
 }

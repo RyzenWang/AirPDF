@@ -36,7 +36,7 @@
 
     <Button Grid.Row="3"
             Classes="primary"
-            Content="OK"
+            Content="{DynamicResource L.OK}"
             HorizontalAlignment="Right"
             MinWidth="88"
             Click="OnCloseClick" />

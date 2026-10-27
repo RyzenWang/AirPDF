@@ -8,6 +8,8 @@ public sealed class AppSettings
 
     public string Theme { get; set; } = "System";
 
+    public string Language { get; set; } = "en";
+
     public bool SidebarVisible { get; set; } = true;
 
     public double WindowWidth { get; set; } = 1240;

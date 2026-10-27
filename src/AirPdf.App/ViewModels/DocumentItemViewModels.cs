@@ -1,12 +1,16 @@
+using AirPdf.App.Services;
 using AirPdf.Core.Models;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AirPdf.App.ViewModels;
 
-public sealed class SearchResultViewModel
+public sealed class SearchResultViewModel : ObservableObject
 {
-    public SearchResultViewModel(PdfSearchHit hit, int index)
+    private readonly LocalizationService _localization;
+
+    public SearchResultViewModel(PdfSearchHit hit, int index, LocalizationService localization)
     {
+        _localization = localization;
         Index = index;
         PageNumber = hit.PageNumber;
         Snippet = hit.Snippet;
@@ -24,7 +28,9 @@ public sealed class SearchResultViewModel
 
     public int MatchIndexOnPage { get; }
 
-    public string PageLabel => $"PAGE {PageNumber}";
+    public string PageLabel => _localization.Format("L.PageUpperFormat", PageNumber);
+
+    public void RefreshLanguage() => OnPropertyChanged(nameof(PageLabel));
 }
 
 public sealed class BookmarkViewModel
