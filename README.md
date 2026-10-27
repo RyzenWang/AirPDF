@@ -9,6 +9,9 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/RyzenWang/AirPDF/actions/workflows/ci.yml">
+    <img alt="CI" src="https://github.com/RyzenWang/AirPDF/actions/workflows/ci.yml/badge.svg" />
+  </a>
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4?style=flat-square" />
   <img alt="Avalonia 11" src="https://img.shields.io/badge/Avalonia-11.3-8B44AC?style=flat-square" />
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-2E6F63?style=flat-square" />
@@ -69,7 +72,7 @@ The published builds are self-contained; end users do not need .NET installed.
 ## Run from source
 
 ```bash
-git clone https://github.com/<your-account>/AirPDF.git
+git clone https://github.com/RyzenWang/AirPDF.git
 cd AirPDF
 dotnet run --project src/AirPdf.App
 ```

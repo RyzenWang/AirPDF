@@ -21,7 +21,7 @@ Requirements:
 - Git
 
 ```bash
-git clone https://github.com/<your-account>/AirPDF.git
+git clone https://github.com/RyzenWang/AirPDF.git
 cd AirPDF
 dotnet restore AirPdf.sln
 dotnet build AirPdf.sln

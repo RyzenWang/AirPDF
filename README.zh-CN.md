@@ -47,7 +47,7 @@ AirPDF 打开得快、渲染得稳，然后安静地退到页面后面。没有�
 macOS 13+，或现代 Linux 桌面（X11 / Wayland）均可。
 
 ```bash
-git clone https://github.com/<your-account>/AirPDF.git
+git clone https://github.com/RyzenWang/AirPDF.git
 cd AirPDF
 dotnet run --project src/AirPdf.App
 ```

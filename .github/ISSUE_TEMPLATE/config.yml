@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: Security report
-    url: https://github.com/your-account/AirPDF/security/advisories/new
+    url: https://github.com/RyzenWang/AirPDF/security/advisories/new
     about: Please report vulnerabilities privately, not as a public issue.
   - name: Questions and ideas
-    url: https://github.com/your-account/AirPDF/discussions
+    url: https://github.com/RyzenWang/AirPDF/discussions
     about: Ask a question or share a document workflow.
