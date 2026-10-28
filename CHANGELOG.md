@@ -13,6 +13,8 @@ semantic versioning once it reaches 1.0.
   choice is persisted.
 - Word-level text selection across pages, with `Ctrl+C` copy, `Ctrl+A` select
   all, double-click word selection, and a status-bar copy action.
+- Per-document reading position memory, storing the page, within-page offset,
+  and a file fingerprint so changed files do not restore a stale position.
 
 ### Fixed
 

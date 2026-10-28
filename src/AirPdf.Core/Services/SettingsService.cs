@@ -6,6 +6,8 @@ public sealed class AppSettings
 {
     public List<RecentFileEntry> RecentFiles { get; set; } = [];
 
+    public List<ReadingPositionEntry> ReadingPositions { get; set; } = [];
+
     public string Theme { get; set; } = "System";
 
     public string Language { get; set; } = "en";
@@ -24,6 +26,22 @@ public sealed class RecentFileEntry
     public string FilePath { get; set; } = string.Empty;
 
     public DateTimeOffset LastOpened { get; set; } = DateTimeOffset.UtcNow;
+}
+
+public sealed class ReadingPositionEntry
+{
+    public string FilePath { get; set; } = string.Empty;
+
+    public int Page { get; set; } = 1;
+
+    /// <summary>Offset within the page, normalized to 0..1.</summary>
+    public double PageOffset { get; set; }
+
+    public long FileSizeBytes { get; set; }
+
+    public long FileLastWriteUtcTicks { get; set; }
+
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
 /// <summary>
@@ -63,6 +81,7 @@ public sealed class SettingsService
                 var json = File.ReadAllText(SettingsPath);
                 var settings = JsonSerializer.Deserialize<AppSettings>(json, _options) ?? new AppSettings();
                 settings.RecentFiles ??= [];
+                settings.ReadingPositions ??= [];
                 return settings;
             }
             catch

@@ -6,6 +6,7 @@ using AirPdf.Core.Models;
 using AirPdf.Core.Services;
 using Avalonia;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
@@ -40,6 +41,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private TextPosition? _selectionFocus;
     private string _selectedText = string.Empty;
     private readonly HashSet<int> _selectedPages = [];
+    private readonly DispatcherTimer _readingPositionTimer;
+    private ReadingPositionEntry? _pendingReadingPosition;
+    private double _readingPageOffset;
+    private long _readingFileSizeBytes;
+    private long _readingFileWriteTicks;
 
     public MainWindowViewModel(
         PdfDocumentService documentService,
@@ -58,7 +64,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _localization = localization;
         _settings = settings;
         _isSidebarVisible = _settings.SidebarVisible;
+        _settings.ReadingPositions ??= [];
         _documentSubtitle = _localization.T("L.Ready");
+        _readingPositionTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1.2)
+        };
+        _readingPositionTimer.Tick += (_, _) =>
+        {
+            _readingPositionTimer.Stop();
+            SaveReadingPositionNow();
+        };
 
         var systemVariant = Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant;
         var systemIsDark = systemVariant == Avalonia.Platform.PlatformThemeVariant.Dark;
@@ -330,6 +346,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void CloseDocument()
     {
+        SaveReadingPositionNow();
         CancelSafely(_loadCancellation);
         CancelSafely(_searchCancellation);
         CloseDocumentCore();
@@ -596,6 +613,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        SaveReadingPositionNow();
         CancelSafely(_loadCancellation);
         var cancellation = new CancellationTokenSource();
         _loadCancellation = cancellation;
@@ -715,14 +733,64 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ScrollToPageRequested?.Invoke(this, _currentPage);
     }
 
-    public void UpdateCurrentPageFromScroll(int pageNumber)
+    public void UpdateCurrentPageFromScroll(int pageNumber, double pageOffset = 0)
     {
         if (!IsDocumentOpen)
         {
             return;
         }
 
+        _readingPageOffset = Math.Clamp(pageOffset, 0, 1);
         SetCurrentPage(pageNumber);
+        ScheduleReadingPositionSave();
+    }
+
+    public ReadingPositionEntry? TakePendingReadingPosition()
+    {
+        var pending = _pendingReadingPosition;
+        _pendingReadingPosition = null;
+        return pending;
+    }
+
+    public void SaveReadingPositionNow()
+    {
+        _readingPositionTimer.Stop();
+        if (_document is null || PageCount == 0)
+        {
+            return;
+        }
+
+        var entry = _settings.ReadingPositions.FirstOrDefault(
+            candidate => SamePath(candidate.FilePath, _document.FilePath));
+        if (entry is null)
+        {
+            entry = new ReadingPositionEntry { FilePath = _document.FilePath };
+            _settings.ReadingPositions.Add(entry);
+        }
+
+        entry.Page = Math.Clamp(_currentPage, 1, PageCount);
+        entry.PageOffset = Math.Clamp(_readingPageOffset, 0, 1);
+        entry.FileSizeBytes = _readingFileSizeBytes;
+        entry.FileLastWriteUtcTicks = _readingFileWriteTicks;
+        entry.UpdatedAt = DateTimeOffset.UtcNow;
+
+        PruneReadingPositions();
+        _settingsService.Save(_settings);
+    }
+
+    public void SaveWindowState(double width, double height, bool isMaximized)
+    {
+        SaveReadingPositionNow();
+
+        if (width > 500 && height > 400)
+        {
+            _settings.WindowWidth = width;
+            _settings.WindowHeight = height;
+        }
+
+        _settings.WindowMaximized = isMaximized;
+        _settings.SidebarVisible = IsSidebarVisible;
+        _settingsService.Save(_settings);
     }
 
     public void CommitPageNumberInput() => GoToPageInput();
@@ -994,20 +1062,80 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private readonly record struct TextPosition(int PageNumber, int WordIndex);
 
-    public void SaveWindowState(double width, double height, bool isMaximized)
+    public void SaveSettings() => _settingsService.Save(_settings);
+
+    private void ScheduleReadingPositionSave()
     {
-        if (width > 500 && height > 400)
+        if (_document is null)
         {
-            _settings.WindowWidth = width;
-            _settings.WindowHeight = height;
+            return;
         }
 
-        _settings.WindowMaximized = isMaximized;
-        _settings.SidebarVisible = IsSidebarVisible;
-        _settingsService.Save(_settings);
+        _readingPositionTimer.Stop();
+        _readingPositionTimer.Start();
     }
 
-    public void SaveSettings() => _settingsService.Save(_settings);
+    private void PruneReadingPositions()
+    {
+        var retained = _settings.ReadingPositions
+            .OrderByDescending(entry => entry.UpdatedAt)
+            .Take(50)
+            .ToHashSet();
+
+        _settings.ReadingPositions.RemoveAll(entry => !retained.Contains(entry));
+    }
+
+    private ReadingPositionEntry? FindReadingPosition(PdfDocumentInfo info)
+    {
+        var entry = _settings.ReadingPositions.FirstOrDefault(
+            candidate => SamePath(candidate.FilePath, info.FilePath));
+        if (entry is null || entry.Page < 1 || entry.Page > info.PageCount)
+        {
+            return null;
+        }
+
+        if (entry.FileSizeBytes > 0 && entry.FileSizeBytes != info.FileSizeBytes)
+        {
+            return null;
+        }
+
+        var lastWriteTicks = GetFileWriteUtcTicks(info.FilePath);
+        if (entry.FileLastWriteUtcTicks > 0 &&
+            lastWriteTicks > 0 &&
+            entry.FileLastWriteUtcTicks != lastWriteTicks)
+        {
+            return null;
+        }
+
+        return entry;
+    }
+
+    private static long GetFileWriteUtcTicks(string filePath)
+    {
+        try
+        {
+            return File.Exists(filePath) ? File.GetLastWriteTimeUtc(filePath).Ticks : 0;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static bool SamePath(string left, string right)
+    {
+        try
+        {
+            var comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), comparison);
+        }
+        catch
+        {
+            return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     private void StartTextLayerExtraction(PdfDocumentInfo info, string? password)
     {
@@ -1069,6 +1197,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _document = info;
         _password = password;
         _pageRenderer = new PdfPageRenderer(_documentService, info.FilePath, password);
+        _readingFileSizeBytes = info.FileSizeBytes;
+        _readingFileWriteTicks = GetFileWriteUtcTicks(info.FilePath);
+        _pendingReadingPosition = FindReadingPosition(info);
+        _readingPageOffset = _pendingReadingPosition?.PageOffset ?? 0;
 
         Pages = info.Pages.Select(page => new PageViewModel(_pageRenderer, page, _localization)).ToList();
         Thumbnails = info.Pages.Select(page => new ThumbnailViewModel(_pageRenderer, page)).ToList();
@@ -1107,6 +1239,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private void CloseDocumentCore(bool clearDocument = true)
     {
+        _readingPositionTimer.Stop();
+        _pendingReadingPosition = null;
+        _readingPageOffset = 0;
         CancelSafely(_textCancellation);
         _textCancellation = null;
         ClearTextSelection();

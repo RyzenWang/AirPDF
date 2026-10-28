@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private bool _suppressThumbnailSync;
     private bool _isSelectingText;
     private bool _selectionMoved;
+    private bool _restoringDocument;
 
     public MainWindow()
         : this(null)
@@ -97,17 +98,35 @@ public partial class MainWindow : Window
 
     private void OnDocumentOpened(object? sender, EventArgs e)
     {
+        var readingPosition = _viewModel.TakePendingReadingPosition();
+
         Dispatcher.UIThread.Post(() =>
         {
+            _restoringDocument = true;
             UpdateViewport();
             _viewModel.FitWidthToViewport();
+
+            if (readingPosition is not null)
+            {
+                ScrollToReadingPosition(readingPosition.Page, readingPosition.PageOffset);
+            }
+            else
+            {
+                ScrollToPage(1, center: false);
+            }
+
             UpdateThumbnailSelection();
-            ScrollToPage(1, center: false);
+            DispatcherTimer.RunOnce(() => _restoringDocument = false, TimeSpan.FromMilliseconds(300));
         }, DispatcherPriority.Loaded);
     }
 
     private void OnZoomChanged(object? sender, EventArgs e)
     {
+        if (_restoringDocument)
+        {
+            return;
+        }
+
         var page = _viewModel.CurrentPage;
         Dispatcher.UIThread.Post(() => ScrollToPage(page), DispatcherPriority.Loaded);
     }
@@ -144,11 +163,32 @@ public partial class MainWindow : Window
         }
 
         var page = GetPageAtViewportTop();
-        if (page > 0)
+        var viewer = PagesList.Viewer;
+        if (page > 0 && viewer is not null)
         {
-            _viewModel.UpdateCurrentPageFromScroll(page);
+            var pageModel = _viewModel.Pages.FirstOrDefault(candidate => candidate.Number == page);
+            var pageTop = GetPageTop(page);
+            var fraction = pageModel is null
+                ? 0
+                : Math.Clamp(
+                    (viewer.Offset.Y - pageTop) / Math.Max(1, pageModel.DisplayHeight),
+                    0,
+                    1);
+            _viewModel.UpdateCurrentPageFromScroll(page, fraction);
             UpdateThumbnailSelection();
         }
+    }
+
+    private double GetPageTop(int pageNumber)
+    {
+        var index = Math.Clamp(pageNumber, 1, Math.Max(1, _viewModel.Pages.Count)) - 1;
+        var top = 24.0;
+        for (var i = 0; i < index; i++)
+        {
+            top += _viewModel.Pages[i].DisplayHeight + 28;
+        }
+
+        return top;
     }
 
     private int GetPageAtViewportTop()
@@ -206,18 +246,43 @@ public partial class MainWindow : Window
         }
 
         var index = Math.Clamp(pageNumber, 1, _viewModel.Pages.Count) - 1;
-        var top = 24.0;
-        for (var i = 0; i < index; i++)
-        {
-            top += _viewModel.Pages[i].DisplayHeight + 28;
-        }
-
+        var top = GetPageTop(pageNumber);
         var page = _viewModel.Pages[index];
         var target = center
             ? top - Math.Max(12, (viewer.Viewport.Height - page.DisplayHeight) / 2)
             : top - 12;
+        var fraction = Math.Clamp((target - top) / Math.Max(1, page.DisplayHeight), 0, 1);
 
-        ApplyScrollOffset(target, pageNumber);
+        ApplyScrollOffset(target, pageNumber, fraction);
+    }
+
+    private void ScrollToReadingPosition(int pageNumber, double fraction, int attempt = 0)
+    {
+        if (_viewModel.Pages.Count == 0)
+        {
+            return;
+        }
+
+        var viewer = PagesList.Viewer;
+        if (viewer is null)
+        {
+            if (attempt < 2)
+            {
+                Dispatcher.UIThread.Post(
+                    () => ScrollToReadingPosition(pageNumber, fraction, attempt + 1),
+                    DispatcherPriority.Background);
+            }
+
+            return;
+        }
+
+        var index = Math.Clamp(pageNumber, 1, _viewModel.Pages.Count) - 1;
+        var page = _viewModel.Pages[index];
+        var top = GetPageTop(page.Number);
+        var normalized = Math.Clamp(fraction, 0, 1);
+        var target = top + (normalized * page.DisplayHeight);
+
+        ApplyScrollOffset(target, page.Number, normalized);
     }
 
     private void ScrollToSearchResult(SearchResultViewModel result)
@@ -234,27 +299,25 @@ public partial class MainWindow : Window
         }
 
         var page = _viewModel.Pages[result.PageNumber - 1];
-        var top = 24.0;
-        for (var i = 0; i < result.PageNumber - 1; i++)
-        {
-            top += _viewModel.Pages[i].DisplayHeight + 28;
-        }
+        var top = GetPageTop(result.PageNumber);
 
         var highlightTop = result.Rects.Count > 0
             ? top + (result.Rects[0].Y * page.DisplayHeight)
             : top;
         var target = highlightTop - (viewer.Viewport.Height * 0.34);
-        ApplyScrollOffset(target, result.PageNumber);
+        var fraction = Math.Clamp((highlightTop - top) / Math.Max(1, page.DisplayHeight), 0, 1);
+        ApplyScrollOffset(target, result.PageNumber, fraction);
     }
 
-    private void ApplyScrollOffset(double target, int pageNumber)
+    private void ApplyScrollOffset(double target, int pageNumber, double fraction)
     {
         _suppressScrollSync = true;
         PagesList.ScrollToVerticalOffset(target);
         DispatcherTimer.RunOnce(() =>
         {
             _suppressScrollSync = false;
-            _viewModel.UpdateCurrentPageFromScroll(pageNumber);
+            _viewModel.UpdateCurrentPageFromScroll(pageNumber, fraction);
+            UpdateThumbnailSelection();
         }, TimeSpan.FromMilliseconds(140));
 
         UpdateThumbnailSelection();

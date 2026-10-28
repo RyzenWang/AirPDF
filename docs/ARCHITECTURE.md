@@ -96,6 +96,19 @@ before that page has been virtualized into existence.
 Search result navigation adds the active match's normalized `Y` coordinate to
 the page offset, placing the highlight near the upper third of the viewport.
 
+## Reading position
+
+Each opened document records `(page, within-page offset)` in the settings file,
+keyed by its absolute path. The entry also stores the file size and last-write
+ticks; if either changes, the old position is ignored. Scroll updates are
+debounced for 1.2 seconds, and closing a document or the window flushes the
+latest position immediately.
+
+On open, the saved position is held until the window has applied fit-width and
+laid out the page heights, then the scroll viewer is placed at
+`pageTop + offset × pageHeight`. The fraction is used rather than a raw pixel
+offset so the position survives a different window size or zoom level.
+
 ## Text selection
 
 `PdfTextService` extracts ordered word geometry from PdfPig after a document is

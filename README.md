@@ -47,6 +47,8 @@ small .NET application with a hand-built Avalonia interface.
 - **Full-text search** with page-grouped results and in-page match highlights.
 - **Text selection and copy** — drag across words and pages, double-click a
   word, `Ctrl+A` selects the document, and `Ctrl+C` copies the result.
+- **Remembers your place** in every document, including the offset within the
+  page; the position is restored on the next open.
 - **Zoom** with fit width, fit page, actual size, presets, and `Ctrl` + wheel.
 - **Password-protected PDFs** with a proper unlock prompt.
 - **Light and dark themes**, following the system on first launch.
@@ -204,7 +206,7 @@ docs/                   Screenshots and architecture notes
 
 - [ ] PDF hyperlinks and internal link navigation
 - [ ] Native printing and "Save a copy"
-- [ ] Per-document bookmarks and remembered reading position
+- [ ] Per-document bookmarks
 - [ ] Rotated-page search highlights
 - [ ] Annotations (highlight, ink, notes)
 - [ ] Tabs and multi-window support

@@ -88,6 +88,42 @@ public sealed class PdfDocumentServiceTests
     }
 
     [Fact]
+    public void SettingsService_RoundTripsReadingPosition()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-settings-{Guid.NewGuid()}");
+        try
+        {
+            var service = new SettingsService(directory);
+            var settings = new AppSettings();
+            settings.ReadingPositions.Add(new ReadingPositionEntry
+            {
+                FilePath = SamplePath,
+                Page = 3,
+                PageOffset = 0.42,
+                FileSizeBytes = 1234,
+                FileLastWriteUtcTicks = 5678
+            });
+
+            service.Save(settings);
+            var loaded = service.Load();
+
+            var position = Assert.Single(loaded.ReadingPositions);
+            Assert.Equal(SamplePath, position.FilePath);
+            Assert.Equal(3, position.Page);
+            Assert.Equal(0.42, position.PageOffset, 3);
+            Assert.Equal(1234, position.FileSizeBytes);
+            Assert.Equal(5678, position.FileLastWriteUtcTicks);
+        }
+        finally
+        {
+            if (Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task OpenAsync_MissingFile_ThrowsFriendlyFailure()
     {
         var service = new PdfDocumentService();
