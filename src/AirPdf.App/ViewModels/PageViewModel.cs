@@ -30,6 +30,8 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     private string? _renderError;
     private IReadOnlyList<PdfSearchRect> _highlightRects = [];
     private IReadOnlyList<PdfSearchRect> _activeHighlightRects = [];
+    private IReadOnlyList<PdfTextWord> _words = [];
+    private IReadOnlyList<PdfSearchRect> _selectionRects = [];
 
     public PageViewModel(PdfPageRenderer renderer, PdfPageInfo pageInfo, LocalizationService localization)
     {
@@ -121,6 +123,84 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         get => _activeHighlightRects;
         private set => SetProperty(ref _activeHighlightRects, value);
     }
+
+    public IReadOnlyList<PdfTextWord> Words => _words;
+
+    public bool HasTextLayer => _words.Count > 0;
+
+    public IReadOnlyList<PdfSearchRect> SelectionRects
+    {
+        get => _selectionRects;
+        private set
+        {
+            if (SetProperty(ref _selectionRects, value))
+            {
+                OnPropertyChanged(nameof(HasSelection));
+            }
+        }
+    }
+
+    public bool HasSelection => SelectionRects.Count > 0;
+
+    public void SetTextLayout(PdfTextPage page)
+    {
+        _words = page.Words;
+        OnPropertyChanged(nameof(Words));
+        OnPropertyChanged(nameof(HasTextLayer));
+    }
+
+    public int HitTestWord(double x, double y)
+    {
+        const double padding = 0.003;
+        for (var i = 0; i < _words.Count; i++)
+        {
+            var bounds = _words[i].Bounds;
+            if (x >= bounds.X - padding &&
+                x <= bounds.X + bounds.Width + padding &&
+                y >= bounds.Y - padding &&
+                y <= bounds.Y + bounds.Height + padding)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    public int NearestWord(double x, double y)
+    {
+        if (_words.Count == 0)
+        {
+            return -1;
+        }
+
+        var bestIndex = -1;
+        var bestDistance = double.MaxValue;
+        for (var i = 0; i < _words.Count; i++)
+        {
+            var bounds = _words[i].Bounds;
+            var centerX = bounds.X + (bounds.Width / 2);
+            var centerY = bounds.Y + (bounds.Height / 2);
+            var dx = Math.Max(0, Math.Abs(x - centerX) - (bounds.Width / 2));
+            var dy = Math.Max(0, Math.Abs(y - centerY) - (bounds.Height / 2));
+            var distance = (dx * dx) + (dy * dy);
+
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    }
+
+    public void SetSelectionRects(IReadOnlyList<PdfSearchRect> rects)
+    {
+        SelectionRects = rects;
+    }
+
+    public void ClearSelectionRects() => SelectionRects = [];
 
     public void ApplyZoom(double zoom)
     {

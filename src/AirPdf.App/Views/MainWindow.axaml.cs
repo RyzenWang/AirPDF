@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using AirPdf.App.Services;
 using AirPdf.App.ViewModels;
 using AirPdf.Core.Services;
@@ -17,6 +18,8 @@ public partial class MainWindow : Window
     private readonly string? _initialFile;
     private bool _suppressScrollSync;
     private bool _suppressThumbnailSync;
+    private bool _isSelectingText;
+    private bool _selectionMoved;
 
     public MainWindow()
         : this(null)
@@ -35,11 +38,13 @@ public partial class MainWindow : Window
         _initialFile = initialFile;
         var documentService = new PdfDocumentService();
         var searchService = new PdfSearchService();
+        var textService = new PdfTextService();
         var dialogs = new DialogService(() => this, localization);
 
         _viewModel = new MainWindowViewModel(
             documentService,
             searchService,
+            textService,
             _settingsService,
             dialogs,
             settings,
@@ -60,6 +65,7 @@ public partial class MainWindow : Window
 
         _viewModel.ScrollToPageRequested += OnScrollToPageRequested;
         _viewModel.ScrollToSearchResultRequested += OnScrollToSearchResultRequested;
+        _viewModel.CopySelectionRequested += OnCopySelectionRequested;
         _viewModel.DocumentOpened += OnDocumentOpened;
         _viewModel.ZoomChanged += OnZoomChanged;
         _viewModel.SearchOpened += OnSearchOpened;
@@ -67,6 +73,9 @@ public partial class MainWindow : Window
         PagesList.SizeChanged += (_, _) => UpdateViewport();
 
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(PointerPressedEvent, OnSelectionPointerPressed, RoutingStrategies.Tunnel);
+        AddHandler(PointerMovedEvent, OnSelectionPointerMoved, RoutingStrategies.Tunnel);
+        AddHandler(PointerReleasedEvent, OnSelectionPointerReleased, RoutingStrategies.Tunnel);
         PagesList.AddHandler(PointerWheelChangedEvent, OnPagesPointerWheel, RoutingStrategies.Tunnel);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
@@ -324,6 +333,143 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnSelectionPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!_viewModel.IsDocumentOpen || _isSelectingText ||
+            !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        var pageView = FindPageView(e.Source) ?? FindPageViewAt(e.GetPosition(this));
+        if (pageView?.DataContext is not PageViewModel page)
+        {
+            return;
+        }
+
+        PagesList.Focus();
+
+        var point = e.GetPosition(pageView);
+        if (!new Rect(pageView.Bounds.Size).Contains(point))
+        {
+            return;
+        }
+
+        if (!_viewModel.BeginTextSelection(
+                page.Number,
+                point.X / Math.Max(1, pageView.Bounds.Width),
+                point.Y / Math.Max(1, pageView.Bounds.Height),
+                e.ClickCount))
+        {
+            return;
+        }
+
+        _isSelectingText = true;
+        _selectionMoved = e.ClickCount >= 2;
+        e.Pointer.Capture(this);
+        e.Handled = true;
+    }
+
+    private void OnSelectionPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (!_isSelectingText)
+        {
+            return;
+        }
+
+        var pageView = FindPageViewAt(e.GetPosition(this));
+        if (pageView?.DataContext is PageViewModel page)
+        {
+            var point = e.GetPosition(pageView);
+            if (_viewModel.UpdateTextSelection(
+                    page.Number,
+                    point.X / Math.Max(1, pageView.Bounds.Width),
+                    point.Y / Math.Max(1, pageView.Bounds.Height)))
+            {
+                _selectionMoved = true;
+            }
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnSelectionPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_isSelectingText)
+        {
+            return;
+        }
+
+        if (_selectionMoved)
+        {
+            _viewModel.CompleteTextSelection();
+        }
+        else
+        {
+            _viewModel.ClearTextSelection();
+        }
+
+        _isSelectingText = false;
+        e.Pointer.Capture(null);
+        e.Handled = true;
+    }
+
+    private void OnCopySelectionRequested(object? sender, string text)
+    {
+        _ = CopyTextAsync(text);
+    }
+
+    private async Task CopyTextAsync(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard is not null)
+            {
+                await clipboard.SetTextAsync(text);
+            }
+        }
+        catch
+        {
+            // Clipboard access can be denied by the desktop environment.
+        }
+    }
+
+    private static PdfPageView? FindPageView(object? source)
+    {
+        if (source is PdfPageView pageView)
+        {
+            return pageView;
+        }
+
+        return (source as Visual)?.GetVisualAncestors().OfType<PdfPageView>().FirstOrDefault();
+    }
+
+    private PdfPageView? FindPageViewAt(Point windowPoint)
+    {
+        foreach (var pageView in PagesList.GetVisualDescendants().OfType<PdfPageView>())
+        {
+            var origin = pageView.TranslatePoint(new Point(0, 0), this);
+            if (origin is null)
+            {
+                continue;
+            }
+
+            var bounds = new Rect(origin.Value, pageView.Bounds.Size);
+            if (bounds.Contains(windowPoint))
+            {
+                return pageView;
+            }
+        }
+
+        return null;
+    }
+
     private void OnFitWidthMenuClick(object? sender, RoutedEventArgs e) =>
         _viewModel.FitWidthCommand.Execute(null);
 
@@ -380,6 +526,20 @@ public partial class MainWindow : Window
     {
         var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control) ||
                    e.KeyModifiers.HasFlag(KeyModifiers.Meta);
+
+        if (!(e.Source is TextBox) && ctrl && e.Key == Key.C && _viewModel.HasSelection)
+        {
+            _viewModel.CopySelectionCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
+
+        if (!(e.Source is TextBox) && ctrl && e.Key == Key.A && _viewModel.IsDocumentOpen)
+        {
+            _viewModel.SelectAllTextCommand.Execute(null);
+            e.Handled = true;
+            return;
+        }
 
         if (ctrl && e.Key == Key.O)
         {

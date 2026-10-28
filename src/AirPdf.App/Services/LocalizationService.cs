@@ -48,6 +48,8 @@ public sealed class LocalizationService
             ["L.WelcomeMeta"] = ("PDFium  ·  .NET 10  ·  MIT licensed", "PDFium  ·  .NET 10  ·  MIT 许可"),
             ["L.Recent"] = ("RECENT", "最近打开"),
             ["L.Clear"] = ("Clear", "清除"),
+            ["L.Copy"] = ("Copy", "复制"),
+            ["L.SelectionStatusFormat"] = ("{0} characters selected", "已选择 {0} 个字符"),
             ["L.SearchTitle"] = ("Find in document", "在文档中查找"),
             ["L.SearchSubtitle"] = ("Searches the PDF text layer", "搜索 PDF 文本层"),
             ["L.SearchPlaceholder"] = ("Search this PDF…", "搜索此 PDF…"),

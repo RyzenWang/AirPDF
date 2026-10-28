@@ -65,13 +65,41 @@ public sealed class PdfDocumentServiceTests
     }
 
     [Fact]
+    public async Task ExtractTextAsync_ReturnsWordGeometry()
+    {
+        var service = new PdfTextService();
+        var pages = new List<PdfTextPage>();
+        var progress = new InlineProgress<PdfTextPage>(pages.Add);
+
+        await service.ExtractAsync(SamplePath, null, progress);
+
+        Assert.Equal(8, pages.Count);
+        Assert.Contains(pages, page => page.Words.Any(word =>
+            word.Text.Contains("quiet", StringComparison.OrdinalIgnoreCase)));
+        Assert.All(
+            pages.SelectMany(page => page.Words),
+            word =>
+            {
+                Assert.InRange(word.Bounds.X, 0, 1);
+                Assert.InRange(word.Bounds.Y, 0, 1);
+                Assert.InRange(word.Bounds.Width, 0, 1);
+                Assert.InRange(word.Bounds.Height, 0, 1);
+            });
+    }
+
+    [Fact]
     public async Task OpenAsync_MissingFile_ThrowsFriendlyFailure()
     {
         var service = new PdfDocumentService();
 
         var error = await Assert.ThrowsAsync<PdfDocumentException>(
-            () => service.OpenAsync(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".pdf")));
+            () => service.OpenAsync(Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.pdf")));
 
         Assert.Equal(PdfFailure.NotFound, error.Failure);
+    }
+
+    private sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
     }
 }

@@ -26,9 +26,8 @@ AirPDF opens PDFs quickly, renders them natively, and stays out of the way. It
 has no account, no cloud, no telemetry, and no web view. The whole reader is a
 small .NET application with a hand-built Avalonia interface.
 
-> **Status:** 0.1 preview. The reading core is stable and tested; annotations,
-> printing, and text selection are not implemented yet. See the
-> [roadmap](#roadmap).
+> **Status:** 0.1 preview. The reading core is stable and tested; annotations
+> and printing are not implemented yet. See the [roadmap](#roadmap).
 
 ---
 
@@ -46,6 +45,8 @@ small .NET application with a hand-built Avalonia interface.
 - **Continuous, virtualized pages** — only pages near the viewport are decoded.
 - **Thumbnail rail and document outline** for fast navigation.
 - **Full-text search** with page-grouped results and in-page match highlights.
+- **Text selection and copy** — drag across words and pages, double-click a
+  word, `Ctrl+A` selects the document, and `Ctrl+C` copies the result.
 - **Zoom** with fit width, fit page, actual size, presets, and `Ctrl` + wheel.
 - **Password-protected PDFs** with a proper unlock prompt.
 - **Light and dark themes**, following the system on first launch.
@@ -131,6 +132,10 @@ Supported runtime identifiers include `win-x64`, `win-arm64`, `linux-x64`,
 | `Ctrl+O` / `Cmd+O` | Open a PDF |
 | `Ctrl+W` / `Cmd+W` | Close the document |
 | `Ctrl+F` / `Cmd+F` | Find in document |
+| Drag on text | Select words |
+| Double-click | Select a word |
+| `Ctrl+C` / `Cmd+C` | Copy the selected text |
+| `Ctrl+A` / `Cmd+A` | Select all document text |
 | `Enter` | Jump to the typed page, or run a search |
 | `Esc` | Close search, dismiss an error, or leave full screen |
 | `Ctrl++` / `Ctrl+-` | Zoom in / out |
@@ -186,7 +191,8 @@ docs/                   Screenshots and architecture notes
 
 ## Limitations
 
-- Pages are rasterized; text is not selectable yet.
+- Text selection is word-granular rather than character-granular.
+- Text selection is unavailable on pages with a non-zero `/Rotate` value.
 - No annotations, form filling, printing, or PDF editing.
 - Search highlights are hidden on pages with a non-zero `/Rotate` value; the
   results themselves still work.
@@ -196,7 +202,6 @@ docs/                   Screenshots and architecture notes
 
 ## Roadmap
 
-- [ ] Text selection and copy
 - [ ] PDF hyperlinks and internal link navigation
 - [ ] Native printing and "Save a copy"
 - [ ] Per-document bookmarks and remembered reading position

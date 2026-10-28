@@ -11,6 +11,8 @@ semantic versioning once it reaches 1.0.
 - Simplified Chinese interface with live switching from the toolbar or
   `Ctrl+Shift+L`. English remains the default on a fresh install, and the
   choice is persisted.
+- Word-level text selection across pages, with `Ctrl+C` copy, `Ctrl+A` select
+  all, double-click word selection, and a status-bar copy action.
 
 ### Fixed
 
@@ -20,7 +22,6 @@ semantic versioning once it reaches 1.0.
 
 ### Planned
 
-- Text selection and copy.
 - Native printing.
 - Per-document bookmarks and remembered reading position.
 - Rotated-page search highlights.

@@ -96,6 +96,19 @@ before that page has been virtualized into existence.
 Search result navigation adds the active match's normalized `Y` coordinate to
 the page offset, placing the highlight near the upper third of the viewport.
 
+## Text selection
+
+`PdfTextService` extracts ordered word geometry from PdfPig after a document is
+opened. Each `PdfTextPage` carries normalized word rectangles. Selection state
+is stored as `(page, word index)` pairs in `MainWindowViewModel`; dragging maps
+the pointer to a page through the realized `PdfPageView` controls and expands
+the range across pages. `TextSelectionOverlay` paints the selected word boxes,
+and the status bar exposes copy/select-all actions.
+
+The selection is word-granular by design: it keeps hit-testing deterministic
+and avoids a second character-level layout system. Rotated pages are skipped
+for now, matching the search-highlight limitation.
+
 ## Theming and typography
 
 - `Colors.axaml` defines light and dark theme dictionaries.

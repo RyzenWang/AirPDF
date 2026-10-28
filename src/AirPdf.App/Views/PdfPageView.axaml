@@ -16,6 +16,9 @@
                Stretch="Fill"
                RenderOptions.BitmapInterpolationMode="HighQuality" />
 
+        <controls:TextSelectionOverlay Rects="{Binding SelectionRects}"
+                                       IsVisible="{Binding HasSelection}" />
+
         <controls:SearchHighlightOverlay Rects="{Binding HighlightRects}"
                                          ActiveRects="{Binding ActiveHighlightRects}"
                                          IsVisible="{Binding HasHighlights}" />

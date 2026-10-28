@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using AirPdf.App.Rendering;
 using AirPdf.App.Services;
 using AirPdf.Core.Models;
@@ -17,12 +18,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private readonly PdfDocumentService _documentService;
     private readonly PdfSearchService _searchService;
+    private readonly PdfTextService _textService;
     private readonly SettingsService _settingsService;
     private readonly IUserDialogService _dialogs;
     private readonly LocalizationService _localization;
     private readonly AppSettings _settings;
     private CancellationTokenSource? _loadCancellation;
     private CancellationTokenSource? _searchCancellation;
+    private CancellationTokenSource? _textCancellation;
     private PdfDocumentInfo? _document;
     private PdfPageRenderer? _pageRenderer;
     private string? _password;
@@ -33,10 +36,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private string? _errorKey;
     private string? _busyFileName;
     private bool _searchFailed;
+    private TextPosition? _selectionAnchor;
+    private TextPosition? _selectionFocus;
+    private string _selectedText = string.Empty;
+    private readonly HashSet<int> _selectedPages = [];
 
     public MainWindowViewModel(
         PdfDocumentService documentService,
         PdfSearchService searchService,
+        PdfTextService textService,
         SettingsService settingsService,
         IUserDialogService dialogs,
         AppSettings settings,
@@ -44,6 +52,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         _documentService = documentService;
         _searchService = searchService;
+        _textService = textService;
         _settingsService = settingsService;
         _dialogs = dialogs;
         _localization = localization;
@@ -74,6 +83,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public event EventHandler? SearchOpened;
 
     public event EventHandler<SearchResultViewModel>? ScrollToSearchResultRequested;
+
+    public event EventHandler<string>? CopySelectionRequested;
 
     public AppSettings Settings => _settings;
 
@@ -183,6 +194,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool HasMetadata => Metadata.Count > 0;
 
     public bool HasSearchQuery => !string.IsNullOrWhiteSpace(SearchQuery);
+
+    public bool HasSelection => _selectedText.Length > 0;
+
+    public string SelectionStatus => HasSelection
+        ? _localization.Format("L.SelectionStatusFormat", _selectedText.Length)
+        : string.Empty;
 
     public bool HasSearchResults
     {
@@ -375,6 +392,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ClearSearchState();
         SearchOpened?.Invoke(this, EventArgs.Empty);
     }
+
+    [RelayCommand]
+    private void CopySelection()
+    {
+        if (HasSelection)
+        {
+            CopySelectionRequested?.Invoke(this, _selectedText);
+        }
+    }
+
+    [RelayCommand]
+    private void SelectAllText() => SelectAllDocumentText();
 
     [RelayCommand]
     private void ShowPagesTab()
@@ -609,6 +638,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
             cancellation.Token.ThrowIfCancellationRequested();
             LoadDocument(info, password);
+            StartTextLayerExtraction(info, password);
 
             if (recordRecent)
             {
@@ -697,6 +727,273 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public void CommitPageNumberInput() => GoToPageInput();
 
+    public bool BeginTextSelection(int pageNumber, double x, double y, int clickCount)
+    {
+        if (!IsDocumentOpen)
+        {
+            return false;
+        }
+
+        var page = Pages.FirstOrDefault(candidate => candidate.Number == pageNumber);
+        if (page is null || !page.HasTextLayer)
+        {
+            return false;
+        }
+
+        var wordIndex = page.HitTestWord(x, y);
+        if (wordIndex < 0)
+        {
+            return false;
+        }
+
+        ResetSelectionVisuals();
+
+        if (clickCount >= 3)
+        {
+            _selectionAnchor = new TextPosition(pageNumber, 0);
+            _selectionFocus = new TextPosition(pageNumber, page.Words.Count - 1);
+            ApplySelection();
+            return true;
+        }
+
+        _selectionAnchor = new TextPosition(pageNumber, wordIndex);
+        _selectionFocus = clickCount >= 2 ? _selectionAnchor : null;
+        if (_selectionFocus is not null)
+        {
+            ApplySelection();
+        }
+
+        return true;
+    }
+
+    public bool UpdateTextSelection(int pageNumber, double x, double y)
+    {
+        if (_selectionAnchor is null)
+        {
+            return false;
+        }
+
+        var page = Pages.FirstOrDefault(candidate => candidate.Number == pageNumber);
+        if (page is null || !page.HasTextLayer)
+        {
+            return false;
+        }
+
+        var wordIndex = page.HitTestWord(x, y);
+        if (wordIndex < 0)
+        {
+            wordIndex = page.NearestWord(x, y);
+        }
+
+        if (wordIndex < 0)
+        {
+            return false;
+        }
+
+        _selectionFocus = new TextPosition(pageNumber, wordIndex);
+        ApplySelection();
+        return true;
+    }
+
+    public void CompleteTextSelection()
+    {
+        if (_selectionFocus is null)
+        {
+            ClearTextSelection();
+        }
+    }
+
+    public void ClearTextSelection()
+    {
+        _selectionAnchor = null;
+        _selectionFocus = null;
+        ResetSelectionVisuals();
+    }
+
+    public string GetSelectedText() => _selectedText;
+
+    private void SelectAllDocumentText()
+    {
+        if (!IsDocumentOpen)
+        {
+            return;
+        }
+
+        var first = Pages.FirstOrDefault(page => page.HasTextLayer);
+        var last = Pages.LastOrDefault(page => page.HasTextLayer);
+        if (first is null || last is null)
+        {
+            return;
+        }
+
+        _selectionAnchor = new TextPosition(first.Number, 0);
+        _selectionFocus = new TextPosition(last.Number, last.Words.Count - 1);
+        ApplySelection();
+    }
+
+    private void ResetSelectionVisuals()
+    {
+        foreach (var page in Pages)
+        {
+            page.ClearSelectionRects();
+        }
+
+        _selectedPages.Clear();
+        _selectedText = string.Empty;
+        NotifySelectionChanged();
+    }
+
+    private void ApplySelection()
+    {
+        if (_selectionAnchor is not { } anchor || _selectionFocus is not { } focus)
+        {
+            return;
+        }
+
+        var start = anchor;
+        var end = focus;
+        if (start.PageNumber > end.PageNumber ||
+            (start.PageNumber == end.PageNumber && start.WordIndex > end.WordIndex))
+        {
+            (start, end) = (end, start);
+        }
+
+        var selectedPages = new HashSet<int>();
+        foreach (var page in Pages)
+        {
+            var inRange = page.Number >= start.PageNumber && page.Number <= end.PageNumber;
+            if (!inRange)
+            {
+                if (_selectedPages.Contains(page.Number))
+                {
+                    page.ClearSelectionRects();
+                }
+
+                continue;
+            }
+
+            if (page.Words.Count == 0)
+            {
+                if (_selectedPages.Contains(page.Number))
+                {
+                    page.ClearSelectionRects();
+                }
+
+                continue;
+            }
+
+            var from = page.Number == start.PageNumber ? start.WordIndex : 0;
+            var to = page.Number == end.PageNumber ? end.WordIndex : page.Words.Count - 1;
+            from = Math.Clamp(from, 0, page.Words.Count - 1);
+            to = Math.Clamp(to, 0, page.Words.Count - 1);
+            if (from > to)
+            {
+                (from, to) = (to, from);
+            }
+
+            var rects = new List<PdfSearchRect>(to - from + 1);
+            for (var i = from; i <= to; i++)
+            {
+                rects.Add(page.Words[i].Bounds);
+            }
+
+            page.SetSelectionRects(rects);
+            selectedPages.Add(page.Number);
+        }
+
+        _selectedPages.Clear();
+        foreach (var pageNumber in selectedPages)
+        {
+            _selectedPages.Add(pageNumber);
+        }
+
+        _selectedText = BuildSelectedText(start, end);
+        NotifySelectionChanged();
+    }
+
+    private string BuildSelectedText(TextPosition start, TextPosition end)
+    {
+        var builder = new StringBuilder();
+        PdfTextWord? previous = null;
+        var previousPage = 0;
+
+        foreach (var page in Pages)
+        {
+            if (page.Number < start.PageNumber || page.Number > end.PageNumber || page.Words.Count == 0)
+            {
+                continue;
+            }
+
+            var from = page.Number == start.PageNumber ? start.WordIndex : 0;
+            var to = page.Number == end.PageNumber ? end.WordIndex : page.Words.Count - 1;
+            from = Math.Clamp(from, 0, page.Words.Count - 1);
+            to = Math.Clamp(to, 0, page.Words.Count - 1);
+            if (from > to)
+            {
+                (from, to) = (to, from);
+            }
+
+            for (var i = from; i <= to; i++)
+            {
+                var word = page.Words[i];
+                if (builder.Length > 0)
+                {
+                    if (page.Number != previousPage || IsNewLine(previous, word))
+                    {
+                        builder.Append('\n');
+                    }
+                    else if (NeedsSpace(previous?.Text, word.Text))
+                    {
+                        builder.Append(' ');
+                    }
+                }
+
+                builder.Append(word.Text);
+                previous = word;
+                previousPage = page.Number;
+            }
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool IsNewLine(PdfTextWord? previous, PdfTextWord current)
+    {
+        if (previous is null)
+        {
+            return false;
+        }
+
+        var previousCenter = previous.Bounds.Y + (previous.Bounds.Height / 2);
+        var currentCenter = current.Bounds.Y + (current.Bounds.Height / 2);
+        var threshold = Math.Max(previous.Bounds.Height, current.Bounds.Height) * 0.65;
+        return Math.Abs(previousCenter - currentCenter) > threshold ||
+               current.Bounds.X + current.Bounds.Width < previous.Bounds.X + 0.002;
+    }
+
+    private static bool NeedsSpace(string? previous, string current)
+    {
+        if (string.IsNullOrEmpty(previous) || string.IsNullOrEmpty(current))
+        {
+            return false;
+        }
+
+        var left = previous[^1];
+        var right = current[0];
+        return !(IsCjk(left) && IsCjk(right));
+    }
+
+    private static bool IsCjk(char value) =>
+        value is >= '\u2E80' and <= '\u9FFF' or >= '\uF900' and <= '\uFAFF';
+
+    private void NotifySelectionChanged()
+    {
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(SelectionStatus));
+    }
+
+    private readonly record struct TextPosition(int PageNumber, int WordIndex);
+
     public void SaveWindowState(double width, double height, bool isMaximized)
     {
         if (width > 500 && height > 400)
@@ -711,6 +1008,59 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     public void SaveSettings() => _settingsService.Save(_settings);
+
+    private void StartTextLayerExtraction(PdfDocumentInfo info, string? password)
+    {
+        CancelSafely(_textCancellation);
+        var cancellation = new CancellationTokenSource();
+        _textCancellation = cancellation;
+        _ = ExtractTextLayerAsync(info, password, cancellation);
+    }
+
+    private async Task ExtractTextLayerAsync(
+        PdfDocumentInfo info,
+        string? password,
+        CancellationTokenSource cancellation)
+    {
+        try
+        {
+            var progress = new Progress<PdfTextPage>(page =>
+            {
+                if (cancellation.IsCancellationRequested || !ReferenceEquals(_document, info))
+                {
+                    return;
+                }
+
+                var pageViewModel = Pages.FirstOrDefault(candidate => candidate.Number == page.PageNumber);
+                pageViewModel?.SetTextLayout(page);
+
+                if (_selectionAnchor is not null)
+                {
+                    ApplySelection();
+                }
+            });
+
+            await _textService.ExtractAsync(info.FilePath, password, progress, cancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer document replaced this text layer.
+        }
+        catch
+        {
+            // Scanned PDFs and malformed text layers are valid documents; they
+            // simply do not expose selectable text.
+        }
+        finally
+        {
+            if (ReferenceEquals(_textCancellation, cancellation))
+            {
+                _textCancellation = null;
+            }
+
+            cancellation.Dispose();
+        }
+    }
 
     private void LoadDocument(PdfDocumentInfo info, string? password)
     {
@@ -757,6 +1107,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private void CloseDocumentCore(bool clearDocument = true)
     {
+        CancelSafely(_textCancellation);
+        _textCancellation = null;
+        ClearTextSelection();
+
         foreach (var page in Pages)
         {
             page.Dispose();
@@ -1092,6 +1446,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(LanguageShortLabel));
         OnPropertyChanged(nameof(PageStatusText));
         OnPropertyChanged(nameof(PageCountText));
+        OnPropertyChanged(nameof(SelectionStatus));
 
         if (_document is not null)
         {
