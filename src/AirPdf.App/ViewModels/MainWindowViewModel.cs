@@ -665,7 +665,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
         if (!IsUpdateReady)
         {
             await DownloadUpdateAsync(_availableUpdate, userInitiated: true);
-            return;
+            if (!IsUpdateReady)
+            {
+                return;
+            }
         }
 
         SaveReadingPositionNow();
