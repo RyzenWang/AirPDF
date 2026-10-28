@@ -9,6 +9,8 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Velopack;
+using Velopack.Exceptions;
 
 namespace AirPdf.App.ViewModels;
 
@@ -21,6 +23,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly PdfSearchService _searchService;
     private readonly PdfTextService _textService;
     private readonly SettingsService _settingsService;
+    private readonly UpdateService _updateService;
     private readonly IUserDialogService _dialogs;
     private readonly LocalizationService _localization;
     private readonly AppSettings _settings;
@@ -46,12 +49,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private double _readingPageOffset;
     private long _readingFileSizeBytes;
     private long _readingFileWriteTicks;
+    private UpdateInfo? _availableUpdate;
 
     public MainWindowViewModel(
         PdfDocumentService documentService,
         PdfSearchService searchService,
         PdfTextService textService,
         SettingsService settingsService,
+        UpdateService updateService,
         IUserDialogService dialogs,
         AppSettings settings,
         LocalizationService localization)
@@ -60,6 +65,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _searchService = searchService;
         _textService = textService;
         _settingsService = settingsService;
+        _updateService = updateService;
         _dialogs = dialogs;
         _localization = localization;
         _settings = settings;
@@ -88,6 +94,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         _localization.LanguageChanged += OnLanguageChanged;
         RefreshRecentFiles();
+        _ = CheckForUpdatesAsync(userInitiated: false);
     }
 
     public event EventHandler<int>? ScrollToPageRequested;
@@ -216,6 +223,43 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public string SelectionStatus => HasSelection
         ? _localization.Format("L.SelectionStatusFormat", _selectedText.Length)
         : string.Empty;
+
+    [ObservableProperty]
+    private bool _hasUpdate;
+
+    [ObservableProperty]
+    private bool _isUpdateReady;
+
+    [ObservableProperty]
+    private bool _isUpdating;
+
+    [ObservableProperty]
+    private int _updateProgress;
+
+    [ObservableProperty]
+    private string _updateVersion = string.Empty;
+
+    public bool CanApplyUpdate => HasUpdate && !IsUpdating;
+
+    public string UpdateButtonText
+    {
+        get
+        {
+            if (!HasUpdate)
+            {
+                return string.Empty;
+            }
+
+            if (IsUpdating)
+            {
+                return _localization.Format("L.UpdatingFormat", UpdateProgress);
+            }
+
+            return IsUpdateReady
+                ? _localization.Format("L.RestartToUpdateFormat", UpdateVersion)
+                : _localization.Format("L.UpdateAvailableFormat", UpdateVersion);
+        }
+    }
 
     public bool HasSearchResults
     {
@@ -605,6 +649,112 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     private void DismissError() => ClearError();
+
+    [RelayCommand]
+    private async Task CheckForUpdates() => await CheckForUpdatesAsync(userInitiated: true);
+
+    [RelayCommand]
+    private async Task ApplyUpdateAsync()
+    {
+        if (_availableUpdate is null)
+        {
+            await CheckForUpdatesAsync(userInitiated: true);
+            return;
+        }
+
+        if (!IsUpdateReady)
+        {
+            await DownloadUpdateAsync(_availableUpdate, userInitiated: true);
+            return;
+        }
+
+        SaveReadingPositionNow();
+        _updateService.ApplyAndRestart(_availableUpdate);
+    }
+
+    private async Task CheckForUpdatesAsync(bool userInitiated)
+    {
+        if (!_updateService.IsInstalled)
+        {
+            if (userInitiated)
+            {
+                SetError("L.UpdateNotInstalled");
+            }
+
+            return;
+        }
+
+        try
+        {
+            if (!userInitiated)
+            {
+                await Task.Delay(2500);
+            }
+
+            var update = await _updateService.CheckForUpdatesAsync();
+            if (update is null)
+            {
+                return;
+            }
+
+            _availableUpdate = update;
+            UpdateVersion = update.TargetFullRelease.Version.ToString();
+            HasUpdate = true;
+            IsUpdateReady = false;
+            OnPropertyChanged(nameof(UpdateButtonText));
+
+            await DownloadUpdateAsync(update, userInitiated: false);
+        }
+        catch (NotInstalledException)
+        {
+            // Portable/source builds do not participate in auto-updates.
+        }
+        catch
+        {
+            if (userInitiated)
+            {
+                SetError("L.UpdateError");
+            }
+        }
+    }
+
+    private async Task DownloadUpdateAsync(UpdateInfo update, bool userInitiated)
+    {
+        if (IsUpdating)
+        {
+            return;
+        }
+
+        IsUpdating = true;
+        UpdateProgress = 0;
+        OnPropertyChanged(nameof(UpdateButtonText));
+
+        try
+        {
+            await _updateService.DownloadAsync(
+                update,
+                progress => Dispatcher.UIThread.Post(() =>
+                {
+                    UpdateProgress = Math.Clamp(progress, 0, 100);
+                    OnPropertyChanged(nameof(UpdateButtonText));
+                }),
+                CancellationToken.None);
+
+            IsUpdateReady = true;
+        }
+        catch
+        {
+            if (userInitiated)
+            {
+                SetError("L.UpdateError");
+            }
+        }
+        finally
+        {
+            IsUpdating = false;
+            OnPropertyChanged(nameof(UpdateButtonText));
+        }
+    }
 
     public async Task OpenPathAsync(string filePath, bool recordRecent = true)
     {
@@ -1576,12 +1726,29 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     partial void OnIsSearchingChanged(bool value) => OnPropertyChanged(nameof(HasNoSearchResults));
 
+    partial void OnHasUpdateChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanApplyUpdate));
+        OnPropertyChanged(nameof(UpdateButtonText));
+    }
+
+    partial void OnIsUpdateReadyChanged(bool value) => OnPropertyChanged(nameof(UpdateButtonText));
+
+    partial void OnIsUpdatingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanApplyUpdate));
+        OnPropertyChanged(nameof(UpdateButtonText));
+    }
+
+    partial void OnUpdateProgressChanged(int value) => OnPropertyChanged(nameof(UpdateButtonText));
+
     private void OnLanguageChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(LanguageShortLabel));
         OnPropertyChanged(nameof(PageStatusText));
         OnPropertyChanged(nameof(PageCountText));
         OnPropertyChanged(nameof(SelectionStatus));
+        OnPropertyChanged(nameof(UpdateButtonText));
 
         if (_document is not null)
         {

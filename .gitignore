@@ -3,6 +3,9 @@ bin/
 obj/
 artifacts/
 publish/
+releases/
+.vpk/
+*.nupkg
 *.user
 *.suo
 *.userprefs

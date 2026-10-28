@@ -14,14 +14,15 @@ components that are distributed with, or required by, the application.
 | PdfPig | Apache-2.0 | https://github.com/UglyToad/PdfPig |
 | PDFium | BSD-3-Clause | https://pdfium.googlesource.com/pdfium/ |
 | SkiaSharp | MIT | https://github.com/mono/SkiaSharp |
+| Velopack | MIT | https://github.com/velopack/velopack |
 | Inter typeface | SIL Open Font License 1.1 | https://rsms.me/inter/ |
 | Lucide icons (adapted line geometry) | ISC | https://lucide.dev |
 
 ## MIT license
 
 The MIT License applies to Avalonia, Avalonia.Fonts.Inter, CommunityToolkit.Mvvm,
-PDFtoImage, and SkiaSharp. Their copyright notices are held by their respective
-authors and contributors.
+PDFtoImage, SkiaSharp, and Velopack. Their copyright notices are held by their
+respective authors and contributors.
 
 ```
 Permission is hereby granted, free of charge, to any person obtaining a copy

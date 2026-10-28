@@ -177,6 +177,11 @@
                         </DataTemplate>
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <Button Content="{DynamicResource L.CheckForUpdates}"
+                            Command="{Binding CheckForUpdatesCommand}"
+                            Classes="chip"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Center" />
                   </StackPanel>
                 </Border>
               </Flyout>
@@ -729,6 +734,16 @@
                      TextTrimming="CharacterEllipsis" />
         </StackPanel>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+          <Button Classes="soft"
+                  Content="{Binding UpdateButtonText}"
+                  Command="{Binding ApplyUpdateCommand}"
+                  IsVisible="{Binding HasUpdate}"
+                  IsEnabled="{Binding CanApplyUpdate}"
+                  MinHeight="22"
+                  Padding="8,2"
+                  FontSize="10.5"
+                  ToolTip.Tip="{DynamicResource L.CheckForUpdates}" />
+          <Border Width="1" Height="12" Background="{DynamicResource BorderBrush}" IsVisible="{Binding HasUpdate}" />
           <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsVisible="{Binding HasSelection}">
             <TextBlock Text="{Binding SelectionStatus}"
                        Classes="caption"

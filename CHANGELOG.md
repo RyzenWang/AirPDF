@@ -4,6 +4,30 @@ All notable changes to AirPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning once it reaches 1.0.
 
+## [Unreleased]
+
+### Added
+
+- Windows installer and portable package built with Velopack.
+- macOS `.pkg` and portable package built with optional Developer ID signing
+  and Apple notarization.
+- In-app update checks, background downloads, and a restart-to-update action for
+  installed Windows and macOS builds.
+- Distribution guide covering release assets, required signing secrets, and
+  end-to-end update testing.
+- macOS `.icns` application icon.
+
+### Changed
+
+- Release workflow now publishes Velopack installers and update manifests
+  instead of plain archives for Windows and macOS.
+
+### Notes
+
+- Windows Authenticode and Apple Developer ID credentials are supplied as
+  repository secrets. Without them the workflow produces unsigned packages and
+  skips notarization.
+
 ## [0.1.0] - 2026-10-28
 
 First public preview.

@@ -40,6 +40,7 @@ public partial class MainWindow : Window
         var documentService = new PdfDocumentService();
         var searchService = new PdfSearchService();
         var textService = new PdfTextService();
+        var updateService = new UpdateService();
         var dialogs = new DialogService(() => this, localization);
 
         _viewModel = new MainWindowViewModel(
@@ -47,6 +48,7 @@ public partial class MainWindow : Window
             searchService,
             textService,
             _settingsService,
+            updateService,
             dialogs,
             settings,
             localization);

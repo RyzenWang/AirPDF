@@ -11,27 +11,15 @@ permissions:
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
+  VPK_VERSION: 1.2.161
 
 jobs:
-  publish:
-    name: Publish ${{ matrix.rid }}
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            rid: win-x64
-            archive: zip
-          - os: ubuntu-latest
-            rid: linux-x64
-            archive: tar
-          - os: macos-latest
-            rid: osx-arm64
-            archive: tar
-          - os: macos-15-intel
-            rid: osx-x64
-            archive: tar
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    env:
+      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -42,7 +30,116 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart("v")
+          "value=$version" >> $env:GITHUB_OUTPUT
+
       - name: Publish
+        shell: pwsh
+        run: >
+          dotnet publish src/AirPdf.App/AirPdf.App.csproj
+          -c Release
+          -r win-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:Version=${{ steps.version.outputs.value }}
+          -o publish/win-x64
+
+      - name: Install Velopack CLI
+        shell: pwsh
+        run: dotnet tool install vpk --version $env:VPK_VERSION --tool-path .vpk
+
+      - name: Prepare Windows certificate
+        if: env.WINDOWS_CERTIFICATE_BASE64 != ''
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP "airpdf-codesign.pfx"
+          [IO.File]::WriteAllBytes(
+            $path,
+            [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          "WINDOWS_CERT_PATH=$path" >> $env:GITHUB_ENV
+
+      - name: Build installer and portable package
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $args = @(
+            "pack",
+            "--packId", "AirPDF",
+            "--packVersion", "${{ steps.version.outputs.value }}",
+            "--packDir", "publish/win-x64",
+            "--mainExe", "AirPdf.exe",
+            "--packTitle", "AirPDF",
+            "--packAuthors", "AirPDF contributors",
+            "--icon", "src/AirPdf.App/Assets/airpdf.ico",
+            "--runtime", "win-x64",
+            "--channel", "win",
+            "--outputDir", "releases/win"
+          )
+
+          if ($env:WINDOWS_CERT_PATH) {
+            $sign = "/td sha256 /fd sha256 /f `"$env:WINDOWS_CERT_PATH`" /p `"$env:WINDOWS_CERTIFICATE_PASSWORD`" /tr http://timestamp.digicert.com"
+            $args += @("--signParams", $sign)
+          }
+
+          & "$PWD\.vpk\vpk.exe" @args
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: AirPDF-win-x64
+          path: releases/win/*
+
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            rid: osx-arm64
+            arch: arm64
+          - os: macos-15-intel
+            rid: osx-x64
+            arch: x64
+
+    env:
+      MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+      MACOS_INSTALLER_CERTIFICATE_BASE64: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_BASE64 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_APP_SIGN_IDENTITY: ${{ secrets.MACOS_APP_SIGN_IDENTITY }}
+      MACOS_INSTALLER_SIGN_IDENTITY: ${{ secrets.MACOS_INSTALLER_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        shell: bash
         run: >
           dotnet publish src/AirPdf.App/AirPdf.App.csproj
           -c Release
@@ -51,46 +148,140 @@ jobs:
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
           -p:EnableCompressionInSingleFile=true
+          -p:Version=${{ steps.version.outputs.value }}
           -o publish/${{ matrix.rid }}
 
-      - name: Package (Windows)
-        if: matrix.archive == 'zip'
-        shell: pwsh
-        run: |
-          Compress-Archive -Path "publish/${{ matrix.rid }}/*" `
-            -DestinationPath "AirPDF-$env:GITHUB_REF_NAME-${{ matrix.rid }}.zip"
+      - name: Install Velopack CLI
+        shell: bash
+        run: dotnet tool install vpk --version "$VPK_VERSION" --tool-path .vpk
 
-      - name: Package (Unix)
-        if: matrix.archive == 'tar'
+      - name: Import Apple certificate and notary profile
+        if: env.MACOS_CERTIFICATE_BASE64 != ''
         shell: bash
         run: |
-          tar -czf "AirPDF-${GITHUB_REF_NAME}-${{ matrix.rid }}.tar.gz" \
-            -C "publish/${{ matrix.rid }}" .
+          CERT_PATH="$RUNNER_TEMP/airpdf-app.p12"
+          INSTALLER_PATH="$RUNNER_TEMP/airpdf-installer.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/airpdf-signing.keychain-db"
 
-      - name: Upload archive
+          python3 - "$CERT_PATH" "$MACOS_CERTIFICATE_BASE64" <<'PY'
+          import base64, sys
+          open(sys.argv[1], "wb").write(base64.b64decode(sys.argv[2]))
+          PY
+          python3 - "$INSTALLER_PATH" "$MACOS_INSTALLER_CERTIFICATE_BASE64" <<'PY'
+          import base64, sys
+          open(sys.argv[1], "wb").write(base64.b64decode(sys.argv[2]))
+          PY
+
+          security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security import "$INSTALLER_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          xcrun notarytool store-credentials "airpdf-notary" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --keychain "$KEYCHAIN_PATH"
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Build pkg and portable package
+        shell: bash
+        run: |
+          args=(
+            pack
+            --packId "AirPDF-osx-${{ matrix.arch }}"
+            --packVersion "${{ steps.version.outputs.value }}"
+            --packDir "publish/${{ matrix.rid }}"
+            --mainExe AirPdf
+            --packTitle AirPDF
+            --packAuthors "AirPDF contributors"
+            --icon src/AirPdf.App/Assets/airpdf.icns
+            --runtime "${{ matrix.rid }}"
+            --channel "osx-${{ matrix.arch }}"
+            --outputDir "releases/osx-${{ matrix.arch }}"
+          )
+
+          if [[ -n "${MACOS_CERTIFICATE_BASE64:-}" ]]; then
+            args+=(
+              --signAppIdentity "$MACOS_APP_SIGN_IDENTITY"
+              --signInstallIdentity "$MACOS_INSTALLER_SIGN_IDENTITY"
+              --notaryProfile airpdf-notary
+              --keychain "$KEYCHAIN_PATH"
+            )
+          fi
+
+          ./.vpk/vpk "${args[@]}"
+
+      - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: AirPDF-${{ matrix.rid }}
-          path: |
-            AirPDF-*.zip
-            AirPDF-*.tar.gz
+          name: AirPDF-osx-${{ matrix.arch }}
+          path: releases/osx-${{ matrix.arch }}/*
 
-  release:
-    name: Create GitHub release
-    needs: publish
+  linux:
+    name: Linux portable
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download archives
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        shell: bash
+        run: >
+          dotnet publish src/AirPdf.App/AirPdf.App.csproj
+          -c Release
+          -r linux-x64
+          --self-contained true
+          -p:PublishSingleFile=true
+          -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:EnableCompressionInSingleFile=true
+          -p:Version=${{ steps.version.outputs.value }}
+          -o publish/linux-x64
+
+      - name: Package
+        shell: bash
+        run: |
+          tar -czf "AirPDF-${{ steps.version.outputs.value }}-linux-x64.tar.gz" \
+            -C publish/linux-x64 .
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AirPDF-linux-x64
+          path: AirPDF-*-linux-x64.tar.gz
+
+  release:
+    name: Create GitHub release
+    needs: [windows, macos, linux]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
-          merge-multiple: true
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/AirPDF-*
+          files: |
+            artifacts/**/AirPDF-*
+            artifacts/**/releases.*.json
           generate_release_notes: true
           draft: false
           prerelease: ${{ contains(github.ref_name, '-preview') }}

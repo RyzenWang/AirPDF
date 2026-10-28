@@ -55,8 +55,11 @@ small .NET application with a hand-built Avalonia interface.
 - **English by default, Simplified Chinese on demand** — switch live from the
   toolbar or with `Ctrl+Shift+L`.
 - **Drag and drop**, command-line opening, and a recent-files shelf.
+- **Automatic updates** in installed Windows and macOS builds, including
+  background download and a restart action.
 - **Keyboard-first navigation** and a quiet, information-dense status bar.
-- **Zero network access** from the reading path.
+- **No network access on the reading path**; installed builds only contact
+  GitHub when checking for updates.
 
 ## Tech stack
 
@@ -123,6 +126,22 @@ dotnet publish src/AirPdf.App -c Release -r win-x64 \
 
 Supported runtime identifiers include `win-x64`, `win-arm64`, `linux-x64`,
 `linux-arm64`, `osx-x64`, and `osx-arm64`.
+
+### Installers and automatic updates
+
+Tagged releases are packaged with [Velopack](https://velopack.io/):
+
+- Windows x64: `AirPDF-win-Setup.exe` (installer) and a portable zip
+- macOS arm64 / x64: `AirPDF-osx-*.pkg` (installer) and a portable package
+- Linux x64: portable `.tar.gz`
+
+Installed Windows and macOS builds check GitHub for a newer stable release,
+download it in the background, and show a **Restart to update** action. Portable
+and source builds do not self-update.
+
+The workflow also contains optional Windows code-signing and macOS
+codesign/notarization steps. See [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)
+for the required repository secrets and the exact release process.
 
 > Release binaries are currently unsigned. Windows SmartScreen and macOS
 > Gatekeeper may ask for confirmation until signing is added.
@@ -199,7 +218,8 @@ docs/                   Screenshots and architecture notes
 - Search highlights are hidden on pages with a non-zero `/Rotate` value; the
   results themselves still work.
 - One document per window; no tabs.
-- No installers or code signing in the repository yet.
+- Release binaries are signed only when the maintainer signing secrets are
+  configured. Unsigned Windows/macOS builds may show platform warnings.
 - Mobile and browser targets are out of scope for the desktop reader.
 
 ## Roadmap
@@ -211,9 +231,8 @@ docs/                   Screenshots and architecture notes
 - [ ] Annotations (highlight, ink, notes)
 - [ ] Tabs and multi-window support
 - [ ] Additional UI languages (English and Simplified Chinese are available)
-- [ ] Tagged release with downloadable, signed builds
-- [ ] Automatic updates
-- [ ] UI/end-to-end coverage for zoom, search, and language switching
+- [ ] Configure production Windows signing and Apple notarization credentials
+- [ ] UI/end-to-end coverage for zoom, search, language switching, and updates
 
 Contributions and issue reports are welcome. If you want to pick up a roadmap
 item, open an issue first so we can keep the design coherent.
