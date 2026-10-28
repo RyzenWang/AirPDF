@@ -197,13 +197,16 @@ docs/                   Screenshots and architecture notes
 ## Roadmap
 
 - [ ] Text selection and copy
+- [ ] PDF hyperlinks and internal link navigation
 - [ ] Native printing and "Save a copy"
 - [ ] Per-document bookmarks and remembered reading position
+- [ ] Rotated-page search highlights
 - [ ] Annotations (highlight, ink, notes)
 - [ ] Tabs and multi-window support
-- [ ] Signed installers and automatic updates
-- [ ] Full localization (the UI is English today)
-- [ ] Rotated-page search highlights
+- [ ] Additional UI languages (English and Simplified Chinese are available)
+- [ ] Tagged release with downloadable, signed builds
+- [ ] Automatic updates
+- [ ] UI/end-to-end coverage for zoom, search, and language switching
 
 Contributions and issue reports are welcome. If you want to pick up a roadmap
 item, open an issue first so we can keep the design coherent.
