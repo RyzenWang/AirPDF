@@ -1,4 +1,8 @@
 <p align="center">
+  <a href="README.md">English</a> &nbsp;·&nbsp; <strong>简体中文</strong>
+</p>
+
+<p align="center">
   <img src="docs/welcome.png" alt="AirPDF 欢迎界面" width="860" />
 </p>
 

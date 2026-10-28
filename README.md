@@ -1,4 +1,8 @@
 <p align="center">
+  <strong>English</strong> &nbsp;·&nbsp; <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
   <img src="docs/welcome.png" alt="AirPDF welcome screen" width="860" />
 </p>
 
