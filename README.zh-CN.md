@@ -19,7 +19,7 @@
 AirPDF 打开得快、渲染得稳，然后安静地退到页面后面。没有账号，没有云端，没有遥测，
 也没有内嵌浏览器。整个阅读器就是一个小的 .NET 应用，界面用 Avalonia 手写。
 
-> **状态：** 0.1 预览版。阅读核心已经可用并有测试覆盖；批注、打印尚未实现。
+> **状态：** 0.2 预览版。阅读核心已经可用并有测试覆盖；批注、打印尚未实现。
 
 ![AirPDF 中文界面](docs/welcome-zh.png)
 
@@ -74,11 +74,12 @@ dotnet run --project src/AirPdf.App -- /path/to/document.pdf
 ```bash
 dotnet restore AirPdf.sln
 dotnet build AirPdf.sln -c Release
-dotnet test tests/AirPdf.Core.Tests/AirPdf.Core.Tests.csproj -c Release
+dotnet test AirPdf.sln -c Release
 ```
 
 测试使用 `tests/Assets/sample.pdf`，一份八页的示例文档，覆盖英文、中文、
-混合排版和搜索坐标。
+混合排版和搜索坐标。`AirPdf.App.Tests` 还包含 Headless Avalonia 测试，覆盖
+打开、搜索、选择、缩放、语言切换和阅读位置恢复。
 
 ## 发布
 
@@ -138,6 +139,7 @@ src/
   AirPdf.App/           Avalonia 桌面应用
 tests/
   AirPdf.Core.Tests/    打开、渲染、搜索、错误处理测试
+  AirPdf.App.Tests/     Headless 视图模型与页面布局测试
   Assets/               可复现的示例 PDF 与 HTML 源文件
 docs/                   截图与架构说明
 ```

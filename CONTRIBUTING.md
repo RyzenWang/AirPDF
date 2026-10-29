@@ -25,7 +25,7 @@ git clone https://github.com/RyzenWang/AirPDF.git
 cd AirPDF
 dotnet restore AirPdf.sln
 dotnet build AirPdf.sln
-dotnet test tests/AirPdf.Core.Tests/AirPdf.Core.Tests.csproj
+dotnet test AirPdf.sln
 dotnet run --project src/AirPdf.App
 ```
 

@@ -21,6 +21,13 @@ semantic versioning once it reaches 1.0.
 
 - Release workflow now publishes Velopack installers and update manifests
   instead of plain archives for Windows and macOS.
+- Text layers are loaded lazily as pages become visible instead of parsing the
+  whole document when it opens.
+- Page layout is precomputed so scrolling uses a binary search rather than
+  walking every page.
+- Selection and reading-position state moved into dedicated controllers.
+- Release builds now run the full test suite before packaging, and CI runs the
+  new headless Avalonia tests.
 
 ### Notes
 

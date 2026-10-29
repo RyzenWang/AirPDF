@@ -6,22 +6,39 @@ namespace AirPdf.App.Services;
 /// <summary>
 /// Thin wrapper around Velopack. Update checks are only meaningful in an
 /// installed build; running from <c>bin</c> is treated as not installed.
+/// The manager is created lazily so constructing the view model in tests or
+/// tools does not require a Velopack installation.
 /// </summary>
 public sealed class UpdateService
 {
     private const string RepositoryUrl = "https://github.com/RyzenWang/AirPDF";
 
-    private readonly UpdateManager _manager = new(
-        new GithubSource(RepositoryUrl, null, false));
+    private readonly Lazy<UpdateManager> _manager = new(
+        () => new UpdateManager(new GithubSource(RepositoryUrl, null, false)));
 
-    public bool IsInstalled => _manager.IsInstalled;
+    private UpdateManager Manager => _manager.Value;
+
+    public bool IsInstalled
+    {
+        get
+        {
+            try
+            {
+                return Manager.IsInstalled;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+    }
 
     public Task<UpdateInfo?> CheckForUpdatesAsync() =>
-        _manager.IsInstalled ? _manager.CheckForUpdatesAsync() : Task.FromResult<UpdateInfo?>(null);
+        IsInstalled ? Manager.CheckForUpdatesAsync() : Task.FromResult<UpdateInfo?>(null);
 
     public Task DownloadAsync(UpdateInfo update, Action<int> progress, CancellationToken cancellationToken) =>
-        _manager.DownloadUpdatesAsync(update, progress, cancellationToken);
+        Manager.DownloadUpdatesAsync(update, progress, cancellationToken);
 
     public void ApplyAndRestart(UpdateInfo update) =>
-        _manager.ApplyUpdatesAndRestart(update.TargetFullRelease);
+        Manager.ApplyUpdatesAndRestart(update.TargetFullRelease);
 }

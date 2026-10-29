@@ -13,7 +13,7 @@
 ## Checklist
 
 - [ ] `dotnet build AirPdf.sln -c Release` succeeds without new warnings.
-- [ ] `dotnet test tests/AirPdf.Core.Tests/AirPdf.Core.Tests.csproj -c Release` passes.
+- [ ] `dotnet test AirPdf.sln -c Release` passes.
 - [ ] Core changes stay free of Avalonia dependencies.
 - [ ] Long-running work is cancellable and does not block the UI thread.
 - [ ] README / CHANGELOG / third-party notices updated if needed.

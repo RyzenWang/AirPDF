@@ -44,9 +44,14 @@ front end.
   render generation. A page is rendered only while its view is attached to the
   visual tree; stale renders are discarded.
 - `ThumbnailViewModel` uses the same renderer at a fixed preview width.
+- `TextLayerLoader` extracts PdfPig word geometry lazily for the pages that are
+  visible or needed by a selection. Requests are batched and cancelled when the
+  document closes.
 - `PdfPageList` is a `ListBox` with a custom template that exposes the internal
   `ScrollViewer`. The list virtualizes page containers; scrolling drives the
   current-page calculation.
+- `PageLayout` precomputes page tops for the current zoom. Scroll and
+  navigation use binary search instead of walking every page.
 - `SearchHighlightOverlay` paints normalized rectangles over the bitmap. The
   active match gets a border and a lighter fill.
 
@@ -83,6 +88,8 @@ available yet; search uses the separate PdfPig text layer.
 - PDF calls run on the thread pool through `Task.Run`.
 - One process-wide semaphore serializes PDFium calls.
 - Bitmap conversion happens on the UI thread after the native render completes.
+- Text-layer extraction runs on the thread pool; page callbacks are marshaled to
+  the UI thread before touching view models.
 - Cancellation is cooperative: queued work is cancelled, and an in-flight native
   render is discarded when it returns.
 
@@ -98,11 +105,11 @@ the page offset, placing the highlight near the upper third of the viewport.
 
 ## Reading position
 
-Each opened document records `(page, within-page offset)` in the settings file,
-keyed by its absolute path. The entry also stores the file size and last-write
-ticks; if either changes, the old position is ignored. Scroll updates are
-debounced for 1.2 seconds, and closing a document or the window flushes the
-latest position immediately.
+`ReadingPositionController` records `(page, within-page offset)` in the settings
+file for each opened document, keyed by its absolute path. The entry also
+stores the file size and last-write ticks; if either changes, the old position
+is ignored. Scroll updates are debounced for 1.2 seconds, and closing a document
+or the window flushes the latest position immediately.
 
 On open, the saved position is held until the window has applied fit-width and
 laid out the page heights, then the scroll viewer is placed at
@@ -111,9 +118,9 @@ offset so the position survives a different window size or zoom level.
 
 ## Text selection
 
-`PdfTextService` extracts ordered word geometry from PdfPig after a document is
-opened. Each `PdfTextPage` carries normalized word rectangles. Selection state
-is stored as `(page, word index)` pairs in `MainWindowViewModel`; dragging maps
+`PdfTextService` extracts ordered word geometry from PdfPig on demand. Each
+`PdfTextPage` carries normalized word rectangles. Selection state is stored as
+`(page, word index)` pairs in `TextSelectionController`; dragging maps
 the pointer to a page through the realized `PdfPageView` controls and expands
 the range across pages. `TextSelectionOverlay` paints the selected word boxes,
 and the status bar exposes copy/select-all actions.

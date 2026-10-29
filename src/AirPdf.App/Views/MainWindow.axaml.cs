@@ -1,3 +1,7 @@
+using AirPdf.App.Layout;
+using AirPdf.App.Services;
+using AirPdf.App.ViewModels;
+using AirPdf.Core.Services;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -5,9 +9,6 @@ using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using AirPdf.App.Services;
-using AirPdf.App.ViewModels;
-using AirPdf.Core.Services;
 
 namespace AirPdf.App.Views;
 
@@ -19,8 +20,10 @@ public partial class MainWindow : Window
     private bool _suppressScrollSync;
     private bool _suppressThumbnailSync;
     private bool _isSelectingText;
+    private bool _selectionPressInProgress;
     private bool _selectionMoved;
     private bool _restoringDocument;
+    private PageLayout _pageLayout = PageLayout.Empty;
 
     public MainWindow()
         : this(null)
@@ -107,6 +110,7 @@ public partial class MainWindow : Window
             _restoringDocument = true;
             UpdateViewport();
             _viewModel.FitWidthToViewport();
+            RebuildPageLayout();
 
             if (readingPosition is not null)
             {
@@ -126,9 +130,11 @@ public partial class MainWindow : Window
     {
         if (_restoringDocument)
         {
+            RebuildPageLayout();
             return;
         }
 
+        RebuildPageLayout();
         var page = _viewModel.CurrentPage;
         Dispatcher.UIThread.Post(() => ScrollToPage(page), DispatcherPriority.Loaded);
     }
@@ -164,69 +170,36 @@ public partial class MainWindow : Window
             return;
         }
 
-        var page = GetPageAtViewportTop();
         var viewer = PagesList.Viewer;
-        if (page > 0 && viewer is not null)
+        if (viewer is null)
         {
-            var pageModel = _viewModel.Pages.FirstOrDefault(candidate => candidate.Number == page);
-            var pageTop = GetPageTop(page);
-            var fraction = pageModel is null
-                ? 0
-                : Math.Clamp(
-                    (viewer.Offset.Y - pageTop) / Math.Max(1, pageModel.DisplayHeight),
-                    0,
-                    1);
-            _viewModel.UpdateCurrentPageFromScroll(page, fraction);
-            UpdateThumbnailSelection();
+            return;
         }
+
+        EnsurePageLayout();
+        if (_pageLayout.Count == 0)
+        {
+            return;
+        }
+
+        var page = _pageLayout.GetPageAtViewportTop(viewer.Offset.Y, viewer.Viewport.Height);
+        var fraction = _pageLayout.GetPageOffset(page, viewer.Offset.Y);
+        _viewModel.UpdateCurrentPageFromScroll(page, fraction);
+        UpdateThumbnailSelection();
     }
 
-    private double GetPageTop(int pageNumber)
+    private void RebuildPageLayout()
     {
-        var index = Math.Clamp(pageNumber, 1, Math.Max(1, _viewModel.Pages.Count)) - 1;
-        var top = 24.0;
-        for (var i = 0; i < index; i++)
-        {
-            top += _viewModel.Pages[i].DisplayHeight + 28;
-        }
-
-        return top;
+        _pageLayout = new PageLayout(
+            _viewModel.Pages.Select(page => page.DisplayHeight).ToList());
     }
 
-    private int GetPageAtViewportTop()
+    private void EnsurePageLayout()
     {
-        var viewer = PagesList.Viewer;
-        if (viewer is null || _viewModel.Pages.Count == 0)
+        if (_pageLayout.Count != _viewModel.Pages.Count)
         {
-            return 1;
+            RebuildPageLayout();
         }
-
-        var offset = viewer.Offset.Y;
-        var viewportHeight = viewer.Viewport.Height;
-        if (viewportHeight <= 0)
-        {
-            return _viewModel.CurrentPage;
-        }
-
-        var top = 24.0;
-        var bestOverlap = -1.0;
-        var bestPage = 1;
-        var viewportBottom = offset + viewportHeight;
-
-        foreach (var page in _viewModel.Pages)
-        {
-            var bottom = top + page.DisplayHeight;
-            var overlap = Math.Min(bottom, viewportBottom) - Math.Max(top, offset);
-            if (overlap > bestOverlap)
-            {
-                bestOverlap = overlap;
-                bestPage = page.Number;
-            }
-
-            top = bottom + 28;
-        }
-
-        return bestPage;
     }
 
     private void ScrollToPage(int pageNumber, bool center = true, int attempt = 0)
@@ -236,6 +209,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        EnsurePageLayout();
         var viewer = PagesList.Viewer;
         if (viewer is null)
         {
@@ -248,14 +222,15 @@ public partial class MainWindow : Window
         }
 
         var index = Math.Clamp(pageNumber, 1, _viewModel.Pages.Count) - 1;
-        var top = GetPageTop(pageNumber);
+        var targetPage = index + 1;
+        var top = _pageLayout.GetTop(targetPage);
         var page = _viewModel.Pages[index];
         var target = center
             ? top - Math.Max(12, (viewer.Viewport.Height - page.DisplayHeight) / 2)
             : top - 12;
         var fraction = Math.Clamp((target - top) / Math.Max(1, page.DisplayHeight), 0, 1);
 
-        ApplyScrollOffset(target, pageNumber, fraction);
+        ApplyScrollOffset(target, targetPage, fraction);
     }
 
     private void ScrollToReadingPosition(int pageNumber, double fraction, int attempt = 0)
@@ -265,6 +240,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        EnsurePageLayout();
         var viewer = PagesList.Viewer;
         if (viewer is null)
         {
@@ -280,7 +256,7 @@ public partial class MainWindow : Window
 
         var index = Math.Clamp(pageNumber, 1, _viewModel.Pages.Count) - 1;
         var page = _viewModel.Pages[index];
-        var top = GetPageTop(page.Number);
+        var top = _pageLayout.GetTop(page.Number);
         var normalized = Math.Clamp(fraction, 0, 1);
         var target = top + (normalized * page.DisplayHeight);
 
@@ -294,6 +270,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        EnsurePageLayout();
         var viewer = PagesList.Viewer;
         if (viewer is null)
         {
@@ -301,7 +278,7 @@ public partial class MainWindow : Window
         }
 
         var page = _viewModel.Pages[result.PageNumber - 1];
-        var top = GetPageTop(result.PageNumber);
+        var top = _pageLayout.GetTop(result.PageNumber);
 
         var highlightTop = result.Rects.Count > 0
             ? top + (result.Rects[0].Y * page.DisplayHeight)
@@ -398,9 +375,9 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnSelectionPointerPressed(object? sender, PointerPressedEventArgs e)
+    private async void OnSelectionPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (!_viewModel.IsDocumentOpen || _isSelectingText ||
+        if (!_viewModel.IsDocumentOpen || _isSelectingText || _selectionPressInProgress ||
             !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             return;
@@ -420,17 +397,49 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!_viewModel.BeginTextSelection(
-                page.Number,
-                point.X / Math.Max(1, pageView.Bounds.Width),
-                point.Y / Math.Max(1, pageView.Bounds.Height),
-                e.ClickCount))
+        var pageNumber = page.Number;
+        var clickCount = e.ClickCount;
+        var x = point.X / Math.Max(1, pageView.Bounds.Width);
+        var y = point.Y / Math.Max(1, pageView.Bounds.Height);
+
+        bool began;
+        _selectionPressInProgress = true;
+        try
+        {
+            began = await _viewModel.BeginTextSelectionAsync(pageNumber, x, y, clickCount);
+        }
+        catch
+        {
+            return;
+        }
+        finally
+        {
+            _selectionPressInProgress = false;
+        }
+
+        if (!began || !_viewModel.IsDocumentOpen)
         {
             return;
         }
 
+        bool stillPressed;
+        try
+        {
+            stillPressed = e.GetCurrentPoint(this).Properties.IsLeftButtonPressed;
+        }
+        catch
+        {
+            return;
+        }
+
+        if (!stillPressed)
+        {
+            _viewModel.ClearTextSelection();
+            return;
+        }
+
         _isSelectingText = true;
-        _selectionMoved = e.ClickCount >= 2;
+        _selectionMoved = clickCount >= 2;
         e.Pointer.Capture(this);
         e.Handled = true;
     }
@@ -465,7 +474,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_selectionMoved)
+        if (_selectionMoved || _viewModel.HasSelection)
         {
             _viewModel.CompleteTextSelection();
         }

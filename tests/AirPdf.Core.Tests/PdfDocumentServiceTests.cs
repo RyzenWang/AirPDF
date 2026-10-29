@@ -88,6 +88,18 @@ public sealed class PdfDocumentServiceTests
     }
 
     [Fact]
+    public async Task ExtractPagesAsync_LoadsOnlyRequestedPages()
+    {
+        var service = new PdfTextService();
+
+        var pages = await service.ExtractPagesAsync(SamplePath, new[] { 7 }, password: null);
+
+        var page = Assert.Single(pages);
+        Assert.Equal(7, page.PageNumber);
+        Assert.NotEmpty(page.Words);
+    }
+
+    [Fact]
     public void SettingsService_RoundTripsReadingPosition()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"airpdf-settings-{Guid.NewGuid()}");

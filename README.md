@@ -26,7 +26,7 @@ AirPDF opens PDFs quickly, renders them natively, and stays out of the way. It
 has no account, no cloud, no telemetry, and no web view. The whole reader is a
 small .NET application with a hand-built Avalonia interface.
 
-> **Status:** 0.1 preview. The reading core is stable and tested; annotations
+> **Status:** 0.2 preview. The reading core is stable and tested; annotations
 > and printing are not implemented yet. See the [roadmap](#roadmap).
 
 ---
@@ -100,11 +100,13 @@ dotnet run --project src/AirPdf.App -- /path/to/document.pdf
 ```bash
 dotnet restore AirPdf.sln
 dotnet build AirPdf.sln -c Release
-dotnet test tests/AirPdf.Core.Tests/AirPdf.Core.Tests.csproj -c Release
+dotnet test AirPdf.sln -c Release
 ```
 
 The tests use `tests/Assets/sample.pdf`, an eight-page document that exercises
-Latin and Chinese text, mixed typography, and search geometry.
+Latin and Chinese text, mixed typography, and search geometry. `AirPdf.App.Tests`
+adds headless Avalonia coverage for opening, search, selection, zoom, language
+switching, and reading-position restore.
 
 ## Publish
 
@@ -206,6 +208,7 @@ src/
   AirPdf.App/           Avalonia desktop application
 tests/
   AirPdf.Core.Tests/    Open, render, search, and failure tests
+  AirPdf.App.Tests/     Headless view-model and page-layout tests
   Assets/               Reproducible sample PDF and its HTML source
 docs/                   Screenshots and architecture notes
 ```
