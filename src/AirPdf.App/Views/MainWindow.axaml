@@ -37,7 +37,10 @@
                      VerticalAlignment="Center"
                      LetterSpacing="-0.2" />
           <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="4,0" VerticalAlignment="Center" />
-          <Button Classes="soft" Command="{Binding OpenCommand}" ToolTip.Tip="{DynamicResource L.OpenTooltip}">
+          <Button Classes="soft"
+                  Command="{Binding OpenCommand}"
+                  AutomationProperties.Name="{DynamicResource L.OpenPdf}"
+                  ToolTip.Tip="{DynamicResource L.OpenTooltip}">
             <StackPanel Orientation="Horizontal" Spacing="7">
               <Path Classes="icon small"
                     Data="{StaticResource IconFolderOpen}"
@@ -54,8 +57,16 @@
                     VerticalAlignment="Center"
                     IsVisible="{Binding IsDocumentOpen}">
           <Button Classes="icon"
+                  Command="{Binding NavigateBackCommand}"
+                  IsVisible="{Binding CanNavigateBack}"
+                  AutomationProperties.Name="{DynamicResource L.NavigateBack}"
+                  ToolTip.Tip="{DynamicResource L.NavigateBack}">
+            <Path Classes="icon" Data="{StaticResource IconHistory}" />
+          </Button>
+          <Button Classes="icon"
                   Command="{Binding PreviousPageCommand}"
                   IsEnabled="{Binding CanGoPrevious}"
+                  AutomationProperties.Name="{DynamicResource L.PreviousPage}"
                   ToolTip.Tip="{DynamicResource L.PreviousPage}">
             <Path Classes="icon" Data="{StaticResource IconChevronLeft}" />
           </Button>
@@ -69,6 +80,7 @@
               <TextBox x:Name="PageNumberBox"
                        Classes="pageBox"
                        Text="{Binding PageNumberInput, Mode=TwoWay}"
+                       AutomationProperties.Name="{DynamicResource L.PageNumberLabel}"
                        KeyDown="OnPageNumberKeyDown"
                        LostFocus="OnPageNumberLostFocus" />
               <TextBlock Text="/"
@@ -87,16 +99,25 @@
           <Button Classes="icon"
                   Command="{Binding NextPageCommand}"
                   IsEnabled="{Binding CanGoNext}"
+                  AutomationProperties.Name="{DynamicResource L.NextPage}"
                   ToolTip.Tip="{DynamicResource L.NextPage}">
             <Path Classes="icon" Data="{StaticResource IconChevronRight}" />
           </Button>
 
           <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="8,0" VerticalAlignment="Center" />
 
-          <Button Classes="zoom" Command="{Binding ZoomOutCommand}" ToolTip.Tip="{DynamicResource L.ZoomOut}">
+          <Button Classes="zoom"
+                  Command="{Binding ZoomOutCommand}"
+                  AutomationProperties.Name="{DynamicResource L.ZoomOut}"
+                  ToolTip.Tip="{DynamicResource L.ZoomOut}">
             <Border Width="12" Height="1.5" CornerRadius="1" Background="{DynamicResource TextPrimaryBrush}" />
           </Button>
-          <Button Classes="chip" Content="{Binding ZoomText}" Padding="9,5" MinWidth="58" ToolTip.Tip="{DynamicResource L.ZoomPreset}">
+          <Button Classes="chip"
+                  Content="{Binding ZoomText}"
+                  Padding="9,5"
+                  MinWidth="58"
+                  AutomationProperties.Name="{DynamicResource L.ZoomLevelLabel}"
+                  ToolTip.Tip="{DynamicResource L.ZoomPreset}">
             <Button.Flyout>
               <MenuFlyout Placement="BottomEdgeAlignedRight">
                 <MenuItem Header="{DynamicResource L.FitWidth}" Tag="fit-width" Click="OnFitWidthMenuClick" />
@@ -110,13 +131,22 @@
               </MenuFlyout>
             </Button.Flyout>
           </Button>
-          <Button Classes="zoom" Command="{Binding ZoomInCommand}" ToolTip.Tip="{DynamicResource L.ZoomIn}">
+          <Button Classes="zoom"
+                  Command="{Binding ZoomInCommand}"
+                  AutomationProperties.Name="{DynamicResource L.ZoomIn}"
+                  ToolTip.Tip="{DynamicResource L.ZoomIn}">
             <Path Classes="icon small" Data="{StaticResource IconPlus}" />
           </Button>
-          <Button Classes="icon" Command="{Binding FitWidthCommand}" ToolTip.Tip="{DynamicResource L.FitWidth}">
+          <Button Classes="icon"
+                  Command="{Binding FitWidthCommand}"
+                  AutomationProperties.Name="{DynamicResource L.FitWidth}"
+                  ToolTip.Tip="{DynamicResource L.FitWidth}">
             <Path Classes="icon" Data="{StaticResource IconFitWidth}" />
           </Button>
-          <Button Classes="icon" Command="{Binding FitPageCommand}" ToolTip.Tip="{DynamicResource L.FitPage}">
+          <Button Classes="icon"
+                  Command="{Binding FitPageCommand}"
+                  AutomationProperties.Name="{DynamicResource L.FitPage}"
+                  ToolTip.Tip="{DynamicResource L.FitPage}">
             <Path Classes="icon" Data="{StaticResource IconFitPage}" />
           </Button>
         </StackPanel>
@@ -125,12 +155,14 @@
           <Button Classes="icon"
                   Command="{Binding ToggleSearchCommand}"
                   IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{DynamicResource L.FindInDocument}"
                   ToolTip.Tip="{DynamicResource L.FindInDocument}">
             <Path Classes="icon" Data="{StaticResource IconSearch}" />
           </Button>
           <Button Classes="icon"
                   Command="{Binding ToggleSidebarCommand}"
                   IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{DynamicResource L.ToggleThumbnails}"
                   ToolTip.Tip="{DynamicResource L.ToggleThumbnails}">
             <Path Classes="icon" Data="{StaticResource IconSidebar}" />
           </Button>
@@ -140,6 +172,7 @@
                   Padding="0,5"
                   Content="{Binding LanguageShortLabel}"
                   FontWeight="SemiBold"
+                  AutomationProperties.Name="{DynamicResource L.Language}"
                   ToolTip.Tip="{DynamicResource L.Language}">
             <Button.Flyout>
               <MenuFlyout Placement="BottomEdgeAlignedRight">
@@ -148,13 +181,20 @@
               </MenuFlyout>
             </Button.Flyout>
           </Button>
-          <Button Classes="icon" Command="{Binding ToggleThemeCommand}" ToolTip.Tip="{DynamicResource L.ToggleTheme}">
+          <Button Classes="icon"
+                  Command="{Binding ToggleThemeCommand}"
+                  AutomationProperties.Name="{Binding ThemeTooltip}"
+                  ToolTip.Tip="{Binding ThemeTooltip}">
             <Panel>
               <Path Classes="icon" Data="{StaticResource IconMoon}" IsVisible="{Binding IsLightTheme}" />
               <Path Classes="icon" Data="{StaticResource IconSun}" IsVisible="{Binding IsDarkTheme}" />
             </Panel>
           </Button>
-          <Button x:Name="InfoButton" Classes="icon" IsVisible="{Binding IsDocumentOpen}" ToolTip.Tip="{DynamicResource L.DocumentDetails}">
+          <Button x:Name="InfoButton"
+                  Classes="icon"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{DynamicResource L.DocumentDetails}"
+                  ToolTip.Tip="{DynamicResource L.DocumentDetails}">
             <Button.Flyout>
               <Flyout Placement="BottomEdgeAlignedRight" Opened="OnInfoFlyoutOpened">
                 <Border Width="326" Padding="14">
@@ -219,6 +259,7 @@
             <Button Grid.Column="1"
                     Classes="icon"
                     Command="{Binding ToggleSidebarCommand}"
+                    AutomationProperties.Name="{DynamicResource L.HideSidebar}"
                     ToolTip.Tip="{DynamicResource L.HideSidebar}"
                     VerticalAlignment="Top">
               <Path Classes="icon small" Data="{StaticResource IconChevronLeft}" />
@@ -230,6 +271,7 @@
                      Classes="thumbnailList"
                      ItemsSource="{Binding Thumbnails}"
                      IsVisible="{Binding IsPagesTabSelected}"
+                     AutomationProperties.Name="{DynamicResource L.ThumbnailsList}"
                      SelectionChanged="OnThumbnailSelectionChanged">
               <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:ThumbnailViewModel">
@@ -243,6 +285,7 @@
                         Classes="outlineTree"
                         ItemsSource="{Binding Bookmarks}"
                         Margin="8,2,8,16"
+                        AutomationProperties.Name="{DynamicResource L.OutlineList}"
                         SelectionChanged="OnOutlineSelectionChanged">
                 <TreeView.ItemTemplate>
                   <TreeDataTemplate x:DataType="vm:BookmarkViewModel" ItemsSource="{Binding Children}">
@@ -283,7 +326,23 @@
         <controls:PdfPageList x:Name="PagesList"
                               ItemsSource="{Binding Pages}"
                               IsVisible="{Binding IsDocumentOpen}"
+                              AutomationProperties.Name="{DynamicResource L.Pages}"
                               ViewerScrollChanged="OnPagesScrollChanged">
+          <!-- x:CompileBindings is opted out for the context menu: it is hosted in a
+               popup and does not take part in the window's compiled-binding scope. -->
+          <controls:PdfPageList.ContextMenu>
+            <ContextMenu x:CompileBindings="False">
+              <MenuItem Header="{DynamicResource L.CopySelection}"
+                        Command="{Binding CopySelectionCommand}"
+                        IsEnabled="{Binding HasSelection}" />
+              <MenuItem Header="{DynamicResource L.SelectAll}"
+                        Command="{Binding SelectAllTextCommand}" />
+              <Separator />
+              <MenuItem Header="{DynamicResource L.OpenContainingFolder}"
+                        Command="{Binding OpenContainingFolderCommand}"
+                        IsEnabled="{Binding IsDocumentOpen}" />
+            </ContextMenu>
+          </controls:PdfPageList.ContextMenu>
           <controls:PdfPageList.ItemTemplate>
             <DataTemplate x:DataType="vm:PageViewModel">
               <views:PdfPageView Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}" />
@@ -361,7 +420,11 @@
                           MinHeight="24"
                           Foreground="{DynamicResource TextTertiaryBrush}" />
                 </Grid>
-                <ItemsControl ItemsSource="{Binding RecentFiles}">
+                <ScrollViewer MaxHeight="300"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              AutomationProperties.Name="{DynamicResource L.RecentFilesList}">
+                  <ItemsControl ItemsSource="{Binding RecentFiles}">
                   <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:RecentFileViewModel">
                       <Button Classes="recent" Command="{Binding OpenCommand}">
@@ -392,6 +455,7 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                </ScrollViewer>
               </StackPanel>
             </StackPanel>
 
@@ -556,6 +620,7 @@
                     Height="26"
                     MinHeight="26"
                     Command="{Binding DismissErrorCommand}"
+                    AutomationProperties.Name="{DynamicResource L.Dismiss}"
                     ToolTip.Tip="{DynamicResource L.Dismiss}">
               <Path Data="{StaticResource IconClose}"
                     Stroke="{DynamicResource DangerBrush}"
@@ -605,6 +670,7 @@
             <Button Grid.Column="1"
                     Classes="icon"
                     Command="{Binding CloseSearchCommand}"
+                    AutomationProperties.Name="{DynamicResource L.CloseSearch}"
                     ToolTip.Tip="{DynamicResource L.CloseSearch}">
               <Path Classes="icon small" Data="{StaticResource IconClose}" />
             </Button>
@@ -616,6 +682,7 @@
                        Classes="searchBox"
                        Text="{Binding SearchQuery, Mode=TwoWay}"
                        Watermark="{DynamicResource L.SearchPlaceholder}"
+                       AutomationProperties.Name="{DynamicResource L.SearchBoxLabel}"
                        KeyDown="OnSearchKeyDown" />
               <Path Classes="icon small muted"
                     Data="{StaticResource IconSearch}"
@@ -632,6 +699,7 @@
                       Margin="0,0,3,0"
                       Command="{Binding ClearSearchCommand}"
                       IsVisible="{Binding HasSearchQuery}"
+                      AutomationProperties.Name="{DynamicResource L.ClearSearch}"
                       ToolTip.Tip="{DynamicResource L.ClearSearch}">
                 <Path Data="{StaticResource IconClose}"
                       Stroke="{DynamicResource TextTertiaryBrush}"
@@ -653,10 +721,18 @@
                            IsVisible="{Binding IsSearching}" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
-              <Button Classes="zoom" Command="{Binding PreviousSearchResultCommand}" IsEnabled="{Binding HasSearchResults}" ToolTip.Tip="{DynamicResource L.PreviousMatch}">
+              <Button Classes="zoom"
+                      Command="{Binding PreviousSearchResultCommand}"
+                      IsEnabled="{Binding HasSearchResults}"
+                      AutomationProperties.Name="{DynamicResource L.PreviousMatch}"
+                      ToolTip.Tip="{DynamicResource L.PreviousMatch}">
                 <Path Classes="icon small" Data="{StaticResource IconChevronLeft}" />
               </Button>
-              <Button Classes="zoom" Command="{Binding NextSearchResultCommand}" IsEnabled="{Binding HasSearchResults}" ToolTip.Tip="{DynamicResource L.NextMatch}">
+              <Button Classes="zoom"
+                      Command="{Binding NextSearchResultCommand}"
+                      IsEnabled="{Binding HasSearchResults}"
+                      AutomationProperties.Name="{DynamicResource L.NextMatch}"
+                      ToolTip.Tip="{DynamicResource L.NextMatch}">
                 <Path Classes="icon small" Data="{StaticResource IconChevronRight}" />
               </Button>
             </StackPanel>
@@ -666,7 +742,8 @@
             <ListBox Classes="searchResults"
                      ItemsSource="{Binding SearchResults}"
                      SelectedItem="{Binding SelectedSearchResult, Mode=TwoWay}"
-                     Margin="10,0,8,0">
+                     Margin="10,0,8,0"
+                     AutomationProperties.Name="{DynamicResource L.SearchResultsList}">
               <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:SearchResultViewModel">
                   <StackPanel Spacing="4">
@@ -742,6 +819,7 @@
                   MinHeight="22"
                   Padding="8,2"
                   FontSize="10.5"
+                  AutomationProperties.Name="{DynamicResource L.CheckForUpdates}"
                   ToolTip.Tip="{DynamicResource L.CheckForUpdates}" />
           <Border Width="1" Height="12" Background="{DynamicResource BorderBrush}" IsVisible="{Binding HasUpdate}" />
           <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsVisible="{Binding HasSelection}">
@@ -755,12 +833,20 @@
                     MinHeight="22"
                     Padding="7,2"
                     FontSize="10.5"
+                    AutomationProperties.Name="{DynamicResource L.CopySelection}"
                     ToolTip.Tip="{DynamicResource L.Copy}" />
           </StackPanel>
           <Border Width="1" Height="12" Background="{DynamicResource BorderBrush}" IsVisible="{Binding HasSelection}" />
           <TextBlock Text="{Binding PageStatusText}"
                      Classes="caption"
                      FontSize="11"
+                     AutomationProperties.Name="{DynamicResource L.PageStatusFormat}"
+                     IsVisible="{Binding IsDocumentOpen}" />
+          <TextBlock Text="{Binding ReadingProgressText}"
+                     Classes="caption tertiary"
+                     FontSize="11"
+                     VerticalAlignment="Center"
+                     AutomationProperties.Name="{DynamicResource L.ReadingProgressLabel}"
                      IsVisible="{Binding IsDocumentOpen}" />
           <Border Width="1" Height="12" Background="{DynamicResource BorderBrush}" IsVisible="{Binding IsDocumentOpen}" />
           <TextBlock Text="PDFium"

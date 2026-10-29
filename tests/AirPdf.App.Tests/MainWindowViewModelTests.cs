@@ -76,6 +76,108 @@ public sealed class MainWindowViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task Zoom_IsRememberedPerDocument()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        context.ViewModel.UpdateViewport(1200, 900);
+        context.ViewModel.ApplyInitialZoom();
+
+        context.ViewModel.SetZoomCommand.Execute("1.5");
+        Assert.Equal(1.5, context.ViewModel.Zoom, 3);
+
+        // Reopening the same document must restore the manual zoom instead of
+        // resetting to 100% and fitting the width again.
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        context.ViewModel.UpdateViewport(1200, 900);
+        context.ViewModel.ApplyInitialZoom();
+
+        Assert.Equal(1.5, context.ViewModel.Zoom, 3);
+    }
+
+    [AvaloniaFact]
+    public async Task Zoom_FitWidthModeIsRememberedAsFitWidth()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        context.ViewModel.UpdateViewport(1200, 900);
+        context.ViewModel.ApplyInitialZoom();
+
+        var fitWidthZoom = context.ViewModel.Zoom;
+
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        // A different viewport width must produce a different fitted zoom, which only
+        // happens when the remembered mode is "fit width" rather than a frozen number.
+        context.ViewModel.UpdateViewport(760, 900);
+        context.ViewModel.ApplyInitialZoom();
+
+        Assert.NotEqual(fitWidthZoom, context.ViewModel.Zoom, 3);
+    }
+
+    [AvaloniaFact]
+    public async Task ReadingProgress_ReflectsPageAndOffset()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        Assert.Equal("0%", context.ViewModel.ReadingProgressText);
+
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 3, pageOffset: 0);
+        Assert.Equal("25%", context.ViewModel.ReadingProgressText);
+
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 3, pageOffset: 0.5);
+        Assert.Equal("31%", context.ViewModel.ReadingProgressText);
+
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 8, pageOffset: 1);
+        Assert.Equal("100%", context.ViewModel.ReadingProgressText);
+    }
+
+    [AvaloniaFact]
+    public async Task NavigateBack_ReturnsToThePositionBeforeTheJump()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 1, pageOffset: 0.2);
+        Assert.False(context.ViewModel.CanNavigateBack);
+
+        context.ViewModel.NavigateToPage(5);
+        Assert.Equal(5, context.ViewModel.CurrentPage);
+        Assert.True(context.ViewModel.CanNavigateBack);
+
+        context.ViewModel.NavigateBackCommand.Execute(null);
+
+        Assert.Equal(1, context.ViewModel.CurrentPage);
+        Assert.False(context.ViewModel.CanNavigateBack);
+    }
+
+    [AvaloniaFact]
+    public async Task ThemeMode_CyclesThroughAllFourModes()
+    {
+        using var context = new TestContext();
+
+        context.ViewModel.SetThemeMode("System", persist: false);
+        Assert.True(context.ViewModel.IsSystemTheme);
+        Assert.False(string.IsNullOrWhiteSpace(context.ViewModel.ThemeTooltip));
+
+        // The cycle is System → Light → Dark → High contrast → System.
+        context.ViewModel.ToggleThemeCommand.Execute(null);
+        Assert.False(context.ViewModel.IsSystemTheme);
+        Assert.False(context.ViewModel.IsDarkTheme);
+
+        context.ViewModel.ToggleThemeCommand.Execute(null);
+        Assert.True(context.ViewModel.IsDarkTheme);
+
+        context.ViewModel.ToggleThemeCommand.Execute(null);
+        Assert.False(context.ViewModel.IsSystemTheme);
+        Assert.True(context.ViewModel.IsDarkTheme);
+
+        context.ViewModel.ToggleThemeCommand.Execute(null);
+        Assert.True(context.ViewModel.IsSystemTheme);
+    }
+
+    [AvaloniaFact]
     public async Task ZoomAndLanguageCommands_UpdateViewModelState()
     {
         using var context = new TestContext();
@@ -122,7 +224,7 @@ public sealed class MainWindowViewModelTests
 
         public void Dispose()
         {
-            ViewModel.CloseDocumentCommand.Execute(null);
+            ViewModel.Dispose();
 
             if (Directory.Exists(_settingsDirectory))
             {

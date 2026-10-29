@@ -19,6 +19,14 @@ public sealed class AppSettings
     public double WindowHeight { get; set; } = 860;
 
     public bool WindowMaximized { get; set; }
+
+    /// <summary>
+    /// Restored window top-left in physical pixels. Null lets the platform place the
+    /// window; a value is only applied after it is validated against the current screens.
+    /// </summary>
+    public int? WindowX { get; set; }
+
+    public int? WindowY { get; set; }
 }
 
 public sealed class RecentFileEntry
@@ -42,6 +50,15 @@ public sealed class ReadingPositionEntry
     public long FileLastWriteUtcTicks { get; set; }
 
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// Last zoom mode for this document: <c>fit-width</c>, <c>fit-page</c>, or
+    /// <c>manual</c>. Null (older settings files) is treated as <c>fit-width</c>.
+    /// </summary>
+    public string? ZoomMode { get; set; }
+
+    /// <summary>Last zoom factor. Only applied when <see cref="ZoomMode"/> is <c>manual</c>.</summary>
+    public double? Zoom { get; set; }
 }
 
 /// <summary>

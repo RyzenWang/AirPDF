@@ -16,11 +16,31 @@ semantic versioning once it reaches 1.0.
 - Distribution guide covering release assets, required signing secrets, and
   end-to-end update testing.
 - macOS `.icns` application icon.
+- Back navigation: `Alt+Left` (and a toolbar button) returns to the position you
+  were at before the last outline, thumbnail, search, or page-number jump.
+- Per-document zoom memory: the zoom mode (fit width, fit page, or a manual
+  factor) is restored the next time the document is opened.
+- Reading progress percentage in the status bar.
+- A high-contrast theme, selectable from the theme button.
+- Right-click menu on the page canvas: copy selection, select all, and show the
+  file in the system file manager.
+- `F3` / `Shift+F3` for the next / previous search match.
+- Accessible names for the toolbar buttons, inputs, and lists, so screen readers
+  can announce them.
+- Command line: `--help`, `--version`, a `--` path terminator, and a message
+  when extra files were ignored.
 
 ### Changed
 
 - Release workflow now publishes Velopack installers and update manifests
   instead of plain archives for Windows and macOS.
+- The theme button now cycles System → Light → Dark → High contrast instead of
+  toggling two states, and "System" follows the OS while the app is running.
+- Window position is remembered and validated against the current screens, so a
+  window saved on a disconnected monitor no longer reopens off-screen.
+- The recent-files shelf now shows all ten remembered documents; it used to show
+  six while storing ten.
+- Search-result navigation uses the result index instead of scanning the list.
 - Text layers are loaded lazily as pages become visible instead of parsing the
   whole document when it opens.
 - Page layout is precomputed so scrolling uses a binary search rather than
@@ -34,6 +54,15 @@ semantic versioning once it reaches 1.0.
 - Windows Authenticode and Apple Developer ID credentials are supplied as
   repository secrets. Without them the workflow produces unsigned packages and
   skips notarization.
+
+### Fixed
+
+- Opening a long document no longer scans every page dictionary just to record its
+  rotation, which nothing read. Opening a 9,277-page document dropped from 54.7 s
+  to 7.1 s, and a 4,215-page one from 24.6 s to 3.6 s.
+- Opening a document no longer queues a page render at 100% and then renders
+  again for fit-width.
+- Closing a maximized window no longer overwrites the remembered restore size.
 
 ## [0.1.0] - 2026-10-28
 

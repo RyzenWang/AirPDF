@@ -49,9 +49,17 @@ small .NET application with a hand-built Avalonia interface.
   word, `Ctrl+A` selects the document, and `Ctrl+C` copies the result.
 - **Remembers your place** in every document, including the offset within the
   page; the position is restored on the next open.
+- **Remembers your zoom** too — fit width, fit page, or an exact factor, per
+  document.
 - **Zoom** with fit width, fit page, actual size, presets, and `Ctrl` + wheel.
 - **Password-protected PDFs** with a proper unlock prompt.
-- **Light and dark themes**, following the system on first launch.
+- **Light, dark, and high-contrast themes**, following the system on first launch.
+- **Status bar** with the page position and a reading-progress percentage.
+- **Back navigation** with `Alt+Left` after any outline, thumbnail, search, or
+  page jump.
+- **Right-click menu** for copy, select all, and showing the file in the folder.
+- **Accessible controls** — toolbar buttons, inputs, and lists expose names to
+  screen readers.
 - **English by default, Simplified Chinese on demand** — switch live from the
   toolbar or with `Ctrl+Shift+L`.
 - **Drag and drop**, command-line opening, and a recent-files shelf.
@@ -155,6 +163,8 @@ for the required repository secrets and the exact release process.
 | `Ctrl+O` / `Cmd+O` | Open a PDF |
 | `Ctrl+W` / `Cmd+W` | Close the document |
 | `Ctrl+F` / `Cmd+F` | Find in document |
+| `F3` / `Shift+F3` | Next / previous search match |
+| `Alt+Left` | Return to the previous position |
 | Drag on text | Select words |
 | Double-click | Select a word |
 | `Ctrl+C` / `Cmd+C` | Copy the selected text |
@@ -169,6 +179,9 @@ for the required repository secrets and the exact release process.
 | `Ctrl+Shift+L` | Toggle English / 简体中文 |
 | `F11` | Toggle full screen |
 | `Page Up` / `Page Down` | Scroll the document |
+
+Right-clicking the page canvas opens a menu for copying the selection, selecting
+the whole document, and showing the file in its folder.
 
 ## Architecture
 

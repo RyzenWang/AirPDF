@@ -54,3 +54,9 @@ public sealed class BookmarkViewModel
 }
 
 public sealed record MetadataRow(string Label, string Value);
+
+/// <summary>
+/// A remembered reading position: a page plus the normalized offset within it.
+/// Used by the back-navigation history.
+/// </summary>
+public readonly record struct NavigationPoint(int Page, double PageOffset);

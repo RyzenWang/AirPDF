@@ -4,6 +4,9 @@ using AirPdf.App.Services;
 using AirPdf.Core.Models;
 using AirPdf.Core.Services;
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Markup.Xaml.Styling;
+using Avalonia.Platform;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -13,10 +16,15 @@ using Velopack.Exceptions;
 
 namespace AirPdf.App.ViewModels;
 
-public sealed partial class MainWindowViewModel : ObservableObject
+public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     private static readonly double[] ZoomSteps =
         [0.25, 0.33, 0.5, 0.67, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0];
+
+    private const int MaxHistoryEntries = 50;
+
+    /// <summary>Must match <c>SettingsService.MaxRecentFiles</c> so nothing stored is unreachable.</summary>
+    private const int MaxRecentFilesShown = 10;
 
     private readonly PdfDocumentService _documentService;
     private readonly PdfSearchService _searchService;
@@ -26,12 +34,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private readonly IUserDialogService _dialogs;
     private readonly LocalizationService _localization;
     private readonly AppSettings _settings;
+    private readonly List<NavigationPoint> _history = [];
     private CancellationTokenSource? _loadCancellation;
     private CancellationTokenSource? _searchCancellation;
     private PdfDocumentInfo? _document;
     private PdfPageRenderer? _pageRenderer;
     private string? _password;
     private double _zoom = 1.0;
+    private string _zoomMode = ZoomModes.FitWidth;
+    private string _themeMode = ThemeModes.System;
+    private IResourceProvider? _highContrastPalette;
+    private double? _restoreZoom;
+    private string? _restoreZoomMode;
     private int _currentPage = 1;
     private SearchResultViewModel? _selectedSearchResult;
     private string? _errorMessage;
@@ -69,28 +83,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
             _settingsService,
             _settings,
             () => _currentPage,
-            () => PageCount);
+            () => PageCount,
+            () => _zoom,
+            () => _zoomMode);
         _selection = new TextSelectionController(() => Pages, () => _textLoader);
         _selection.SelectionChanged += (_, _) => NotifySelectionChanged();
 
-        var systemIsDark = false;
-        try
-        {
-            systemIsDark = Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant ==
-                           Avalonia.Platform.PlatformThemeVariant.Dark;
-        }
-        catch
-        {
-            // Headless or unusual platform hosts may not expose theme values.
-        }
-
-        _isDarkTheme = _settings.Theme switch
-        {
-            "Dark" => true,
-            "Light" => false,
-            _ => systemIsDark
-        };
+        _themeMode = NormalizeThemeMode(_settings.Theme);
+        _settings.Theme = _themeMode;
+        _isDarkTheme = ResolveIsDark(_themeMode);
         ApplyTheme();
+
+        if (Application.Current?.PlatformSettings is { } platformSettings)
+        {
+            platformSettings.ColorValuesChanged += OnPlatformColorValuesChanged;
+        }
 
         _localization.LanguageChanged += OnLanguageChanged;
         RefreshRecentFiles();
@@ -98,6 +105,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     public event EventHandler<int>? ScrollToPageRequested;
+
+    public event EventHandler<NavigationPoint>? ReturnToPositionRequested;
 
     public event EventHandler? DocumentOpened;
 
@@ -206,6 +215,30 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ? _localization.T("L.PageCountOne")
         : _localization.Format("L.PageCountMany", PageCount);
 
+    /// <summary>
+    /// Reading progress as a 0..1 fraction. Uses the page index plus the normalized
+    /// offset within the page, so it advances smoothly while scrolling.
+    /// </summary>
+    public double ReadingProgress
+    {
+        get
+        {
+            if (PageCount <= 0)
+            {
+                return 0;
+            }
+
+            var offset = Math.Clamp(_reading.PageOffset, 0, 1);
+            return Math.Clamp(((CurrentPage - 1) + offset) / PageCount, 0, 1);
+        }
+    }
+
+    public string ReadingProgressText => PageCount <= 0
+        ? string.Empty
+        : string.Format(CultureInfo.InvariantCulture, "{0:0}%", ReadingProgress * 100);
+
+    public bool CanNavigateBack => _history.Count > 0;
+
     public bool HasRecentFiles => RecentFiles.Count > 0;
 
     public bool HasNoRecentFiles => !HasRecentFiles;
@@ -281,6 +314,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public bool IsLightTheme => !IsDarkTheme;
 
+    public bool IsSystemTheme => string.Equals(_themeMode, ThemeModes.System, StringComparison.Ordinal);
+
+    public string ThemeTooltip => _localization.Format(
+        "L.ThemeTooltipFormat",
+        _localization.T(_themeMode switch
+        {
+            ThemeModes.Dark => "L.ThemeDark",
+            ThemeModes.Light => "L.ThemeLight",
+            ThemeModes.HighContrast => "L.ThemeHighContrast",
+            _ => "L.ThemeSystem"
+        }));
+
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
 
     public string ErrorMessage
@@ -326,6 +371,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 ApplySearchHighlights(value);
                 if (value is not null)
                 {
+                    PushHistory();
                     SetCurrentPage(value.PageNumber);
                     ScrollToSearchResultRequested?.Invoke(this, value);
                 }
@@ -407,9 +453,83 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ToggleTheme()
     {
-        IsDarkTheme = !IsDarkTheme;
-        _settings.Theme = IsDarkTheme ? "Dark" : "Light";
-        _settingsService.Save(_settings);
+        SetThemeMode(
+            _themeMode switch
+            {
+                ThemeModes.System => ThemeModes.Light,
+                ThemeModes.Light => ThemeModes.Dark,
+                ThemeModes.Dark => ThemeModes.HighContrast,
+                _ => ThemeModes.System
+            },
+            persist: true);
+    }
+
+    /// <summary>
+    /// Cycles System → Light → Dark → High contrast → System. "System" keeps following
+    /// the OS instead of pinning a fixed theme.
+    /// </summary>
+    public void SetThemeMode(string mode, bool persist)
+    {
+        _themeMode = NormalizeThemeMode(mode);
+        _settings.Theme = _themeMode;
+        IsDarkTheme = ResolveIsDark(_themeMode);
+
+        // IsDarkTheme may be unchanged (e.g. System-light → Light), so apply explicitly.
+        ApplyTheme();
+
+        OnPropertyChanged(nameof(IsSystemTheme));
+        OnPropertyChanged(nameof(IsLightTheme));
+        OnPropertyChanged(nameof(ThemeTooltip));
+
+        if (persist)
+        {
+            _settingsService.Save(_settings);
+        }
+    }
+
+    [RelayCommand]
+    private void NavigateBack()
+    {
+        if (!IsDocumentOpen || _history.Count == 0)
+        {
+            return;
+        }
+
+        var target = _history[^1];
+        _history.RemoveAt(_history.Count - 1);
+        OnPropertyChanged(nameof(CanNavigateBack));
+
+        SetCurrentPage(target.Page);
+        ReturnToPositionRequested?.Invoke(this, target);
+    }
+
+    [RelayCommand]
+    private void OpenContainingFolder()
+    {
+        if (!IsDocumentOpen || string.IsNullOrWhiteSpace(FilePath))
+        {
+            return;
+        }
+
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                StartProcess("explorer.exe", $"/select,\"{FilePath}\"");
+            }
+            else if (OperatingSystem.IsMacOS())
+            {
+                StartProcess("open", $"-R \"{FilePath}\"");
+            }
+            else
+            {
+                StartProcess("xdg-open", $"\"{FileDirectory}\"");
+            }
+        }
+        catch
+        {
+            SetError("L.ExplorerError");
+        }
     }
 
     [RelayCommand]
@@ -503,6 +623,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void ZoomIn()
     {
         var next = ZoomSteps.FirstOrDefault(step => step > _zoom + 0.001, 4.0);
+        _zoomMode = ZoomModes.Manual;
         Zoom = next;
     }
 
@@ -510,6 +631,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void ZoomOut()
     {
         var previous = ZoomSteps.LastOrDefault(step => step < _zoom - 0.001, 0.25);
+        _zoomMode = ZoomModes.Manual;
         Zoom = previous;
     }
 
@@ -526,11 +648,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
             numeric /= 100.0;
         }
 
+        _zoomMode = ZoomModes.Manual;
         Zoom = numeric;
     }
 
     [RelayCommand]
-    private void ActualSize() => Zoom = 1.0;
+    private void ActualSize()
+    {
+        _zoomMode = ZoomModes.Manual;
+        Zoom = 1.0;
+    }
 
     [RelayCommand]
     private void FitWidth() => FitWidthToViewport();
@@ -627,9 +754,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        var index = SelectedSearchResult is null
-            ? -1
-            : SearchResults.ToList().IndexOf(SelectedSearchResult);
+        var index = SelectedSearchResult is null ? -1 : SelectedSearchResult.Index - 1;
         SelectedSearchResult = SearchResults[(index + 1) % SearchResults.Count];
     }
 
@@ -641,9 +766,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
 
-        var index = SelectedSearchResult is null
-            ? 0
-            : SearchResults.ToList().IndexOf(SelectedSearchResult);
+        var index = SelectedSearchResult is null ? 0 : SelectedSearchResult.Index - 1;
         SelectedSearchResult = SearchResults[(index - 1 + SearchResults.Count) % SearchResults.Count];
     }
 
@@ -858,6 +981,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
 
         var available = Math.Max(180, ViewportWidth - 72);
+        _zoomMode = ZoomModes.FitWidth;
         Zoom = available / (Pages[0].WidthPoints * PageViewModel.PixelsPerPointAt100);
     }
 
@@ -871,7 +995,32 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var page = Pages[0];
         var byWidth = Math.Max(180, ViewportWidth - 80) / (page.WidthPoints * PageViewModel.PixelsPerPointAt100);
         var byHeight = Math.Max(180, ViewportHeight - 90) / (page.HeightPoints * PageViewModel.PixelsPerPointAt100);
+        _zoomMode = ZoomModes.FitPage;
         Zoom = Math.Min(byWidth, byHeight);
+    }
+
+    /// <summary>
+    /// Applies the zoom that was remembered for this document. Falls back to
+    /// fit-width for documents that have never been opened before.
+    /// </summary>
+    public void ApplyInitialZoom()
+    {
+        switch (_restoreZoomMode)
+        {
+            case ZoomModes.FitPage:
+                FitPageToViewport();
+                break;
+            case ZoomModes.Manual when _restoreZoom is { } zoom:
+                _zoomMode = ZoomModes.Manual;
+                Zoom = zoom;
+                break;
+            default:
+                FitWidthToViewport();
+                break;
+        }
+
+        _restoreZoom = null;
+        _restoreZoomMode = null;
     }
 
     public void NavigateToPage(int pageNumber)
@@ -881,6 +1030,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             return;
         }
 
+        PushHistory();
         SetCurrentPage(pageNumber);
         ScrollToPageRequested?.Invoke(this, _currentPage);
     }
@@ -894,6 +1044,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         _reading.UpdateOffset(pageOffset);
         SetCurrentPage(pageNumber);
+
+        // The offset changes on every scroll tick, even when the page index does not,
+        // so the progress read-out must be refreshed here rather than in SetCurrentPage.
+        OnPropertyChanged(nameof(ReadingProgress));
+        OnPropertyChanged(nameof(ReadingProgressText));
+
         _reading.ScheduleSave();
     }
 
@@ -901,14 +1057,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public void SaveReadingPositionNow() => _reading.SaveNow();
 
-    public void SaveWindowState(double width, double height, bool isMaximized)
+    public void SaveWindowState(double width, double height, bool isMaximized, int? x = null, int? y = null)
     {
         SaveReadingPositionNow();
 
-        if (width > 500 && height > 400)
+        // Only remember the restore size/position while the window is not maximized or
+        // full screen; otherwise the next launch would start at the screen's dimensions.
+        if (!isMaximized && width > 500 && height > 400)
         {
             _settings.WindowWidth = width;
             _settings.WindowHeight = height;
+
+            if (x is not null && y is not null)
+            {
+                _settings.WindowX = x;
+                _settings.WindowY = y;
+            }
         }
 
         _settings.WindowMaximized = isMaximized;
@@ -1020,10 +1184,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
         SetCurrentPage(1, updateInput: false);
         PageNumberInput = "1";
 
+        // Pages are constructed at zoom 1.0, so nothing needs re-rendering here. The zoom
+        // remembered for this document is applied by ApplyInitialZoom once the window has
+        // a viewport; that also avoids the old "render at 1.0, then render again" burst.
         _zoom = 1.0;
+        _zoomMode = NormalizeZoomMode(_reading.PendingZoomMode);
+        _restoreZoom = _reading.PendingZoom;
+        _restoreZoomMode = _zoomMode;
         OnPropertyChanged(nameof(Zoom));
         OnPropertyChanged(nameof(ZoomText));
-        ApplyZoomToPages();
 
         ClearSearchState();
         SearchQuery = string.Empty;
@@ -1041,6 +1210,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void CloseDocumentCore(bool clearDocument = true)
     {
         _reading.Detach();
+        ClearHistory();
+        _zoomMode = ZoomModes.FitWidth;
+        _restoreZoom = null;
+        _restoreZoomMode = null;
         var textLoader = _textLoader;
         _textLoader = null;
         textLoader?.Dispose();
@@ -1116,6 +1289,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _textLoader?.Request(clamped, radius: 1);
         OnPropertyChanged(nameof(CurrentPage));
         OnPropertyChanged(nameof(PageStatusText));
+        OnPropertyChanged(nameof(ReadingProgress));
+        OnPropertyChanged(nameof(ReadingProgressText));
         OnPropertyChanged(nameof(CanGoPrevious));
         OnPropertyChanged(nameof(CanGoNext));
 
@@ -1271,7 +1446,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         RecentFiles = _settings.RecentFiles
             .Where(entry => File.Exists(entry.FilePath))
             .OrderByDescending(entry => entry.LastOpened)
-            .Take(6)
+            .Take(MaxRecentFilesShown)
             .Select(entry => new RecentFileViewModel(
                 entry.FilePath,
                 entry.LastOpened,
@@ -1360,6 +1535,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(PageStatusText));
         OnPropertyChanged(nameof(PageCountText));
+        OnPropertyChanged(nameof(ReadingProgress));
+        OnPropertyChanged(nameof(ReadingProgressText));
         OnPropertyChanged(nameof(CanGoNext));
     }
 
@@ -1400,6 +1577,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(PageCountText));
         OnPropertyChanged(nameof(SelectionStatus));
         OnPropertyChanged(nameof(UpdateButtonText));
+        OnPropertyChanged(nameof(ThemeTooltip));
+        OnPropertyChanged(nameof(ReadingProgressText));
 
         if (_document is not null)
         {
@@ -1466,9 +1645,188 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private void ApplyTheme()
     {
-        if (Application.Current is { } application)
+        if (Application.Current is not { } application)
         {
-            application.RequestedThemeVariant = IsDarkTheme ? ThemeVariant.Dark : ThemeVariant.Light;
+            return;
         }
+
+        application.RequestedThemeVariant = _themeMode switch
+        {
+            ThemeModes.Light => ThemeVariant.Light,
+            ThemeModes.Dark or ThemeModes.HighContrast => ThemeVariant.Dark,
+            // Default lets Avalonia follow the operating system.
+            _ => ThemeVariant.Default
+        };
+
+        ApplyHighContrastPalette(
+            application,
+            string.Equals(_themeMode, ThemeModes.HighContrast, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Avalonia 11 has no high-contrast theme variant, so the high-contrast palette is a
+    /// flat dictionary merged on top of <c>Styles/Colors.axaml</c>. Later merged
+    /// dictionaries win, so every key it defines overrides the light/dark palette.
+    /// </summary>
+    private void ApplyHighContrastPalette(Application application, bool enabled)
+    {
+        if (!enabled)
+        {
+            if (_highContrastPalette is not null)
+            {
+                application.Resources.MergedDictionaries.Remove(_highContrastPalette);
+                _highContrastPalette = null;
+            }
+
+            return;
+        }
+
+        if (_highContrastPalette is not null)
+        {
+            return;
+        }
+
+        try
+        {
+            var include = new ResourceInclude(new Uri("avares://AirPdf/"))
+            {
+                Source = new Uri("avares://AirPdf/Styles/HighContrast.axaml")
+            };
+
+            if (include.Loaded is { } palette)
+            {
+                application.Resources.MergedDictionaries.Add(palette);
+                _highContrastPalette = palette;
+            }
+        }
+        catch
+        {
+            // A missing or malformed palette must not stop the app from starting; the
+            // window simply keeps the light/dark palette.
+        }
+    }
+
+    private static string NormalizeThemeMode(string? mode) => mode switch
+    {
+        ThemeModes.Light => ThemeModes.Light,
+        ThemeModes.Dark => ThemeModes.Dark,
+        ThemeModes.HighContrast => ThemeModes.HighContrast,
+        _ => ThemeModes.System
+    };
+
+    private static string NormalizeZoomMode(string? mode) => mode switch
+    {
+        ZoomModes.FitPage => ZoomModes.FitPage,
+        ZoomModes.Manual => ZoomModes.Manual,
+        _ => ZoomModes.FitWidth
+    };
+
+    private static bool ResolveIsDark(string mode) => mode switch
+    {
+        ThemeModes.Dark or ThemeModes.HighContrast => true,
+        ThemeModes.Light => false,
+        _ => SystemIsDark()
+    };
+
+    private static bool SystemIsDark()
+    {
+        try
+        {
+            return Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant
+                == PlatformThemeVariant.Dark;
+        }
+        catch
+        {
+            // Headless or unusual platform hosts may not expose theme values.
+            return false;
+        }
+    }
+
+    private void OnPlatformColorValuesChanged(object? sender, PlatformColorValues e)
+    {
+        if (!IsSystemTheme)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!IsSystemTheme)
+            {
+                return;
+            }
+
+            IsDarkTheme = e.ThemeVariant == PlatformThemeVariant.Dark;
+            ApplyTheme();
+        });
+    }
+
+    private void PushHistory()
+    {
+        if (!IsDocumentOpen || PageCount <= 0)
+        {
+            return;
+        }
+
+        var point = new NavigationPoint(CurrentPage, Math.Clamp(_reading.PageOffset, 0, 1));
+        if (_history.Count > 0 && _history[^1] == point)
+        {
+            return;
+        }
+
+        _history.Add(point);
+        if (_history.Count > MaxHistoryEntries)
+        {
+            _history.RemoveAt(0);
+        }
+
+        OnPropertyChanged(nameof(CanNavigateBack));
+    }
+
+    private void ClearHistory()
+    {
+        if (_history.Count == 0)
+        {
+            return;
+        }
+
+        _history.Clear();
+        OnPropertyChanged(nameof(CanNavigateBack));
+    }
+
+    private static void StartProcess(string fileName, string arguments) =>
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(fileName, arguments)
+        {
+            UseShellExecute = true
+        });
+
+    private static class ThemeModes
+    {
+        public const string System = "System";
+        public const string Light = "Light";
+        public const string Dark = "Dark";
+        public const string HighContrast = "HighContrast";
+    }
+
+    private static class ZoomModes
+    {
+        public const string FitWidth = "fit-width";
+        public const string FitPage = "fit-page";
+        public const string Manual = "manual";
+    }
+
+    public void Dispose()
+    {
+        _localization.LanguageChanged -= OnLanguageChanged;
+
+        if (Application.Current?.PlatformSettings is { } platformSettings)
+        {
+            platformSettings.ColorValuesChanged -= OnPlatformColorValuesChanged;
+        }
+
+        CancelSafely(_loadCancellation);
+        CancelSafely(_searchCancellation);
+        _reading.Dispose();
+        CloseDocumentCore();
     }
 }

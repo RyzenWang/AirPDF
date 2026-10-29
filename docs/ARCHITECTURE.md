@@ -12,7 +12,11 @@ front end.
 
 - Validates and opens a file.
 - Reads page count and page sizes from PDFium through PDFtoImage.
-- Reads metadata, page rotation, and the outline through PdfPig.
+- Reads metadata and the outline through PdfPig.
+- Does **not** read page rotation. Doing so requires parsing every page dictionary, which
+  dominated open time on long documents (measured at 45.1 s of a 54.7 s open on a
+  9,277-page file, and 18.5 s of 24.6 s on a 4,215-page one) while nothing consumed the
+  value. The services that need it read it per page, for the pages they actually touch.
 - Serializes all PDFium rendering behind a static `SemaphoreSlim`, because
   PDFium is not thread-safe.
 - Maps native and parsing failures to `PdfDocumentException` with a stable
@@ -111,10 +115,27 @@ stores the file size and last-write ticks; if either changes, the old position
 is ignored. Scroll updates are debounced for 1.2 seconds, and closing a document
 or the window flushes the latest position immediately.
 
-On open, the saved position is held until the window has applied fit-width and
-laid out the page heights, then the scroll viewer is placed at
+On open, the saved position is held until the window has applied its initial zoom
+and laid out the page heights, then the scroll viewer is placed at
 `pageTop + offset × pageHeight`. The fraction is used rather than a raw pixel
 offset so the position survives a different window size or zoom level.
+
+The same entry also stores the zoom: `ZoomMode` is `fit-width`, `fit-page`, or
+`manual`, and `Zoom` is only applied for `manual`. Storing the mode rather than a
+frozen number matters because fit-width depends on the window width — reopening
+the document maximized would otherwise keep a zoom that no longer fits.
+`ApplyInitialZoom` resolves the mode once the viewport is known; older settings
+files have no mode and fall back to fit-width.
+
+## Navigation history
+
+`MainWindowViewModel` keeps a bounded stack of `(page, offset)` points. Every
+deliberate jump — outline, thumbnail, search result, page-number input, previous
+and next page — pushes the position it is leaving. Plain scrolling never pushes,
+so `Alt+Left` only walks back through jumps. The view model raises
+`ReturnToPositionRequested`; the window reuses the same scroll path as reading
+position restore, so the jump is clamped to the document and suppresses the
+scroll-to-page feedback loop.
 
 ## Text selection
 
@@ -132,10 +153,36 @@ for now, matching the search-highlight limitation.
 ## Theming and typography
 
 - `Colors.axaml` defines light and dark theme dictionaries.
+- Avalonia 11 has no high-contrast theme variant, so `HighContrast.axaml` is a
+  flat dictionary merged on top of `Colors.axaml` while that theme is selected.
+  Merged dictionaries are resolved in reverse order, so it must define every
+  brush key; a missing one falls through to the light/dark value and produces
+  unreadable combinations.
+- The theme button cycles System, Light, Dark, and High contrast. System sets
+  `RequestedThemeVariant` to `Default` and listens to
+  `PlatformSettings.ColorValuesChanged`, so the app follows the OS live instead
+  of reading the theme once at startup.
 - `Controls.axaml` contains the button, field, list, and page-list templates.
 - Inter is embedded, with system fallbacks for CJK text.
 - The document page always renders on white; only the application chrome changes
   with the theme.
+
+## Accessibility
+
+Icon-only buttons carry `AutomationProperties.Name` fed from the same localization
+catalog as their tooltips, and the page, thumbnail, outline, search-result, and
+recent-file lists expose names. The document text itself is a bitmap, so UI
+Automation cannot read it; the PdfPig text layer is the only source of readable
+text today.
+
+## Command line
+
+`CommandLineOptions` parses the arguments before the window is created. A desktop
+build is a `WinExe` with no console, so `--help`, `--version`, unknown options,
+and ignored extra files are reported through the app's message dialog instead of
+stdout. `--` terminates option parsing so paths that begin with `-` remain
+usable. One document per window means only the first existing path is opened and
+the rest are reported.
 
 ## Localization
 

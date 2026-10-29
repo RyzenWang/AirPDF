@@ -16,6 +16,8 @@ public sealed class ReadingPositionController : IDisposable
     private readonly AppSettings _settings;
     private readonly Func<int> _currentPage;
     private readonly Func<int> _pageCount;
+    private readonly Func<double> _zoom;
+    private readonly Func<string> _zoomMode;
     private readonly DispatcherTimer _saveTimer;
     private PdfDocumentInfo? _document;
     private ReadingPositionEntry? _pendingPosition;
@@ -27,12 +29,16 @@ public sealed class ReadingPositionController : IDisposable
         SettingsService settingsService,
         AppSettings settings,
         Func<int> currentPage,
-        Func<int> pageCount)
+        Func<int> pageCount,
+        Func<double> zoom,
+        Func<string> zoomMode)
     {
         _settingsService = settingsService;
         _settings = settings;
         _currentPage = currentPage;
         _pageCount = pageCount;
+        _zoom = zoom;
+        _zoomMode = zoomMode;
         _settings.ReadingPositions ??= [];
         _saveTimer = new DispatcherTimer
         {
@@ -70,6 +76,15 @@ public sealed class ReadingPositionController : IDisposable
         return pending;
     }
 
+    /// <summary>Zoom mode saved for the document that is currently attached.</summary>
+    public string? PendingZoomMode => _pendingPosition?.ZoomMode;
+
+    /// <summary>Zoom factor saved for the document that is currently attached.</summary>
+    public double? PendingZoom => _pendingPosition?.Zoom;
+
+    /// <summary>Current offset within the current page, normalized to 0..1.</summary>
+    public double PageOffset => _pageOffset;
+
     public void UpdateOffset(double pageOffset) =>
         _pageOffset = Math.Clamp(pageOffset, 0, 1);
 
@@ -102,6 +117,8 @@ public sealed class ReadingPositionController : IDisposable
 
         entry.Page = Math.Clamp(_currentPage(), 1, _pageCount());
         entry.PageOffset = Math.Clamp(_pageOffset, 0, 1);
+        entry.Zoom = _zoom();
+        entry.ZoomMode = _zoomMode();
         entry.FileSizeBytes = _fileSizeBytes;
         entry.FileLastWriteUtcTicks = _fileWriteUtcTicks;
         entry.UpdatedAt = DateTimeOffset.UtcNow;

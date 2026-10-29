@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private bool _selectionPressInProgress;
     private bool _selectionMoved;
     private bool _restoringDocument;
+    private PixelPoint? _pendingPosition;
     private PageLayout _pageLayout = PageLayout.Empty;
 
     public MainWindow()
@@ -68,9 +69,15 @@ public partial class MainWindow : Window
         {
             WindowState = WindowState.Maximized;
         }
+        else if (settings.WindowX is { } savedX && settings.WindowY is { } savedY)
+        {
+            _pendingPosition = new PixelPoint(savedX, savedY);
+            TryApplyPendingPosition();
+        }
 
         _viewModel.ScrollToPageRequested += OnScrollToPageRequested;
         _viewModel.ScrollToSearchResultRequested += OnScrollToSearchResultRequested;
+        _viewModel.ReturnToPositionRequested += OnReturnToPositionRequested;
         _viewModel.CopySelectionRequested += OnCopySelectionRequested;
         _viewModel.DocumentOpened += OnDocumentOpened;
         _viewModel.ZoomChanged += OnZoomChanged;
@@ -90,14 +97,90 @@ public partial class MainWindow : Window
 
         Opened += OnOpened;
         Closing += OnClosing;
+        Closed += (_, _) => _viewModel.Dispose();
     }
 
     private void OnOpened(object? sender, EventArgs e)
     {
+        // Screens and the native window handle are only guaranteed once the window is
+        // shown, so the restored position is retried here if the constructor could not
+        // validate it yet.
+        TryApplyPendingPosition();
         UpdateViewport();
         if (!string.IsNullOrWhiteSpace(_initialFile))
         {
             _ = _viewModel.OpenPathAsync(_initialFile);
+        }
+    }
+
+    private void TryApplyPendingPosition()
+    {
+        if (_pendingPosition is not { } position)
+        {
+            return;
+        }
+
+        switch (IsPositionReachable(position))
+        {
+            case null:
+                // Screen information is not available yet; OnOpened retries.
+                return;
+            case false:
+                // The saved monitor is gone, so let the platform place the window
+                // rather than restoring it off-screen.
+                _pendingPosition = null;
+                return;
+        }
+
+        try
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual;
+            Position = position;
+            _pendingPosition = null;
+        }
+        catch
+        {
+            // Platforms that cannot position a window before it is shown will retry from
+            // OnOpened; a persistent failure simply keeps the platform's own placement.
+        }
+    }
+
+    /// <summary>
+    /// Null means "cannot tell yet" (no screen information), which must not be confused
+    /// with "off-screen" — only the latter should discard the saved position.
+    /// </summary>
+    private bool? IsPositionReachable(PixelPoint position)
+    {
+        try
+        {
+            var screens = Screens;
+            if (screens is null)
+            {
+                return null;
+            }
+
+            var sawScreen = false;
+            foreach (var screen in screens.All)
+            {
+                sawScreen = true;
+                var area = screen.WorkingArea;
+
+                // Require enough of the title bar to stay on a real screen, so a window
+                // saved on a since-disconnected monitor cannot come back off-screen.
+                if (position.X + 160 > area.X &&
+                    position.X < area.X + area.Width - 80 &&
+                    position.Y + 60 > area.Y &&
+                    position.Y < area.Y + area.Height - 40)
+                {
+                    return true;
+                }
+            }
+
+            return sawScreen ? false : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -109,7 +192,7 @@ public partial class MainWindow : Window
         {
             _restoringDocument = true;
             UpdateViewport();
-            _viewModel.FitWidthToViewport();
+            _viewModel.ApplyInitialZoom();
             RebuildPageLayout();
 
             if (readingPosition is not null)
@@ -147,6 +230,13 @@ public partial class MainWindow : Window
     private void OnScrollToSearchResultRequested(object? sender, SearchResultViewModel result)
     {
         Dispatcher.UIThread.Post(() => ScrollToSearchResult(result), DispatcherPriority.Loaded);
+    }
+
+    private void OnReturnToPositionRequested(object? sender, NavigationPoint point)
+    {
+        Dispatcher.UIThread.Post(
+            () => ScrollToReadingPosition(point.Page, point.PageOffset),
+            DispatcherPriority.Loaded);
     }
 
     private void OnSearchOpened(object? sender, EventArgs e)
@@ -601,6 +691,40 @@ public partial class MainWindow : Window
         var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control) ||
                    e.KeyModifiers.HasFlag(KeyModifiers.Meta);
 
+        if (!ctrl && e.KeyModifiers.HasFlag(KeyModifiers.Alt) && e.Key == Key.Left)
+        {
+            if (_viewModel.CanNavigateBack)
+            {
+                _viewModel.NavigateBackCommand.Execute(null);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.F3)
+        {
+            if (_viewModel.HasSearchResults)
+            {
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+                {
+                    _viewModel.PreviousSearchResultCommand.Execute(null);
+                }
+                else
+                {
+                    _viewModel.NextSearchResultCommand.Execute(null);
+                }
+            }
+            else if (_viewModel.IsDocumentOpen && !_viewModel.IsSearchOpen)
+            {
+                // F3 with nothing to step through brings the search panel up, like a browser.
+                _viewModel.ToggleSearchCommand.Execute(null);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
         if (!(e.Source is TextBox) && ctrl && e.Key == Key.C && _viewModel.HasSelection)
         {
             _viewModel.CopySelectionCommand.Execute(null);
@@ -759,7 +883,20 @@ public partial class MainWindow : Window
 
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
-        var maximized = WindowState == WindowState.Maximized;
-        _viewModel.SaveWindowState(Width, Height, maximized);
+        var state = WindowState;
+        var maximized = state == WindowState.Maximized;
+        var fullScreen = state == WindowState.FullScreen;
+
+        // Only the restore geometry is remembered; while maximized or full screen the
+        // current bounds belong to the screen, not to the user's preferred window.
+        int? x = null;
+        int? y = null;
+        if (!maximized && !fullScreen)
+        {
+            x = Position.X;
+            y = Position.Y;
+        }
+
+        _viewModel.SaveWindowState(Width, Height, maximized, x, y);
     }
 }

@@ -1,0 +1,53 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!--
+    High-contrast palette. Avalonia 11 has no built-in high-contrast theme variant, so
+    this dictionary is merged on top of Styles/Colors.axaml at runtime when the user
+    picks the "High contrast" theme (see MainWindowViewModel.ApplyTheme).
+
+    It must define every brush key that Colors.axaml defines, because merged
+    dictionaries are looked up in reverse order: a missing key here falls through to the
+    light/dark palette and produces unreadable combinations.
+  -->
+  <SolidColorBrush x:Key="AppBackgroundBrush" Color="#000000" />
+  <SolidColorBrush x:Key="ToolbarBackgroundBrush" Color="#000000" />
+  <SolidColorBrush x:Key="StatusBackgroundBrush" Color="#000000" />
+  <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#000000" />
+  <SolidColorBrush x:Key="SurfaceBrush" Color="#000000" />
+  <SolidColorBrush x:Key="SurfaceAltBrush" Color="#0A0A0A" />
+  <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#262600" />
+  <SolidColorBrush x:Key="SurfacePressedBrush" Color="#3D3D00" />
+  <SolidColorBrush x:Key="PagePlaceholderBrush" Color="#000000" />
+  <SolidColorBrush x:Key="BorderBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="BorderStrongBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="TextSecondaryBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="TextTertiaryBrush" Color="#E0E0E0" />
+  <SolidColorBrush x:Key="InverseTextBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="AccentBrush" Color="#0000CC" />
+  <SolidColorBrush x:Key="AccentHoverBrush" Color="#0000EE" />
+  <SolidColorBrush x:Key="AccentSoftBrush" Color="#000033" />
+  <SolidColorBrush x:Key="AccentTextBrush" Color="#66B3FF" />
+  <SolidColorBrush x:Key="TealBrush" Color="#00FFFF" />
+  <SolidColorBrush x:Key="TealSoftBrush" Color="#003333" />
+  <SolidColorBrush x:Key="ShadowBrush" Color="#00000000" />
+  <SolidColorBrush x:Key="PageShadowBrush" Color="#00000000" />
+  <SolidColorBrush x:Key="OverlayScrimBrush" Color="#CC000000" />
+  <SolidColorBrush x:Key="SearchHighlightBrush" Color="#6600FFFF" />
+  <SolidColorBrush x:Key="SearchActiveBrush" Color="#CC00FFFF" />
+  <SolidColorBrush x:Key="DangerBrush" Color="#FF8080" />
+  <SolidColorBrush x:Key="DangerSoftBrush" Color="#330000" />
+
+  <Color x:Key="SystemAccentColor">#0000CC</Color>
+  <SolidColorBrush x:Key="SystemAccentColorBrush" Color="#0000CC" />
+  <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#E0E0E0" />
+  <SolidColorBrush x:Key="TextControlBackground" Color="#000000" />
+  <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#0A0A0A" />
+  <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#000000" />
+  <SolidColorBrush x:Key="TextControlBorderBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#66B3FF" />
+  <SolidColorBrush x:Key="TextControlForeground" Color="#FFFFFF" />
+</ResourceDictionary>

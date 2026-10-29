@@ -32,7 +32,6 @@ public sealed class LocalizationService
             ["L.FindInDocument"] = ("Find in document (Ctrl+F)", "在文档中查找（Ctrl+F）"),
             ["L.ToggleThumbnails"] = ("Toggle thumbnails", "显示或隐藏缩略图"),
             ["L.HideSidebar"] = ("Hide sidebar", "隐藏侧栏"),
-            ["L.ToggleTheme"] = ("Toggle light and dark theme", "切换浅色和深色主题"),
             ["L.DocumentDetails"] = ("Document details", "文档详情"),
             ["L.Language"] = ("Language", "语言"),
             ["L.Navigate"] = ("NAVIGATE", "导航"),
@@ -119,7 +118,46 @@ public sealed class LocalizationService
             ["L.ErrorInvalidPassword"] = ("The password is incorrect.", "密码不正确。"),
             ["L.ErrorCorrupt"] = ("The PDF appears to be damaged.", "此 PDF 似乎已损坏。"),
             ["L.ErrorUnsupported"] = ("This document uses an unsupported security scheme.", "此文档使用了不支持的安全方案。"),
-            ["L.ErrorUnknown"] = ("AirPDF could not open this document.", "AirPDF 无法打开此文档。")
+            ["L.ErrorUnknown"] = ("AirPDF could not open this document.", "AirPDF 无法打开此文档。"),
+            ["L.CopySelection"] = ("Copy selection", "复制选中内容"),
+            ["L.SelectAll"] = ("Select all", "全选"),
+            ["L.OpenContainingFolder"] = ("Show in folder", "打开所在文件夹"),
+            ["L.ExplorerError"] = ("AirPDF could not open the file's folder.", "无法打开文件所在文件夹。"),
+            ["L.NavigateBack"] = ("Back to previous position (Alt+Left)", "返回上一个位置（Alt+Left）"),
+            ["L.PageNumberLabel"] = ("Page number", "页码"),
+            ["L.ThumbnailsList"] = ("Page thumbnails", "页面缩略图"),
+            ["L.OutlineList"] = ("Document outline", "文档目录"),
+            ["L.SearchResultsList"] = ("Search results", "搜索结果"),
+            ["L.RecentFilesList"] = ("Recently opened files", "最近打开的文件"),
+            ["L.SearchBoxLabel"] = ("Search this PDF", "搜索此 PDF"),
+            ["L.ZoomLevelLabel"] = ("Zoom level", "缩放比例"),
+            ["L.ReadingProgressLabel"] = ("Reading progress", "阅读进度"),
+            ["L.ThemeSystem"] = ("System", "跟随系统"),
+            ["L.ThemeLight"] = ("Light", "浅色"),
+            ["L.ThemeDark"] = ("Dark", "深色"),
+            ["L.ThemeHighContrast"] = ("High contrast", "高对比度"),
+            ["L.ThemeTooltipFormat"] = ("Theme: {0} — click to change", "主题：{0}（点击切换）"),
+            ["L.CommandLineHelpTitle"] = ("AirPDF — command line", "AirPDF — 命令行"),
+            ["L.CommandLineHelpBody"] = (
+                "Usage: AirPDF [options] [file.pdf]\n\n" +
+                "  -h, --help      Show this help\n" +
+                "      --version   Show the application version\n" +
+                "  --              Treat every following argument as a file path\n\n" +
+                "AirPDF opens one document per window. When several files are given, " +
+                "the first existing one is opened.",
+                "用法：AirPDF [选项] [文件.pdf]\n\n" +
+                "  -h, --help      显示此帮助\n" +
+                "      --version   显示版本号\n" +
+                "  --               其后所有参数都按文件路径处理\n\n" +
+                "AirPDF 每个窗口只打开一个文档；给出多个文件时，只打开第一个存在的文件。"),
+            ["L.CommandLineVersionFormat"] = ("AirPDF {0}", "AirPDF {0}"),
+            ["L.ExtraFilesTitle"] = ("Only one document per window", "每个窗口只打开一个文档"),
+            ["L.UnknownOptionsFormat"] = (
+                "Ignored unrecognised arguments: {0}",
+                "已忽略无法识别的参数：{0}"),
+            ["L.ExtraFilesFormat"] = (
+                "Opened: {0}\n\nIgnored: {1}",
+                "已打开：{0}\n\n已忽略：{1}")
         };
 
     private ResourceDictionary? _dictionary;
