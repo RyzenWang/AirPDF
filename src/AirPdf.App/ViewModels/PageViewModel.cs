@@ -30,6 +30,8 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     private IReadOnlyList<PdfSearchRect> _highlightRects = [];
     private IReadOnlyList<PdfSearchRect> _activeHighlightRects = [];
     private IReadOnlyList<PdfTextWord> _words = [];
+    private IReadOnlyList<PdfLink> _links = [];
+    private Task? _linkLoad;
     private IReadOnlyList<PdfSearchRect> _selectionRects = [];
 
     public PageViewModel(PdfPageRenderer renderer, PdfPageInfo pageInfo, LocalizationService localization)
@@ -143,6 +145,41 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         _words = page.Words;
         OnPropertyChanged(nameof(Words));
         OnPropertyChanged(nameof(HasTextLayer));
+    }
+
+    /// <summary>Link annotations of this page, normalized to the page. Empty until
+    /// <see cref="EnsureLinksAsync"/> has run.</summary>
+    public IReadOnlyList<PdfLink> Links => _links;
+
+    /// <summary>Loads this page's links once; later calls reuse the same task.</summary>
+    public Task EnsureLinksAsync() => _linkLoad ??= LoadLinksAsync();
+
+    public PdfLink? HitTestLink(double x, double y)
+    {
+        foreach (var link in _links)
+        {
+            if (link.Contains(x, y))
+            {
+                return link;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task LoadLinksAsync()
+    {
+        try
+        {
+            var links = await _renderer.GetLinksAsync(Number, CancellationToken.None).ConfigureAwait(true);
+            _links = links;
+            OnPropertyChanged(nameof(Links));
+        }
+        catch
+        {
+            // A malformed annotation must never break the page.
+            _links = [];
+        }
     }
 
     public int HitTestWord(double x, double y)

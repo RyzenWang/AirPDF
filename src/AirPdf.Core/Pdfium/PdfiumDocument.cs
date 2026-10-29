@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Runtime.InteropServices;
+using System.Text;
 using AirPdf.Core.Models;
 using SkiaSharp;
 
@@ -197,6 +198,87 @@ public sealed class PdfiumDocument : IDisposable
         return bitmap;
     }
 
+    /// <summary>
+    /// Returns the link annotations of one page, normalized to the page.
+    /// </summary>
+    /// <remarks>
+    /// Rotated pages are skipped: PDFium reports annotation bounds in unrotated page space,
+    /// and the transform is the same one search highlights and text selection already lack.
+    /// Links never throw — a malformed annotation dictionary must not break a page.
+    /// </remarks>
+    public IReadOnlyList<PdfLink> GetLinks(int pageNumber)
+    {
+        ThrowIfDisposed();
+
+        var page = PdfiumNative.LoadPage(_handle, pageNumber - 1);
+        if (page == IntPtr.Zero)
+        {
+            return [];
+        }
+
+        try
+        {
+            if (PdfiumNative.GetPageRotation(page) % 4 != 0)
+            {
+                return [];
+            }
+
+            var width = PdfiumNative.GetPageWidthF(page);
+            var height = PdfiumNative.GetPageHeightF(page);
+            if (width <= 0 || height <= 0)
+            {
+                return [];
+            }
+
+            var links = new List<PdfLink>();
+            var position = 0;
+
+            while (PdfiumNative.LinkEnumerate(page, ref position, out var link) != 0 && link != IntPtr.Zero)
+            {
+                if (PdfiumNative.LinkGetAnnotRect(link, out var rect) == 0)
+                {
+                    continue;
+                }
+
+                var left = Math.Min(rect.Left, rect.Right);
+                var right = Math.Max(rect.Left, rect.Right);
+                var bottom = Math.Min(rect.Top, rect.Bottom);
+                var top = Math.Max(rect.Top, rect.Bottom);
+
+                var x = Math.Clamp(left / width, 0, 1);
+                var w = Math.Clamp((right - left) / width, 0, 1 - x);
+                var y = Math.Clamp((height - top) / height, 0, 1);
+                var h = Math.Clamp((top - bottom) / height, 0, 1 - y);
+
+                if (w <= 0.0001 || h <= 0.0001)
+                {
+                    continue;
+                }
+
+                if (TryReadTarget(link, out var kind, out var uri, out var targetPage))
+                {
+                    links.Add(new PdfLink
+                    {
+                        Bounds = new PdfSearchRect(x, y, w, h),
+                        Kind = kind,
+                        Uri = uri,
+                        PageNumber = targetPage
+                    });
+                }
+            }
+
+            return links;
+        }
+        catch
+        {
+            return [];
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -215,6 +297,83 @@ public sealed class PdfiumDocument : IDisposable
         _stream.Dispose();
         GC.KeepAlive(_readBlock);
         GC.KeepAlive(_fileAccess);
+    }
+
+    private bool TryReadTarget(IntPtr link, out PdfLinkKind kind, out string? uri, out int pageNumber)
+    {
+        kind = PdfLinkKind.Unknown;
+        uri = null;
+        pageNumber = 0;
+
+        var action = PdfiumNative.LinkGetAction(link);
+        if (action != IntPtr.Zero)
+        {
+            var actionType = PdfiumNative.ActionGetType(action).Value;
+
+            if (actionType == PdfiumNative.ActionUri)
+            {
+                uri = ReadUri(action);
+                if (uri is null)
+                {
+                    return false;
+                }
+
+                kind = PdfLinkKind.Uri;
+                return true;
+            }
+
+            // GoTo is resolved below through the link's destination. Launch, remote GoTo and
+            // anything else is deliberately not followed: a PDF must not run programs.
+            if (actionType != PdfiumNative.ActionGoTo)
+            {
+                return false;
+            }
+        }
+
+        var destination = PdfiumNative.LinkGetDest(_handle, link);
+        if (destination == IntPtr.Zero)
+        {
+            return false;
+        }
+
+        var index = PdfiumNative.DestGetPageIndex(_handle, destination);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        kind = PdfLinkKind.Page;
+        pageNumber = index + 1;
+        return true;
+    }
+
+    private string? ReadUri(IntPtr action)
+    {
+        var length = PdfiumNative.ActionGetUriPath(_handle, action, IntPtr.Zero, new CULong(0u)).Value;
+        if (length == 0 || length > 8192)
+        {
+            return null;
+        }
+
+        var buffer = Marshal.AllocHGlobal((int)length);
+        try
+        {
+            var written = PdfiumNative.ActionGetUriPath(_handle, action, buffer, new CULong((uint)length)).Value;
+            if (written == 0)
+            {
+                return null;
+            }
+
+            var bytes = new byte[(int)Math.Min(written, length)];
+            Marshal.Copy(buffer, bytes, 0, bytes.Length);
+
+            var text = Encoding.UTF8.GetString(bytes).TrimEnd('\0').Trim();
+            return text.Length == 0 ? null : text;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
     }
 
     private static int ReadBlock(FileStream stream, CULong position, IntPtr buffer, CULong size)

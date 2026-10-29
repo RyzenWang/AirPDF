@@ -1,0 +1,40 @@
+%PDF-1.7
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << >> /Contents 7 0 R /Annots [5 0 R] >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 400] /Resources << >> /Contents 7 0 R /Annots [6 0 R] >>
+endobj
+5 0 obj
+<< /Type /Annot /Subtype /Link /Rect [20 300 120 340] /Border [0 0 0] /A << /S /URI /URI (https://example.com/airpdf-links) >> >>
+endobj
+6 0 obj
+<< /Type /Annot /Subtype /Link /Rect [30 60 150 90] /Border [0 0 0] /Dest [3 0 R /Fit] >>
+endobj
+7 0 obj
+<< /Length 0 >>
+stream
+
+endstream
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000121 00000 n 
+0000000241 00000 n 
+0000000361 00000 n 
+0000000506 00000 n 
+0000000611 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+660
+%%EOF

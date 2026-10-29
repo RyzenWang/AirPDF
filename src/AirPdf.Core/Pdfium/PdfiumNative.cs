@@ -86,6 +86,20 @@ internal static class PdfiumNative
     }
 
     /// <summary>
+    /// <c>FS_RECTF</c>: PDFium reports annotation bounds as left/top/right/bottom floats in
+    /// page space. Which pair is numerically larger depends on the coordinate system, so
+    /// callers min/max them rather than assume an order.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct RectF
+    {
+        public float Left;
+        public float Top;
+        public float Right;
+        public float Bottom;
+    }
+
+    /// <summary>
     /// <c>int (*m_GetBlock)(void* param, unsigned long position, unsigned char* pBuf,
     /// unsigned long size)</c>. Returns 1 when the whole range was read.
     /// </summary>
@@ -135,4 +149,49 @@ internal static class PdfiumNative
         int sizeY,
         int rotate,
         int flags);
+
+    // ---- links -----------------------------------------------------------------
+
+    /// <summary><c>PDFACTION_GOTO</c>: jump to a destination inside this document.</summary>
+    internal const uint ActionGoTo = 1;
+
+    /// <summary><c>PDFACTION_URI</c>: open an external URI.</summary>
+    internal const uint ActionUri = 3;
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDF_GetPageWidthF")]
+    internal static extern float GetPageWidthF(IntPtr page);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDF_GetPageHeightF")]
+    internal static extern float GetPageHeightF(IntPtr page);
+
+    /// <summary>Returns the page's <c>/Rotate</c> in quarter turns (0-3).</summary>
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFPage_GetRotation")]
+    internal static extern int GetPageRotation(IntPtr page);
+
+    /// <summary>Walks the page's links. Returns non-zero when a link was written to
+    /// <paramref name="link"/> and <paramref name="startPos"/> was advanced.</summary>
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFLink_Enumerate")]
+    internal static extern int LinkEnumerate(IntPtr page, ref int startPos, out IntPtr link);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFLink_GetAnnotRect")]
+    internal static extern int LinkGetAnnotRect(IntPtr link, out RectF rect);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFLink_GetAction")]
+    internal static extern IntPtr LinkGetAction(IntPtr link);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFLink_GetDest")]
+    internal static extern IntPtr LinkGetDest(IntPtr document, IntPtr link);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAction_GetType")]
+    internal static extern CULong ActionGetType(IntPtr action);
+
+    /// <summary>Writes the URI as a NUL-terminated byte string and returns its length in
+    /// bytes, including the terminator. Pass a null buffer to measure first.</summary>
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAction_GetURIPath")]
+    internal static extern CULong ActionGetUriPath(IntPtr document, IntPtr action, IntPtr buffer, CULong length);
+
+    /// <summary>Zero-based destination page index, or -1 when the destination is not a
+    /// page destination.</summary>
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFDest_GetDestPageIndex")]
+    internal static extern int DestGetPageIndex(IntPtr document, IntPtr destination);
 }

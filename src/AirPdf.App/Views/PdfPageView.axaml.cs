@@ -33,6 +33,9 @@ public partial class PdfPageView : UserControl
         if (DataContext is PageViewModel page && TopLevel.GetTopLevel(this) is { } topLevel)
         {
             page.Activate(topLevel.RenderScaling);
+
+            // Link annotations are needed for hit-testing, so fetch them with the render.
+            _ = page.EnsureLinksAsync();
         }
     }
 }

@@ -122,6 +122,7 @@ public sealed class LocalizationService
             ["L.CopySelection"] = ("Copy selection", "复制选中内容"),
             ["L.SelectAll"] = ("Select all", "全选"),
             ["L.OpenContainingFolder"] = ("Show in folder", "打开所在文件夹"),
+            ["L.LinkError"] = ("AirPDF could not open this link.", "无法打开此链接。"),
             ["L.ExplorerError"] = ("AirPDF could not open the file's folder.", "无法打开文件所在文件夹。"),
             ["L.NavigateBack"] = ("Back to previous position (Alt+Left)", "返回上一个位置（Alt+Left）"),
             ["L.PageNumberLabel"] = ("Page number", "页码"),

@@ -18,6 +18,11 @@ semantic versioning once it reaches 1.0.
 - macOS `.icns` application icon.
 - Back navigation: `Alt+Left` (and a toolbar button) returns to the position you
   were at before the last outline, thumbnail, search, or page-number jump.
+- Clickable links: internal destinations jump to their page (and take part in back
+  navigation), and `http`, `https`, and `mailto` links open in the system handler.
+  A link shows a hand cursor and takes precedence over starting a text selection.
+  `Launch` and remote-`GoTo` actions are deliberately ignored so a document cannot
+  start programs.
 - Per-document zoom memory: the zoom mode (fit width, fit page, or a manual
   factor) is restored the next time the document is opened.
 - Reading progress percentage in the status bar.

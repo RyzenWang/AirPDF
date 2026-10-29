@@ -1,6 +1,7 @@
 using AirPdf.App.Layout;
 using AirPdf.App.Services;
 using AirPdf.App.ViewModels;
+using AirPdf.Core.Models;
 using AirPdf.Core.Services;
 using Avalonia;
 using Avalonia.Controls;
@@ -23,6 +24,7 @@ public partial class MainWindow : Window
     private bool _selectionPressInProgress;
     private bool _selectionMoved;
     private bool _restoringDocument;
+    private bool _linkCursorActive;
     private PixelPoint? _pendingPosition;
     private PageLayout _pageLayout = PageLayout.Empty;
 
@@ -492,6 +494,16 @@ public partial class MainWindow : Window
         var x = point.X / Math.Max(1, pageView.Bounds.Width);
         var y = point.Y / Math.Max(1, pageView.Bounds.Height);
 
+        // A link annotation wins over selection: clicking it should follow it, not start a
+        // drag. The hand cursor already told the user it was clickable.
+        var link = page.HitTestLink(x, y);
+        if (link is not null)
+        {
+            _viewModel.OpenLink(link);
+            e.Handled = true;
+            return;
+        }
+
         bool began;
         _selectionPressInProgress = true;
         try
@@ -538,6 +550,7 @@ public partial class MainWindow : Window
     {
         if (!_isSelectingText)
         {
+            UpdateLinkCursor(e.GetPosition(this));
             return;
         }
 
@@ -555,6 +568,29 @@ public partial class MainWindow : Window
         }
 
         e.Handled = true;
+    }
+
+    private void UpdateLinkCursor(Point windowPoint)
+    {
+        PdfLink? link = null;
+
+        if (_viewModel.IsDocumentOpen && FindPageViewAt(windowPoint) is { } pageView &&
+            pageView.DataContext is PageViewModel page &&
+            this.TranslatePoint(windowPoint, pageView) is { } local)
+        {
+            link = page.HitTestLink(
+                local.X / Math.Max(1, pageView.Bounds.Width),
+                local.Y / Math.Max(1, pageView.Bounds.Height));
+        }
+
+        var active = link is not null;
+        if (active == _linkCursorActive)
+        {
+            return;
+        }
+
+        _linkCursorActive = active;
+        Cursor = active ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
     }
 
     private void OnSelectionPointerReleased(object? sender, PointerReleasedEventArgs e)

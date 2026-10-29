@@ -154,6 +154,22 @@ so `Alt+Left` only walks back through jumps. The view model raises
 position restore, so the jump is clamped to the document and suppresses the
 scroll-to-page feedback loop.
 
+## Links
+
+Link annotations are read per page with `FPDFLink_Enumerate` when the page view
+attaches, and cached on the page view model. Bounds are normalized exactly like
+search rectangles, so hit-testing is the same math at any zoom. Internal
+destinations resolve through `FPDFDest_GetDestPageIndex` and are followed with the
+normal page navigation, which means they join the back history.
+
+Clicking is handled before text selection starts, so a click on a link follows it
+instead of beginning a drag. Only `http`, `https` and `mailto` targets are handed to
+the shell: `Launch` and remote `GoTo` actions are ignored on purpose, so a document
+cannot start a program.
+
+Rotated pages report no links, for the same reason search highlights are skipped
+there — PDFium returns annotation bounds in unrotated page space.
+
 ## Text selection
 
 `PdfTextService` extracts ordered word geometry from PdfPig on demand. Each

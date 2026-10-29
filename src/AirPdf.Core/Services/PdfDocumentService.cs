@@ -77,6 +77,45 @@ public sealed class PdfDocumentService : IDisposable
             cancellationToken);
     }
 
+    /// <summary>
+    /// Returns the link annotations of one page. Links are read from the resident document
+    /// when it matches <paramref name="filePath"/>; otherwise an empty list is returned
+    /// rather than reopening the file.
+    /// </summary>
+    public Task<IReadOnlyList<PdfLink>> GetLinksAsync(
+        string filePath,
+        int pageNumber,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var session = _session;
+                    if (session is not null && string.Equals(_sessionPath, fullPath, PathComparison))
+                    {
+                        return session.GetLinks(pageNumber);
+                    }
+
+                    return (IReadOnlyList<PdfLink>)[];
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
     /// <summary>Releases the resident PDFium handle for the open document.</summary>
     public void CloseDocument()
     {

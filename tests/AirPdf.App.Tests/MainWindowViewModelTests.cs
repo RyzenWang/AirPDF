@@ -1,5 +1,6 @@
 using AirPdf.App.Services;
 using AirPdf.App.ViewModels;
+using AirPdf.Core.Models;
 using AirPdf.Core.Services;
 using Avalonia.Headless.XUnit;
 using Xunit;
@@ -10,6 +11,9 @@ public sealed class MainWindowViewModelTests
 {
     private static readonly string SamplePath =
         Path.Combine(AppContext.BaseDirectory, "Assets", "sample.pdf");
+
+    private static readonly string LinksPath =
+        Path.Combine(AppContext.BaseDirectory, "Assets", "links.pdf");
 
     [AvaloniaFact]
     public async Task OpenPathAsync_LoadsSampleDocument()
@@ -175,6 +179,33 @@ public sealed class MainWindowViewModelTests
 
         context.ViewModel.ToggleThemeCommand.Execute(null);
         Assert.True(context.ViewModel.IsSystemTheme);
+    }
+
+    [AvaloniaFact]
+    public async Task Links_AreHitTestable_AndInternalDestinationsNavigate()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(LinksPath);
+
+        // Page 2 of the fixture links back to page 1.
+        await context.ViewModel.EnsureLinksAsync(2);
+        var page = context.ViewModel.Pages[1];
+        var link = Assert.Single(page.Links);
+        Assert.Equal(PdfLinkKind.Page, link.Kind);
+        Assert.Equal(1, link.PageNumber);
+
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 2, pageOffset: 0);
+
+        var hit = page.HitTestLink(
+            link.Bounds.X + (link.Bounds.Width / 2),
+            link.Bounds.Y + (link.Bounds.Height / 2));
+        Assert.NotNull(hit);
+        Assert.Null(page.HitTestLink(0.98, 0.02));
+
+        context.ViewModel.OpenLink(hit!);
+
+        Assert.Equal(1, context.ViewModel.CurrentPage);
+        Assert.True(context.ViewModel.CanNavigateBack);
     }
 
     [AvaloniaFact]

@@ -55,6 +55,8 @@ small .NET application with a hand-built Avalonia interface.
 - **Password-protected PDFs** with a proper unlock prompt.
 - **Light, dark, and high-contrast themes**, following the system on first launch.
 - **Status bar** with the page position and a reading-progress percentage.
+- **Links** — internal destinations jump to their page, `http`/`https`/`mailto`
+  links open in your browser or mail client, and the cursor turns into a hand.
 - **Back navigation** with `Alt+Left` after any outline, thumbnail, search, or
   page jump.
 - **Right-click menu** for copy, select all, and showing the file in the folder.
@@ -233,6 +235,8 @@ docs/                   Screenshots and architecture notes
 - No annotations, form filling, printing, or PDF editing.
 - Search highlights are hidden on pages with a non-zero `/Rotate` value; the
   results themselves still work.
+- Links are not clickable on pages with a non-zero `/Rotate` value, and only
+  `http`, `https`, and `mailto` targets are followed.
 - One document per window; no tabs.
 - Release binaries are signed only when the maintainer signing secrets are
   configured. Unsigned Windows/macOS builds may show platform warnings.
@@ -240,7 +244,7 @@ docs/                   Screenshots and architecture notes
 
 ## Roadmap
 
-- [ ] PDF hyperlinks and internal link navigation
+- [x] PDF hyperlinks and internal link navigation
 - [ ] Native printing and "Save a copy"
 - [ ] Per-document bookmarks
 - [ ] Rotated-page search highlights

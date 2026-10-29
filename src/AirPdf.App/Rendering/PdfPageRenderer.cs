@@ -1,3 +1,4 @@
+using AirPdf.Core.Models;
 using AirPdf.Core.Services;
 using SkiaSharp;
 
@@ -18,4 +19,7 @@ public sealed class PdfPageRenderer
 
     public Task<SKBitmap> RenderAsync(int pageNumber, int pixelWidth, CancellationToken cancellationToken) =>
         _service.RenderPageAsync(_filePath, pageNumber, pixelWidth, _password, cancellationToken);
+
+    public Task<IReadOnlyList<PdfLink>> GetLinksAsync(int pageNumber, CancellationToken cancellationToken) =>
+        _service.GetLinksAsync(_filePath, pageNumber, cancellationToken);
 }

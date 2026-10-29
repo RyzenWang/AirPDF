@@ -1102,6 +1102,49 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public Task<bool> EnsureTextLayerAsync(int pageNumber) =>
         _textLoader?.EnsurePageAsync(pageNumber) ?? Task.FromResult(false);
 
+    /// <summary>Ensures one page's link annotations are loaded.</summary>
+    public Task EnsureLinksAsync(int pageNumber) =>
+        pageNumber >= 1 && pageNumber <= Pages.Count
+            ? Pages[pageNumber - 1].EnsureLinksAsync()
+            : Task.CompletedTask;
+
+    /// <summary>
+    /// Follows a link annotation. Page destinations reuse the normal navigation so they get
+    /// history and scroll handling. URIs are only handed to the system for http, https and
+    /// mailto: a PDF must not be able to launch programs or local files through this path.
+    /// </summary>
+    public void OpenLink(PdfLink link)
+    {
+        switch (link.Kind)
+        {
+            case PdfLinkKind.Page:
+                NavigateToPage(link.PageNumber);
+                break;
+
+            case PdfLinkKind.Uri when link.Uri is { Length: > 0 } text:
+                if (!Uri.TryCreate(text, UriKind.Absolute, out var uri) || !IsSafeLinkScheme(uri.Scheme))
+                {
+                    return;
+                }
+
+                try
+                {
+                    StartProcess(uri.AbsoluteUri, string.Empty);
+                }
+                catch
+                {
+                    SetError("L.LinkError");
+                }
+
+                break;
+        }
+    }
+
+    private static bool IsSafeLinkScheme(string scheme) =>
+        scheme.Equals("http", StringComparison.OrdinalIgnoreCase) ||
+        scheme.Equals("https", StringComparison.OrdinalIgnoreCase) ||
+        scheme.Equals("mailto", StringComparison.OrdinalIgnoreCase);
+
     private void NotifySelectionChanged()
     {
         OnPropertyChanged(nameof(HasSelection));
