@@ -91,7 +91,9 @@ small .NET application with a hand-built Avalonia interface.
 - [.NET 10 SDK](https://dotnet.microsoft.com/download) for building.
 - Windows 10/11, macOS 13+, or a modern Linux desktop (X11 or Wayland).
 - On Linux, the usual Avalonia desktop dependencies (X11/Wayland, fontconfig,
-  and OpenGL or a software renderer) must be installed.
+  and OpenGL or a software renderer) must be installed. Rendering uses the
+  fontconfig-enabled SkiaSharp build, so system fonts are required — install a CJK
+  font such as `fonts-noto-cjk` to read Chinese or Japanese documents.
 
 The published builds are self-contained; end users do not need .NET installed.
 

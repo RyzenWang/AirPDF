@@ -35,20 +35,26 @@
     <PackageReference Include="Velopack" Version="1.2.161" />
 
     <!--
-      Avalonia.Skia pulls SkiaSharp.NativeAssets.Linux 2.88.9 while PDFtoImage pulls
-      SkiaSharp.NativeAssets.Linux.NoDependencies 4.150.1. They are different package ids, so
-      NuGet does not unify them, and both ship runtimes/linux-x64/native/libSkiaSharp.so. The
-      2.88.9 copy wins the file conflict, which leaves the 4.150.1 managed SkiaSharp talking to
-      a native library it refuses to load:
+      Two SkiaSharp native packages can end up in the graph on Linux, and they are different
+      package ids, so NuGet does not unify them:
 
-        The version of the native libSkiaSharp library (88.1) is incompatible with this
-        version of SkiaSharp.
+        SkiaSharp.NativeAssets.Linux                (Avalonia.Skia asks for 2.88.9)
+        SkiaSharp.NativeAssets.Linux.NoDependencies (PDFtoImage asks for 4.150.1)
 
-      Dropping the old package's native assets leaves the 4.150.1 one as the only provider.
-      Windows and macOS are unaffected: there the package ids match, so NuGet unified them.
-      Remove this once Avalonia depends on SkiaSharp 3 or later.
+      Both ship runtimes/linux-x64/native/libSkiaSharp.so, which caused two separate failures:
+
+      1. The 2.88.9 copy won the file conflict, so the 4.150.1 managed SkiaSharp loaded
+         native 88.1 and refused to start.
+      2. The .NoDependencies build is compiled without fontconfig, so it cannot see any
+         system font; Avalonia then threw "Default font family name can't be null or empty".
+
+      Taking the 4.150.1 fontconfig build and dropping the .NoDependencies copy leaves one
+      native library of the right version that can see the system fonts (including CJK).
+      Windows and macOS never had this problem: there the package ids match, so NuGet
+      unified them to 4.150.1.
     -->
-    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.88.9" ExcludeAssets="native" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="4.150.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.150.1" ExcludeAssets="native" />
   </ItemGroup>
 
   <ItemGroup>
