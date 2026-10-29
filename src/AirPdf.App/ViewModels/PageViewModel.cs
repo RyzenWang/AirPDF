@@ -18,7 +18,6 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     private readonly PdfPageRenderer _renderer;
     private readonly LocalizationService _localization;
     private CancellationTokenSource? _renderCancellation;
-    private readonly int _rotation;
     private double _renderScale = 1;
     private int _renderGeneration;
     private int _renderedWidth;
@@ -40,7 +39,6 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         Number = pageInfo.Number;
         WidthPoints = pageInfo.Width;
         HeightPoints = pageInfo.Height;
-        _rotation = pageInfo.Rotation;
         ApplyZoom(1);
     }
 
@@ -49,8 +47,6 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     public double WidthPoints { get; }
 
     public double HeightPoints { get; }
-
-    public bool CanHighlight => _rotation % 360 == 0;
 
     public string PageLabel => Number.ToString();
 

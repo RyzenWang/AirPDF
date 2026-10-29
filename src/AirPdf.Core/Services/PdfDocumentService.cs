@@ -177,19 +177,24 @@ public sealed class PdfDocumentService
             throw new PdfDocumentException(PdfFailure.Corrupt, "The PDF contains no readable pages.");
         }
 
-        // PdfPig gives us metadata, rotation, and the outline. Rendering still uses PDFium
-        // so the preview always matches what a browser or printer would show.
-        var rotations = new int[pageCount];
+        // PdfPig gives us metadata and the outline. Rendering still uses PDFium so the
+        // preview always matches what a browser or printer would show.
+        //
+        // Page rotation is deliberately NOT read here. Reading it requires parsing every
+        // page dictionary, which dominated open time on long documents: measured at 45.1 s
+        // of a 54.7 s open on a 9,277-page file, and 18.5 s of 24.6 s on a 4,215-page one,
+        // while every page reported 0°. The code that genuinely needs rotation
+        // (PdfSearchService, PdfTextService) reads it per page, only for pages it touches.
         PdfMetadata metadata;
         IReadOnlyList<PdfBookmark> bookmarks;
         double version = 1.7;
-        TryReadPdfPigDetails(fullPath, password, pageCount, rotations, out metadata, out bookmarks, out version);
+        TryReadPdfPigDetails(fullPath, password, out metadata, out bookmarks, out version);
 
         var pages = new List<PdfPageInfo>(pageCount);
         for (var i = 0; i < pageCount; i++)
         {
             var size = i < pageSizes.Count ? pageSizes[i] : pageSizes[^1];
-            pages.Add(new PdfPageInfo(i + 1, size.Width, size.Height, rotations[i]));
+            pages.Add(new PdfPageInfo(i + 1, size.Width, size.Height));
         }
 
         return new PdfDocumentInfo
@@ -207,8 +212,6 @@ public sealed class PdfDocumentService
     private static void TryReadPdfPigDetails(
         string fullPath,
         string? password,
-        int pageCount,
-        int[] rotations,
         out PdfMetadata metadata,
         out IReadOnlyList<PdfBookmark> bookmarks,
         out double version)
@@ -240,14 +243,6 @@ public sealed class PdfDocumentService
                 CreatedAt = SafeDate(info.GetCreatedDateTimeOffset),
                 ModifiedAt = SafeDate(info.GetModifiedDateTimeOffset)
             };
-
-            foreach (var page in document.GetPages())
-            {
-                if (page.Number >= 1 && page.Number <= pageCount)
-                {
-                    rotations[page.Number - 1] = NormalizeRotation(page.Rotation.Value);
-                }
-            }
 
             if (document.TryGetBookmarks(out var outline, false))
             {
@@ -327,12 +322,6 @@ public sealed class PdfDocumentService
         {
             return null;
         }
-    }
-
-    private static int NormalizeRotation(int rotation)
-    {
-        var value = rotation % 360;
-        return value < 0 ? value + 360 : value;
     }
 
     private static string NormalizePath(string filePath)

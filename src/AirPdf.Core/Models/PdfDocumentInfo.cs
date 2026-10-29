@@ -23,10 +23,16 @@ public sealed class PdfDocumentInfo
 }
 
 /// <summary>
-/// Size and rotation of a single PDF page. Sizes are expressed in PDF points (1/72 inch)
-/// after applying the page rotation, matching what the renderer outputs.
+/// Size of a single PDF page in PDF points (1/72 inch), after applying the page rotation
+/// and matching what the renderer outputs.
 /// </summary>
-public sealed record PdfPageInfo(int Number, double Width, double Height, int Rotation)
+/// <remarks>
+/// Page rotation is deliberately not carried here. Reading it costs a full page-dictionary
+/// parse per page, which dominated open time on long documents while nothing consumed the
+/// value; the services that do need it (<c>PdfSearchService</c>, <c>PdfTextService</c>)
+/// read it from PdfPig for the individual pages they touch.
+/// </remarks>
+public sealed record PdfPageInfo(int Number, double Width, double Height)
 {
     public double AspectRatio => Height <= 0 ? 1 : Width / Height;
 }
