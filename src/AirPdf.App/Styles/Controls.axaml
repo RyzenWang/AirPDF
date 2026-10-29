@@ -238,7 +238,8 @@
                       HorizontalScrollBarVisibility="Auto"
                       VerticalScrollBarVisibility="Auto"
                       Padding="24,24,24,64">
-          <ItemsPresenter Name="PART_ItemsPresenter" />
+          <ItemsPresenter Name="PART_ItemsPresenter"
+                          ItemsPanel="{TemplateBinding ItemsPanel}" />
         </ScrollViewer>
       </ControlTemplate>
     </Setter>

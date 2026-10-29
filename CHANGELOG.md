@@ -57,6 +57,10 @@ semantic versioning once it reaches 1.0.
 
 ### Fixed
 
+- The page list now actually virtualizes. Its control template was missing the
+  `ItemsPanel` binding, so the `VirtualizingStackPanel` was never used and every page in
+  the document was realized at once. A 4,215-page document allocated 3 GB within 30
+  seconds and stopped responding; it now stays around 300 MB and remains interactive.
 - Opening a long document no longer scans every page dictionary just to record its
   rotation, which nothing read. Opening a 9,277-page document dropped from 54.7 s
   to 7.1 s, and a 4,215-page one from 24.6 s to 3.6 s.
