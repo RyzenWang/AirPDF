@@ -12,7 +12,7 @@ public sealed class PdfDocumentServiceTests
     [Fact]
     public async Task OpenAsync_ReadsPagesAndDocumentInfo()
     {
-        var service = new PdfDocumentService();
+        using var service = new PdfDocumentService();
 
         var document = await service.OpenAsync(SamplePath);
 
@@ -30,7 +30,7 @@ public sealed class PdfDocumentServiceTests
     [Fact]
     public async Task RenderPageAsync_ReturnsRenderablePixels()
     {
-        var service = new PdfDocumentService();
+        using var service = new PdfDocumentService();
 
         using var bitmap = await service.RenderPageAsync(SamplePath, 1, 600);
 
@@ -38,6 +38,68 @@ public sealed class PdfDocumentServiceTests
         Assert.True(bitmap.Height > 800);
         var pixel = bitmap.GetPixel(30, 30);
         Assert.Equal(255, pixel.Alpha);
+    }
+
+    [Fact]
+    public async Task RenderPageAsync_KeepsThePageAspectRatio()
+    {
+        using var service = new PdfDocumentService();
+        var document = await service.OpenAsync(SamplePath);
+        var page = document.Pages[0];
+
+        using var bitmap = await service.RenderPageAsync(SamplePath, 1, 600);
+
+        var expectedHeight = 600 * (page.Height / page.Width);
+        Assert.InRange(bitmap.Height, expectedHeight - 1, expectedHeight + 1);
+    }
+
+    /// <summary>
+    /// The document handle now stays open between renders, so rendering a page far away and
+    /// then coming back must produce exactly the same pixels as the first render.
+    /// </summary>
+    [Fact]
+    public async Task RenderPageAsync_ReusesTheOpenDocumentWithoutDrift()
+    {
+        using var service = new PdfDocumentService();
+        await service.OpenAsync(SamplePath);
+
+        var first = await RenderPixelsAsync(service, pageNumber: 1);
+        await RenderPixelsAsync(service, pageNumber: 8);
+        var again = await RenderPixelsAsync(service, pageNumber: 1);
+
+        Assert.Equal(first, again);
+    }
+
+    [Fact]
+    public async Task RenderPageAsync_AfterCloseDocument_FallsBackToATransientHandle()
+    {
+        using var service = new PdfDocumentService();
+        await service.OpenAsync(SamplePath);
+        service.CloseDocument();
+
+        var pixels = await RenderPixelsAsync(service, pageNumber: 3);
+
+        Assert.NotEmpty(pixels);
+        Assert.Contains(pixels, value => value != 255);
+    }
+
+    private static async Task<byte[]> RenderPixelsAsync(PdfDocumentService service, int pageNumber)
+    {
+        using var bitmap = await service.RenderPageAsync(SamplePath, pageNumber, 400);
+
+        var rowBytes = bitmap.Info.Width * 4;
+        var pixels = new byte[rowBytes * bitmap.Info.Height];
+        var source = bitmap.GetPixels();
+        for (var y = 0; y < bitmap.Info.Height; y++)
+        {
+            System.Runtime.InteropServices.Marshal.Copy(
+                source + (y * bitmap.RowBytes),
+                pixels,
+                y * rowBytes,
+                rowBytes);
+        }
+
+        return pixels;
     }
 
     [Fact]
@@ -138,7 +200,7 @@ public sealed class PdfDocumentServiceTests
     [Fact]
     public async Task OpenAsync_MissingFile_ThrowsFriendlyFailure()
     {
-        var service = new PdfDocumentService();
+        using var service = new PdfDocumentService();
 
         var error = await Assert.ThrowsAsync<PdfDocumentException>(
             () => service.OpenAsync(Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.pdf")));

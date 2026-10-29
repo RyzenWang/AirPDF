@@ -1,7 +1,5 @@
-using System.Drawing;
 using AirPdf.Core.Models;
-using PDFtoImage;
-using PDFtoImage.Exceptions;
+using AirPdf.Core.Pdfium;
 using SkiaSharp;
 using UglyToad.PdfPig;
 using UglyToad.PdfPig.Outline;
@@ -9,12 +7,24 @@ using UglyToad.PdfPig.Outline;
 namespace AirPdf.Core.Services;
 
 /// <summary>
-/// Opens PDF documents and renders pages with PDFium (through PDFtoImage).
-/// PDFium is not thread-safe, so all native rendering is serialized process-wide.
+/// Opens PDF documents and renders pages with PDFium.
 /// </summary>
-public sealed class PdfDocumentService
+/// <remarks>
+/// The opened document keeps a PDFium handle for as long as it is displayed, so rendering
+/// a page reuses one parsed document instead of reparsing the whole file per page. PDFium
+/// is not thread-safe, so every native call is serialized through one process-wide gate.
+/// </remarks>
+public sealed class PdfDocumentService : IDisposable
 {
     private static readonly SemaphoreSlim RenderGate = new(1, 1);
+
+    private static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
+        ? StringComparison.OrdinalIgnoreCase
+        : StringComparison.Ordinal;
+
+    private PdfiumDocument? _session;
+    private string? _sessionPath;
+    private bool _disposed;
 
     public Task<PdfDocumentInfo> OpenAsync(
         string filePath,
@@ -25,7 +35,7 @@ public sealed class PdfDocumentService
         return Task.Run(() => OpenCore(fullPath, password, cancellationToken), cancellationToken);
     }
 
-    public async Task<SKBitmap> RenderPageAsync(
+    public Task<SKBitmap> RenderPageAsync(
         string filePath,
         int pageNumber,
         int targetWidth,
@@ -33,68 +43,50 @@ public sealed class PdfDocumentService
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         var fullPath = NormalizePath(filePath);
+        var width = Math.Clamp(targetWidth, 160, 2600);
 
-        await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            return await Task.Run(() =>
+        // Rendering is CPU bound, so it must not run on the caller's thread: the gate can
+        // be acquired synchronously and would otherwise block the UI thread.
+        return Task.Run(
+            async () =>
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                var width = Math.Clamp(targetWidth, 160, 2600);
-                var options = new RenderOptions
-                {
-                    Width = width,
-                    WithAnnotations = true,
-                    WithFormFill = false,
-                    WithAspectRatio = true,
-                    BackgroundColor = SKColors.White,
-                    AntiAliasing = PdfAntiAliasing.All,
-                    UseTiling = false
-                };
-
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
                 try
                 {
-                    using var stream = new FileStream(
-                        fullPath,
-                        FileMode.Open,
-                        FileAccess.Read,
-                        FileShare.ReadWrite | FileShare.Delete);
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                    return Conversion.ToImage(
-                        stream,
-                        pageNumber - 1,
-                        leaveOpen: false,
-                        password,
-                        options);
+                    var session = _session;
+                    if (session is not null && string.Equals(_sessionPath, fullPath, PathComparison))
+                    {
+                        return session.RenderPage(pageNumber, width);
+                    }
+
+                    // No resident handle for this file — for example a render that raced a
+                    // document switch. Render from a short-lived handle instead of failing.
+                    using var fallback = PdfiumDocument.Open(fullPath, password);
+                    return fallback.RenderPage(pageNumber, width);
                 }
-                catch (PdfPasswordProtectedException ex)
+                finally
                 {
-                    throw new PdfDocumentException(
-                        password is null ? PdfFailure.PasswordRequired : PdfFailure.InvalidPassword,
-                        "This document is password protected.",
-                        ex);
+                    RenderGate.Release();
                 }
-                catch (PdfInvalidFormatException ex)
-                {
-                    throw new PdfDocumentException(PdfFailure.Corrupt, "The PDF appears to be damaged.", ex);
-                }
-                catch (PdfUnsupportedSecuritySchemeException ex)
-                {
-                    throw new PdfDocumentException(
-                        PdfFailure.Unsupported,
-                        "This document uses an unsupported security scheme.",
-                        ex);
-                }
-                catch (PdfCannotOpenFileException ex)
-                {
-                    throw new PdfDocumentException(
-                        PdfFailure.NotFound,
-                        "The PDF could not be opened. It may have moved or be in use.",
-                        ex);
-                }
-            }, cancellationToken).ConfigureAwait(false);
+            },
+            cancellationToken);
+    }
+
+    /// <summary>Releases the resident PDFium handle for the open document.</summary>
+    public void CloseDocument()
+    {
+        RenderGate.Wait();
+        try
+        {
+            var session = _session;
+            _session = null;
+            _sessionPath = null;
+            session?.Dispose();
         }
         finally
         {
@@ -102,7 +94,18 @@ public sealed class PdfDocumentService
         }
     }
 
-    private static PdfDocumentInfo OpenCore(
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        CloseDocument();
+    }
+
+    private PdfDocumentInfo OpenCore(
         string fullPath,
         string? password,
         CancellationToken cancellationToken)
@@ -113,88 +116,64 @@ public sealed class PdfDocumentService
         }
 
         var fileInfo = new FileInfo(fullPath);
-        int pageCount;
-        IList<SizeF> pageSizes;
 
+        int pageCount;
+        List<PdfPageSize> pageSizes = [];
+
+        RenderGate.Wait(cancellationToken);
         try
         {
-            using var stream = new FileStream(
-                fullPath,
-                FileMode.Open,
-                FileAccess.Read,
-                FileShare.ReadWrite | FileShare.Delete);
-
-            pageCount = Conversion.GetPageCount(stream, leaveOpen: true, password);
             cancellationToken.ThrowIfCancellationRequested();
 
-            stream.Position = 0;
-            pageSizes = Conversion.GetPageSizes(stream, leaveOpen: true, password);
+            var session = PdfiumDocument.Open(fullPath, password);
+
+            // Measure the new document before swapping it in, so a failure leaves the
+            // currently open document untouched.
+            try
+            {
+                pageCount = session.PageCount;
+                if (pageCount <= 0)
+                {
+                    throw new PdfDocumentException(PdfFailure.Corrupt, "The PDF contains no readable pages.");
+                }
+
+                pageSizes = new List<PdfPageSize>(pageCount);
+                for (var page = 1; page <= pageCount; page++)
+                {
+                    pageSizes.Add(session.GetPageSize(page));
+                }
+            }
+            catch
+            {
+                session.Dispose();
+                throw;
+            }
+
+            var previous = _session;
+            _session = session;
+            _sessionPath = fullPath;
+            previous?.Dispose();
         }
-        catch (PdfPasswordProtectedException ex)
+        finally
         {
-            throw new PdfDocumentException(
-                password is null ? PdfFailure.PasswordRequired : PdfFailure.InvalidPassword,
-                password is null
-                    ? "This document is password protected."
-                    : "The password is incorrect.",
-                ex);
-        }
-        catch (PdfUnsupportedSecuritySchemeException ex)
-        {
-            throw new PdfDocumentException(
-                PdfFailure.Unsupported,
-                "This document uses an unsupported security scheme.",
-                ex);
-        }
-        catch (PdfInvalidFormatException ex)
-        {
-            throw new PdfDocumentException(PdfFailure.Corrupt, "The PDF appears to be damaged.", ex);
-        }
-        catch (PdfCannotOpenFileException ex)
-        {
-            throw new PdfDocumentException(
-                PdfFailure.AccessDenied,
-                "The PDF could not be opened. Check that you have permission to read it.",
-                ex);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
-            throw new PdfDocumentException(
-                PdfFailure.AccessDenied,
-                "You do not have permission to read this file.",
-                ex);
-        }
-        catch (IOException ex)
-        {
-            throw new PdfDocumentException(
-                PdfFailure.Unknown,
-                "The PDF could not be read. It may be in use by another app.",
-                ex);
+            RenderGate.Release();
         }
 
-        if (pageCount <= 0 || pageSizes.Count == 0)
-        {
-            throw new PdfDocumentException(PdfFailure.Corrupt, "The PDF contains no readable pages.");
-        }
+        cancellationToken.ThrowIfCancellationRequested();
 
-        // PdfPig gives us metadata and the outline. Rendering still uses PDFium so the
-        // preview always matches what a browser or printer would show.
+        // PdfPig gives us metadata and the outline; PDFium stays the renderer.
         //
-        // Page rotation is deliberately NOT read here. Reading it requires parsing every
-        // page dictionary, which dominated open time on long documents: measured at 45.1 s
-        // of a 54.7 s open on a 9,277-page file, and 18.5 s of 24.6 s on a 4,215-page one,
-        // while every page reported 0°. The code that genuinely needs rotation
-        // (PdfSearchService, PdfTextService) reads it per page, only for pages it touches.
-        PdfMetadata metadata;
-        IReadOnlyList<PdfBookmark> bookmarks;
-        double version = 1.7;
-        TryReadPdfPigDetails(fullPath, password, out metadata, out bookmarks, out version);
+        // Page rotation is deliberately not read here. Reading it requires parsing every
+        // page dictionary, which dominated open time on long documents (measured at 45.1 s
+        // of a 54.7 s open on a 9,277-page file) while nothing consumed the value. The code
+        // that genuinely needs rotation reads it per page, for the pages it touches.
+        TryReadPdfPigDetails(fullPath, password, out var metadata, out var bookmarks, out var version);
 
         var pages = new List<PdfPageInfo>(pageCount);
-        for (var i = 0; i < pageCount; i++)
+        for (var index = 0; index < pageCount; index++)
         {
-            var size = i < pageSizes.Count ? pageSizes[i] : pageSizes[^1];
-            pages.Add(new PdfPageInfo(i + 1, size.Width, size.Height));
+            var size = pageSizes[index];
+            pages.Add(new PdfPageInfo(index + 1, size.Width, size.Height));
         }
 
         return new PdfDocumentInfo

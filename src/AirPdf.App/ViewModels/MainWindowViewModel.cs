@@ -440,6 +440,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         CancelSafely(_loadCancellation);
         CancelSafely(_searchCancellation);
         CloseDocumentCore();
+        _documentService.CloseDocument();
     }
 
     [RelayCommand]
@@ -1828,5 +1829,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         CancelSafely(_searchCancellation);
         _reading.Dispose();
         CloseDocumentCore();
+        _documentService.Dispose();
     }
 }

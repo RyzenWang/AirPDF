@@ -52,7 +52,7 @@ AirPDF 打开得快、渲染得稳，然后安静地退到页面后面。没有�
 | --- | --- | --- |
 | 运行时 | .NET 10 (LTS) | 一个现代运行时覆盖三大桌面平台。 |
 | 界面 | Avalonia 11 | 一套 XAML 代码生成原生桌面窗口。 |
-| 渲染 | PDFium（PDFtoImage） | 浏览器同款开源 PDF 引擎。 |
+| 渲染 | PDFium | 浏览器同款开源 PDF 引擎；阅读期间常驻一个文档句柄。 |
 | 位图传输 | SkiaSharp | 快速、可控的像素处理。 |
 | 文本层 | PdfPig | 纯托管文本提取、搜索与匹配坐标。 |
 | MVVM | CommunityToolkit.Mvvm | 小而克制的源生成 MVVM。 |

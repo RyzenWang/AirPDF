@@ -75,7 +75,7 @@ small .NET application with a hand-built Avalonia interface.
 | --- | --- | --- |
 | Runtime | .NET 10 (LTS) | One modern runtime for Windows, macOS, and Linux. |
 | UI | Avalonia 11 | Native desktop windows from a single XAML codebase. |
-| Rendering | PDFium via PDFtoImage | The same open-source engine used by browsers. |
+| Rendering | PDFium | The same open-source engine used by browsers; one document handle stays open while reading. |
 | Raster transport | SkiaSharp | Fast, predictable pixel handling. |
 | Text layer | PdfPig | Managed PDF text extraction, search, and match rectangles. |
 | MVVM | CommunityToolkit.Mvvm | Small, source-generated, no framework lock-in. |
@@ -194,7 +194,7 @@ the whole document, and showing the file in its folder.
                │
 ┌──────────────▼──────────────┐
 │ AirPdf.Core                 │
-│  PdfDocumentService         │  PDFium (PDFtoImage)
+│  PdfDocumentService         │  PDFium
 │  PdfSearchService           │  PdfPig
 │  SettingsService            │  JSON in the user profile
 └─────────────────────────────┘

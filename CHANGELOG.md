@@ -57,6 +57,11 @@ semantic versioning once it reaches 1.0.
 
 ### Fixed
 
+- Rendering keeps the PDFium document handle open while a document is displayed instead of
+  reparsing the file for every page. Measured on a 9,277-page / 35 MB document: a page
+  render dropped from 0.72 s to 0.023 s, and opening dropped from 7.1 s to 1.9 s. Page
+  counts and rendering results are unchanged apart from a one-pixel rounding difference in
+  the derived page height.
 - The page list now actually virtualizes. Its control template was missing the
   `ItemsPanel` binding, so the `VirtualizingStackPanel` was never used and every page in
   the document was realized at once. A 4,215-page document allocated 3 GB within 30

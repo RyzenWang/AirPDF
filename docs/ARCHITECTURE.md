@@ -11,7 +11,12 @@ front end.
 `PdfDocumentService`
 
 - Validates and opens a file.
-- Reads page count and page sizes from PDFium through PDFtoImage.
+- Keeps one PDFium document handle open while the document is displayed, so rendering a
+  page no longer reparses the whole file. Measured on a 9,277-page / 35 MB document, a page
+  render went from 0.72 s to 0.023 s.
+- Reads page count and page sizes from PDFium directly (see `AirPdf.Core/Pdfium`). The
+  bindings are plain C ABI; the native library is the one PDFtoImage already ships for every
+  target, so the platform matrix is unchanged.
 - Reads metadata and the outline through PdfPig.
 - Does **not** read page rotation. Doing so requires parsing every page dictionary, which
   dominated open time on long documents (measured at 45.1 s of a 54.7 s open on a
@@ -64,11 +69,23 @@ front end.
 ```
 file
   │
-  ├─ PDFtoImage / PDFium ──► SKBitmap ──► WriteableBitmap ──► Image
-  │        (serialized)          (copy pixels, no PNG round-trip)
+  ├─ PDFium (one document handle per open document) ──► SKBitmap ──► WriteableBitmap ──► Image
+  │        (serialized)                                  (copy pixels, no PNG round-trip)
   │
   └─ PdfPig ──► words + bounding boxes ──► normalized search rectangles
 ```
+
+### Why a resident document handle?
+
+PDFtoImage's public API takes a path, byte array or stream per call, and its document type
+is `internal`, so every render used to reload and reparse the file. On a 35 MB document that
+cost 0.72 s per page, which caps scrolling at about 1.4 pages/second. `AirPdf.Core/Pdfium`
+keeps one `FPDF_DOCUMENT` for the lifetime of the display, reads the file through a
+`FPDF_FILEACCESS` callback over a `FileShare.ReadWrite` stream (so the file is never locked
+against other programs), and renders pages straight into the page bitmap.
+
+`PdfDocumentService` still references the PDFtoImage package, but only for its native
+payload — `bblanchon.PDFium.*` and the SkiaSharp native assets for every published RID.
 
 ### Why render to a bitmap?
 

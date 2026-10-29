@@ -8,6 +8,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      Kept for its native payload, not its managed API. PDFtoImage brings in
+      bblanchon.PDFium.{Win32,Linux,macOS} (pdfium.dll / libpdfium.so / libpdfium.dylib for
+      every target we publish) plus the SkiaSharp native assets. Rendering itself goes
+      through src/AirPdf.Core/Pdfium, because PDFtoImage's document type is internal and its
+      public API reparses the file on every call, which cost a full document load per page.
+
+      Removing this package means adding those native references directly; do that only
+      with a Linux and macOS publish verified end to end.
+    -->
     <PackageReference Include="PDFtoImage" Version="5.4.0" />
     <PackageReference Include="PdfPig" Version="0.1.16" />
   </ItemGroup>
