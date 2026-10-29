@@ -15,9 +15,12 @@ namespace AirPdf.App.Views;
 
 public partial class MainWindow : Window
 {
-    private readonly MainWindowViewModel _viewModel;
+    private readonly AppServices _services;
+    private readonly IWindowService _windows;
+    private readonly WindowViewModel _tabs;
     private readonly SettingsService _settingsService;
     private readonly string? _initialFile;
+    private MainWindowViewModel _viewModel = null!;
     private bool _suppressScrollSync;
     private bool _suppressThumbnailSync;
     private bool _isSelectingText;
@@ -29,61 +32,50 @@ public partial class MainWindow : Window
     private PageLayout _pageLayout = PageLayout.Empty;
 
     public MainWindow()
-        : this(null)
+        : this(new AppServices(), NullWindowService.Instance, null, restoreWindowPosition: true)
     {
     }
 
-    public MainWindow(string? initialFile)
+    /// <summary>
+    /// Creates a window over the process-wide services. Only the first window restores the
+    /// remembered position; later windows are cascaded by <see cref="WindowService"/>.
+    /// </summary>
+    public MainWindow(
+        AppServices services,
+        IWindowService windows,
+        string? initialFile,
+        bool restoreWindowPosition)
     {
-        _settingsService = new SettingsService();
-        var settings = _settingsService.Load();
-        var localization = new LocalizationService();
-        localization.Apply(settings.Language);
-
         InitializeComponent();
 
+        _services = services;
+        _windows = windows;
+        _settingsService = services.SettingsService;
+        var settings = services.Settings;
+
         _initialFile = initialFile;
-        var documentService = new PdfDocumentService();
-        var searchService = new PdfSearchService();
-        var textService = new PdfTextService();
-        var updateService = new UpdateService();
-        var dialogs = new DialogService(() => this, localization);
 
-        _viewModel = new MainWindowViewModel(
-            documentService,
-            searchService,
-            textService,
-            _settingsService,
-            updateService,
-            dialogs,
-            settings,
-            localization);
-        DataContext = _viewModel;
+        // The tab strip binds to the host, not to the active document's view model.
+        _tabs = new WindowViewModel(CreateTabViewModel);
+        _tabs.PropertyChanged += OnTabsPropertyChanged;
+        TabStrip.DataContext = _tabs;
+        _tabs.AddTab();
 
-        if (InfoButton.Flyout is Flyout { Content: Control infoContent })
+        if (restoreWindowPosition)
         {
-            infoContent.DataContext = _viewModel;
-        }
+            Width = Math.Max(MinWidth, settings.WindowWidth);
+            Height = Math.Max(MinHeight, settings.WindowHeight);
 
-        Width = Math.Max(MinWidth, settings.WindowWidth);
-        Height = Math.Max(MinHeight, settings.WindowHeight);
-        if (settings.WindowMaximized)
-        {
-            WindowState = WindowState.Maximized;
+            if (settings.WindowMaximized)
+            {
+                WindowState = WindowState.Maximized;
+            }
+            else if (settings.WindowX is { } savedX && settings.WindowY is { } savedY)
+            {
+                _pendingPosition = new PixelPoint(savedX, savedY);
+                TryApplyPendingPosition();
+            }
         }
-        else if (settings.WindowX is { } savedX && settings.WindowY is { } savedY)
-        {
-            _pendingPosition = new PixelPoint(savedX, savedY);
-            TryApplyPendingPosition();
-        }
-
-        _viewModel.ScrollToPageRequested += OnScrollToPageRequested;
-        _viewModel.ScrollToSearchResultRequested += OnScrollToSearchResultRequested;
-        _viewModel.ReturnToPositionRequested += OnReturnToPositionRequested;
-        _viewModel.CopySelectionRequested += OnCopySelectionRequested;
-        _viewModel.DocumentOpened += OnDocumentOpened;
-        _viewModel.ZoomChanged += OnZoomChanged;
-        _viewModel.SearchOpened += OnSearchOpened;
 
         PagesList.SizeChanged += (_, _) => UpdateViewport();
 
@@ -99,7 +91,179 @@ public partial class MainWindow : Window
 
         Opened += OnOpened;
         Closing += OnClosing;
-        Closed += (_, _) => _viewModel.Dispose();
+        Closed += OnClosed;
+    }
+
+    private MainWindowViewModel CreateTabViewModel() =>
+        new(
+            _services,
+            new PdfDocumentService(),
+            new PdfSearchService(),
+            new PdfTextService(),
+            new DialogService(() => this, _services.Localization),
+            _windows,
+            _tabs);
+
+    private void OnTabsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        switch (e.PropertyName)
+        {
+            case nameof(WindowViewModel.SelectedTab):
+                ShowTab(_tabs.SelectedTab);
+                break;
+            case nameof(WindowViewModel.HasMultipleTabs):
+                UpdateTabStripVisibility();
+                break;
+        }
+    }
+
+    private void UpdateTabStripVisibility()
+    {
+        TabStrip.IsVisible = _tabs.HasMultipleTabs;
+
+        // Selecting the tab the user clicked has to survive the ListBox re-binding.
+        if (!ReferenceEquals(TabList.SelectedItem, _tabs.SelectedTab))
+        {
+            TabList.SelectedItem = _tabs.SelectedTab;
+        }
+    }
+
+    /// <summary>
+    /// Points the window at a tab: rebinds the content, moves the event subscriptions, and
+    /// restores that tab's scroll position. The outgoing tab keeps its view model, so its
+    /// document, zoom, and reading position are still there when you come back.
+    /// </summary>
+    private void ShowTab(MainWindowViewModel? tab)
+    {
+        if (tab is null || ReferenceEquals(_viewModel, tab))
+        {
+            return;
+        }
+
+        if (_viewModel is not null)
+        {
+            CaptureScrollOffset();
+            UnhookViewModel(_viewModel);
+        }
+
+        // Freeze scroll sync across the swap. Rebuilding the list for another document emits
+        // ScrollChanged events, and by then _viewModel is the incoming tab, so an unsuppressed
+        // event would write the outgoing tab's offset into it.
+        _suppressScrollSync = true;
+
+        // Read the incoming tab's position now, before any of that noise.
+        var position = tab.CurrentPosition;
+
+        _viewModel = tab;
+        DataContext = tab;
+        HookViewModel(tab);
+        UpdateTabStripVisibility();
+
+        if (InfoButton.Flyout is Flyout { Content: Control infoContent })
+        {
+            infoContent.DataContext = tab;
+        }
+
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (!ReferenceEquals(_viewModel, tab))
+                {
+                    return;
+                }
+
+                _restoringDocument = true;
+                UpdateViewport();
+                RebuildPageLayout();
+                ScrollToReadingPosition(position.Page, position.PageOffset);
+                UpdateThumbnailSelection();
+
+                // ApplyScrollOffset clears the flag after its own delay; do it again so a
+                // tab with no pages (or a failed restore) cannot leave sync frozen.
+                DispatcherTimer.RunOnce(
+                    () =>
+                    {
+                        _suppressScrollSync = false;
+                        _restoringDocument = false;
+                    },
+                    TimeSpan.FromMilliseconds(240));
+            },
+            DispatcherPriority.Loaded);
+    }
+
+    private void HookViewModel(MainWindowViewModel viewModel)
+    {
+        viewModel.ScrollToPageRequested += OnScrollToPageRequested;
+        viewModel.ScrollToSearchResultRequested += OnScrollToSearchResultRequested;
+        viewModel.ReturnToPositionRequested += OnReturnToPositionRequested;
+        viewModel.CopySelectionRequested += OnCopySelectionRequested;
+        viewModel.DocumentOpened += OnDocumentOpened;
+        viewModel.ZoomChanged += OnZoomChanged;
+        viewModel.SearchOpened += OnSearchOpened;
+    }
+
+    private void UnhookViewModel(MainWindowViewModel viewModel)
+    {
+        viewModel.ScrollToPageRequested -= OnScrollToPageRequested;
+        viewModel.ScrollToSearchResultRequested -= OnScrollToSearchResultRequested;
+        viewModel.ReturnToPositionRequested -= OnReturnToPositionRequested;
+        viewModel.CopySelectionRequested -= OnCopySelectionRequested;
+        viewModel.DocumentOpened -= OnDocumentOpened;
+        viewModel.ZoomChanged -= OnZoomChanged;
+        viewModel.SearchOpened -= OnSearchOpened;
+    }
+
+    /// <summary>Records where the outgoing tab was scrolled to before its view goes away.</summary>
+    private void CaptureScrollOffset()
+    {
+        var viewer = PagesList.Viewer;
+        if (viewer is null || !_viewModel.IsDocumentOpen)
+        {
+            return;
+        }
+
+        EnsurePageLayout();
+        if (_pageLayout.Count == 0)
+        {
+            return;
+        }
+
+        var page = _pageLayout.GetPageAtViewportTop(viewer.Offset.Y, viewer.Viewport.Height);
+        _viewModel.UpdateCurrentPageFromScroll(page, _pageLayout.GetPageOffset(page, viewer.Offset.Y));
+    }
+
+    private void OnNewTabClick(object? sender, RoutedEventArgs e) => _tabs.AddTab();
+
+    private void OnOpenInNewTabClick(object? sender, RoutedEventArgs e)
+    {
+        if (_viewModel.IsDocumentOpen && !string.IsNullOrWhiteSpace(_viewModel.FilePath))
+        {
+            _tabs.AddTab(_viewModel.FilePath);
+        }
+    }
+
+    private void OnCloseTabClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: MainWindowViewModel tab })
+        {
+            e.Handled = true;
+            _tabs.CloseTab(tab);
+        }
+    }
+
+    private void OnTabSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (TabList.SelectedItem is MainWindowViewModel selected)
+        {
+            _tabs.SelectedTab = selected;
+        }
+    }
+
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        // The host owns every tab, so disposing it disposes each document handle.
+        _tabs.PropertyChanged -= OnTabsPropertyChanged;
+        _tabs.Dispose();
     }
 
     private void OnOpened(object? sender, EventArgs e)
@@ -188,10 +352,17 @@ public partial class MainWindow : Window
 
     private void OnDocumentOpened(object? sender, EventArgs e)
     {
-        var readingPosition = _viewModel.TakePendingReadingPosition();
+        // Posted work must not touch a tab the user has already switched away from.
+        var viewModel = _viewModel;
+        var readingPosition = viewModel.TakePendingReadingPosition();
 
         Dispatcher.UIThread.Post(() =>
         {
+            if (!ReferenceEquals(_viewModel, viewModel))
+            {
+                return;
+            }
+
             _restoringDocument = true;
             UpdateViewport();
             _viewModel.ApplyInitialZoom();
@@ -220,24 +391,58 @@ public partial class MainWindow : Window
         }
 
         RebuildPageLayout();
-        var page = _viewModel.CurrentPage;
-        Dispatcher.UIThread.Post(() => ScrollToPage(page), DispatcherPriority.Loaded);
+        var viewModel = _viewModel;
+        var page = viewModel.CurrentPage;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (ReferenceEquals(_viewModel, viewModel))
+                {
+                    ScrollToPage(page);
+                }
+            },
+            DispatcherPriority.Loaded);
     }
 
     private void OnScrollToPageRequested(object? sender, int pageNumber)
     {
-        Dispatcher.UIThread.Post(() => ScrollToPage(pageNumber), DispatcherPriority.Loaded);
+        var viewModel = _viewModel;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (ReferenceEquals(_viewModel, viewModel))
+                {
+                    ScrollToPage(pageNumber);
+                }
+            },
+            DispatcherPriority.Loaded);
     }
 
     private void OnScrollToSearchResultRequested(object? sender, SearchResultViewModel result)
     {
-        Dispatcher.UIThread.Post(() => ScrollToSearchResult(result), DispatcherPriority.Loaded);
+        var viewModel = _viewModel;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (ReferenceEquals(_viewModel, viewModel))
+                {
+                    ScrollToSearchResult(result);
+                }
+            },
+            DispatcherPriority.Loaded);
     }
 
     private void OnReturnToPositionRequested(object? sender, NavigationPoint point)
     {
+        var viewModel = _viewModel;
         Dispatcher.UIThread.Post(
-            () => ScrollToReadingPosition(point.Page, point.PageOffset),
+            () =>
+            {
+                if (ReferenceEquals(_viewModel, viewModel))
+                {
+                    ScrollToReadingPosition(point.Page, point.PageOffset);
+                }
+            },
             DispatcherPriority.Loaded);
     }
 
@@ -786,9 +991,25 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (ctrl && e.Key == Key.T)
+        {
+            _tabs.AddTab();
+            e.Handled = true;
+            return;
+        }
+
+        if (ctrl && e.Key == Key.Tab)
+        {
+            _tabs.SelectNext(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1);
+            e.Handled = true;
+            return;
+        }
+
         if (ctrl && e.Key == Key.W)
         {
-            _viewModel.CloseDocumentCommand.Execute(null);
+            // Closing the last tab closes its document and leaves the window open, which is
+            // what Ctrl+W did before tabs existed.
+            _tabs.CloseTab(_viewModel);
             e.Handled = true;
             return;
         }
@@ -896,7 +1117,14 @@ public partial class MainWindow : Window
         var path = GetDroppedPdf(e);
         if (path is not null)
         {
-            _ = _viewModel.OpenPathAsync(path);
+            if (_viewModel.IsDocumentOpen)
+            {
+                _tabs.AddTab(path);
+            }
+            else
+            {
+                _ = _viewModel.OpenPathAsync(path);
+            }
         }
 
         e.Handled = true;
@@ -917,8 +1145,30 @@ public partial class MainWindow : Window
                 string.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>Used by the parameterless constructor (designer, XAML tooling).</summary>
+    private sealed class NullWindowService : IWindowService
+    {
+        public static readonly NullWindowService Instance = new();
+
+        private NullWindowService()
+        {
+        }
+
+        public void OpenNewWindow(string? filePath = null)
+        {
+        }
+
+        public void OpenInNewWindow(string filePath)
+        {
+        }
+    }
     private void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        foreach (var tab in _tabs.Tabs)
+        {
+            tab.SaveReadingPositionNow();
+        }
+
         var state = WindowState;
         var maximized = state == WindowState.Maximized;
         var fullScreen = state == WindowState.FullScreen;

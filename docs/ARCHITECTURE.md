@@ -183,6 +183,43 @@ The selection is word-granular by design: it keeps hit-testing deterministic
 and avoids a second character-level layout system. Rotated pages are skipped
 for now, matching the search-highlight limitation.
 
+## Windows and shared state
+
+Each window owns its document, page view models, renderer, and dialog service, so closing
+one window cannot disturb another. Everything that is process-wide lives in a single
+`AppServices` instance created by `App` and handed to every window:
+
+- one `SettingsService` and one `AppSettings`, so two windows cannot overwrite each
+  other's changes when both save;
+- one `LocalizationService`, because applying a language swaps an application-level
+  resource dictionary;
+- one `ThemeService`, because `RequestedThemeVariant` and the merged high-contrast
+  dictionary are application-level; it raises `Changed` so each window refreshes its
+  own icon and tooltip;
+- one `UpdateService`, with a process-wide guard so only the first window checks the
+  update feed and downloads.
+
+`WindowService` owns the open windows. Only the first window restores the remembered
+position and size; later windows cascade from the window they were opened from, and a
+position that would land off every screen is dropped rather than applied.
+
+## Tabs
+
+A window hosts a `WindowViewModel` that owns an `ObservableCollection` of tabs, and each
+tab is a complete `MainWindowViewModel` — its own document, page view models, renderer,
+search state, and reading position. The window's `DataContext` is the *active tab*, so the
+existing markup and input handling keep binding to a document view model; the tab strip is
+the only control bound to the host, which is why it opts out of compiled bindings.
+
+Switching tabs swaps the `DataContext`, moves the event subscriptions in
+`HookViewModel`/`UnhookViewModel`, and restores that tab's scroll position from
+`CurrentPosition`. Nothing is reloaded. Work that a tab posts to the dispatcher (scroll to
+a search result, apply the initial zoom) re-checks that the tab is still active, so a
+switch in between cannot move another tab's document.
+
+The last tab is never removed: closing it closes its document, which is exactly what
+`Ctrl+W` did before tabs existed.
+
 ## Theming and typography
 
 - `Colors.axaml` defines light and dark theme dictionaries.
@@ -191,10 +228,11 @@ for now, matching the search-highlight limitation.
   Merged dictionaries are resolved in reverse order, so it must define every
   brush key; a missing one falls through to the light/dark value and produces
   unreadable combinations.
-- The theme button cycles System, Light, Dark, and High contrast. System sets
+- The theme button cycles System, Light, Dark, and High contrast. The state lives in
+  `ThemeService` rather than in a view model, because it is process-wide: System sets
   `RequestedThemeVariant` to `Default` and listens to
-  `PlatformSettings.ColorValuesChanged`, so the app follows the OS live instead
-  of reading the theme once at startup.
+  `PlatformSettings.ColorValuesChanged`, so the app follows the OS live instead of
+  reading the theme once at startup.
 - `Controls.axaml` contains the button, field, list, and page-list templates.
 - Inter is embedded, with system fallbacks for CJK text.
 - The document page always renders on white; only the application chrome changes

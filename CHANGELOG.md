@@ -6,6 +6,8 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-29
+
 ### Added
 
 - Windows installer and portable package built with Velopack.
@@ -34,9 +36,20 @@ semantic versioning once it reaches 1.0.
   can announce them.
 - Command line: `--help`, `--version`, a `--` path terminator, and a message
   when extra files were ignored.
+- Multiple windows: `Ctrl+N` opens an empty one and the page menu can open the
+  current document in a new window. New windows cascade instead of stacking on the
+  first one, and only the first window restores the remembered position.
+- Tabs: `Ctrl+T` adds a document to the current window, `Ctrl+Tab` cycles, and the
+  page menu can open the current document in a new tab. Each tab keeps its own
+  document handle, zoom, scroll position, search results, and reading position, so
+  switching does not reload. The tab strip only appears once a second tab exists.
 
 ### Changed
 
+- Windows now share one settings store, language, theme, and update channel
+  instead of each loading and rewriting the settings file, where the last window
+  to save discarded the others' changes. The automatic update check runs once per
+  process rather than once per window.
 - Release workflow now publishes Velopack installers and update manifests
   instead of plain archives for Windows and macOS.
 - The theme button now cycles System → Light → Dark → High contrast instead of

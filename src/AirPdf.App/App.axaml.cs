@@ -27,9 +27,15 @@ public partial class App : Application
 
         var options = CommandLineOptions.Parse(desktop.Args);
 
+        // One settings store, language, theme and update channel for the whole process;
+        // windows own their document and view models only.
+        var services = new AppServices();
+        var windows = new WindowService(services);
+        desktop.Exit += (_, _) => services.Dispose();
+
         // A help or version request should not try to open a document as well.
         var initialFile = options.ShowHelp || options.ShowVersion ? null : options.FilePath;
-        var window = new MainWindow(initialFile);
+        var window = windows.CreateFirstWindow(initialFile);
         desktop.MainWindow = window;
 
         var message = BuildStartupMessage(options);

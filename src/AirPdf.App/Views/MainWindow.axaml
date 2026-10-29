@@ -13,9 +13,74 @@
         MinHeight="620"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource AppBackgroundBrush}">
-  <Grid RowDefinitions="Auto,*,Auto">
+  <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <!-- Tab strip. Its DataContext is the WindowViewModel (the tab host), set in code,
+         which is why compiled bindings are opted out: the window's DataContext is the
+         active document's view model. Hidden while only one tab exists. -->
+    <Border x:Name="TabStrip"
+            Grid.Row="0"
+            IsVisible="False"
+            Background="{DynamicResource ToolbarBackgroundBrush}"
+            BorderBrush="{DynamicResource BorderBrush}"
+            BorderThickness="0,0,0,1"
+            Padding="8,4">
+      <StackPanel Orientation="Horizontal" Spacing="4">
+        <ListBox x:Name="TabList"
+                 x:CompileBindings="False"
+                 Background="Transparent"
+                 BorderThickness="0"
+                 Padding="0"
+                 ItemsSource="{Binding Tabs}"
+                 SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
+                 SelectionChanged="OnTabSelectionChanged">
+          <ListBox.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="2" />
+            </ItemsPanelTemplate>
+          </ListBox.ItemsPanel>
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,2">
+                <TextBlock Text="{Binding TabTitle}"
+                           MaxWidth="200"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center"
+                           FontSize="12" />
+                <Button Classes="icon"
+                        Width="18"
+                        Height="18"
+                        MinHeight="18"
+                        Padding="0"
+                        Click="OnCloseTabClick"
+                        ToolTip.Tip="{DynamicResource L.CloseTab}"
+                        AutomationProperties.Name="{DynamicResource L.CloseTab}">
+                  <Path Data="{StaticResource IconClose}"
+                        Stroke="{DynamicResource TextTertiaryBrush}"
+                        StrokeThickness="1.8"
+                        StrokeLineCap="Round"
+                        Stretch="Uniform"
+                        Width="8"
+                        Height="8" />
+                </Button>
+              </StackPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <Button Classes="icon"
+                Width="24"
+                Height="24"
+                MinHeight="24"
+                Padding="0"
+                Click="OnNewTabClick"
+                ToolTip.Tip="{DynamicResource L.NewTabHint}"
+                AutomationProperties.Name="{DynamicResource L.NewTabHint}">
+          <Path Classes="icon small" Data="{StaticResource IconPlus}" />
+        </Button>
+      </StackPanel>
+    </Border>
+
     <!-- Top bar -->
-    <Border Grid.Row="0"
+    <Border Grid.Row="1"
             Background="{DynamicResource ToolbarBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
@@ -233,7 +298,7 @@
     </Border>
 
     <!-- Body -->
-    <Grid Grid.Row="1" ColumnDefinitions="Auto,*">
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,*">
       <!-- Thumbnail / outline rail -->
       <Border Grid.Column="0"
               Width="252"
@@ -340,6 +405,12 @@
               <Separator />
               <MenuItem Header="{DynamicResource L.OpenContainingFolder}"
                         Command="{Binding OpenContainingFolderCommand}"
+                        IsEnabled="{Binding IsDocumentOpen}" />
+              <MenuItem Header="{DynamicResource L.OpenInNewWindow}"
+                        Command="{Binding OpenInNewWindowCommand}"
+                        IsEnabled="{Binding IsDocumentOpen}" />
+              <MenuItem Header="{DynamicResource L.OpenInNewTab}"
+                        Click="OnOpenInNewTabClick"
                         IsEnabled="{Binding IsDocumentOpen}" />
             </ContextMenu>
           </controls:PdfPageList.ContextMenu>
@@ -795,7 +866,7 @@
     </Grid>
 
     <!-- Status bar -->
-    <Border Grid.Row="2"
+    <Border Grid.Row="3"
             Height="30"
             Background="{DynamicResource StatusBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}"

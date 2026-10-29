@@ -161,7 +161,7 @@ public sealed class MainWindowViewModelTests
     {
         using var context = new TestContext();
 
-        context.ViewModel.SetThemeMode("System", persist: false);
+        context.Services.Theme.Set(ThemeService.SystemMode, persist: false);
         Assert.True(context.ViewModel.IsSystemTheme);
         Assert.False(string.IsNullOrWhiteSpace(context.ViewModel.ThemeTooltip));
 
@@ -179,6 +179,29 @@ public sealed class MainWindowViewModelTests
 
         context.ViewModel.ToggleThemeCommand.Execute(null);
         Assert.True(context.ViewModel.IsSystemTheme);
+    }
+
+    /// <summary>
+    /// Two windows share one theme service, so a change made in one must be visible in the
+    /// other without either of them owning the state.
+    /// </summary>
+    [AvaloniaFact]
+    public void ThemeChange_IsVisibleToEveryWindow()
+    {
+        using var context = new TestContext();
+        using var second = context.CreateSecondViewModel();
+
+        Assert.Equal(context.ViewModel.IsDarkTheme, second.IsDarkTheme);
+
+        context.Services.Theme.Set(ThemeService.DarkMode, persist: false);
+
+        Assert.True(context.ViewModel.IsDarkTheme);
+        Assert.True(second.IsDarkTheme);
+
+        context.Services.Theme.Set(ThemeService.LightMode, persist: false);
+
+        Assert.False(context.ViewModel.IsDarkTheme);
+        Assert.False(second.IsDarkTheme);
     }
 
     [AvaloniaFact]
@@ -209,6 +232,61 @@ public sealed class MainWindowViewModelTests
     }
 
     [AvaloniaFact]
+    public void NewWindowCommand_AsksTheWindowService()
+    {
+        using var context = new TestContext();
+
+        context.ViewModel.NewWindowCommand.Execute(null);
+
+        Assert.Single(context.Windows.NewWindows);
+        Assert.Null(context.Windows.NewWindows[0]);
+    }
+
+    [AvaloniaFact]
+    public async Task OpenInNewWindowCommand_PassesTheCurrentDocument()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        context.ViewModel.OpenInNewWindowCommand.Execute(null);
+
+        Assert.Equal(SamplePath, Assert.Single(context.Windows.DocumentsInNewWindows));
+    }
+
+    [AvaloniaFact]
+    public async Task OpenInNewWindowCommand_DoesNothingWithoutADocument()
+    {
+        using var context = new TestContext();
+
+        context.ViewModel.OpenInNewWindowCommand.Execute(null);
+
+        Assert.Empty(context.Windows.DocumentsInNewWindows);
+    }
+
+    /// <summary>
+    /// Windows share one settings store, so a change made in one window is not lost when
+    /// another window saves (the old design reloaded and rewrote the file per window).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TwoWindows_ShareOneSettingsInstance()
+    {
+        using var context = new TestContext();
+        var second = context.CreateSecondViewModel();
+
+        Assert.Same(context.ViewModel.Settings, second.Settings);
+        Assert.Same(context.ViewModel.Settings.RecentFiles, second.Settings.RecentFiles);
+
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        Assert.Contains(
+            context.Services.Settings.RecentFiles,
+            file => file.FilePath == SamplePath);
+
+        // The second window rebuilt its shelf from the shared list.
+        Assert.Contains(second.RecentFiles, file => file.FilePath == SamplePath);
+    }
+
+    [AvaloniaFact]
     public async Task ZoomAndLanguageCommands_UpdateViewModelState()
     {
         using var context = new TestContext();
@@ -228,6 +306,7 @@ public sealed class MainWindowViewModelTests
     private sealed class TestContext : IDisposable
     {
         private readonly string _settingsDirectory;
+        private readonly List<MainWindowViewModel> _viewModels = [];
 
         public TestContext()
         {
@@ -235,32 +314,58 @@ public sealed class MainWindowViewModelTests
                 Path.GetTempPath(),
                 $"airpdf-app-tests-{Guid.NewGuid():N}");
 
-            var settingsService = new SettingsService(_settingsDirectory);
-            var settings = settingsService.Load();
-            var localization = new LocalizationService();
-            localization.Apply(LocalizationService.English);
-
-            ViewModel = new MainWindowViewModel(
-                new PdfDocumentService(),
-                new PdfSearchService(),
-                new PdfTextService(),
-                settingsService,
-                new UpdateService(),
-                new StubDialogService(),
-                settings,
-                localization);
+            Services = new AppServices(_settingsDirectory);
+            Windows = new StubWindowService();
+            ViewModel = CreateViewModel();
         }
+
+        public AppServices Services { get; }
+
+        public StubWindowService Windows { get; }
 
         public MainWindowViewModel ViewModel { get; }
 
+        /// <summary>Another window over the same services, as a real second window would be.</summary>
+        public MainWindowViewModel CreateSecondViewModel() => CreateViewModel();
+
         public void Dispose()
         {
-            ViewModel.Dispose();
+            foreach (var viewModel in _viewModels)
+            {
+                viewModel.Dispose();
+            }
+
+            Services.Dispose();
 
             if (Directory.Exists(_settingsDirectory))
             {
                 Directory.Delete(_settingsDirectory, recursive: true);
             }
+        }
+
+        private MainWindowViewModel CreateViewModel()
+        {
+            var viewModel = new MainWindowViewModel(
+                Services,
+                new PdfDocumentService(),
+                new PdfSearchService(),
+                new PdfTextService(),
+                new StubDialogService(),
+                Windows);
+
+            _viewModels.Add(viewModel);
+            return viewModel;
+        }
+
+        internal sealed class StubWindowService : IWindowService
+        {
+            public List<string?> NewWindows { get; } = [];
+
+            public List<string> DocumentsInNewWindows { get; } = [];
+
+            public void OpenNewWindow(string? filePath = null) => NewWindows.Add(filePath);
+
+            public void OpenInNewWindow(string filePath) => DocumentsInNewWindows.Add(filePath);
         }
     }
 

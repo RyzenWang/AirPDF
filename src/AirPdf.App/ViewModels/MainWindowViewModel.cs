@@ -33,6 +33,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly UpdateService _updateService;
     private readonly IUserDialogService _dialogs;
     private readonly LocalizationService _localization;
+    private readonly ThemeService _theme;
+    private readonly IWindowService _windows;
+    private readonly ITabService? _tabs;
+    private readonly AppServices _services;
     private readonly AppSettings _settings;
     private readonly List<NavigationPoint> _history = [];
     private CancellationTokenSource? _loadCancellation;
@@ -42,8 +46,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private string? _password;
     private double _zoom = 1.0;
     private string _zoomMode = ZoomModes.FitWidth;
-    private string _themeMode = ThemeModes.System;
-    private IResourceProvider? _highContrastPalette;
     private double? _restoreZoom;
     private string? _restoreZoomMode;
     private int _currentPage = 1;
@@ -58,23 +60,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private UpdateInfo? _availableUpdate;
 
     public MainWindowViewModel(
+        AppServices services,
         PdfDocumentService documentService,
         PdfSearchService searchService,
         PdfTextService textService,
-        SettingsService settingsService,
-        UpdateService updateService,
         IUserDialogService dialogs,
-        AppSettings settings,
-        LocalizationService localization)
+        IWindowService windows,
+        ITabService? tabs = null)
     {
         _documentService = documentService;
         _searchService = searchService;
         _textService = textService;
-        _settingsService = settingsService;
-        _updateService = updateService;
+        _settingsService = services.SettingsService;
+        _updateService = services.Updates;
         _dialogs = dialogs;
-        _localization = localization;
-        _settings = settings;
+        _localization = services.Localization;
+        _theme = services.Theme;
+        _windows = windows;
+        _tabs = tabs;
+        _services = services;
+        _settings = services.Settings;
         _isSidebarVisible = _settings.SidebarVisible;
         _settings.RecentFiles ??= [];
         _settings.ReadingPositions ??= [];
@@ -89,19 +94,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _selection = new TextSelectionController(() => Pages, () => _textLoader);
         _selection.SelectionChanged += (_, _) => NotifySelectionChanged();
 
-        _themeMode = NormalizeThemeMode(_settings.Theme);
-        _settings.Theme = _themeMode;
-        _isDarkTheme = ResolveIsDark(_themeMode);
-        ApplyTheme();
-
-        if (Application.Current?.PlatformSettings is { } platformSettings)
-        {
-            platformSettings.ColorValuesChanged += OnPlatformColorValuesChanged;
-        }
-
+        _theme.Changed += OnThemeChanged;
+        _services.RecentFilesChanged += OnSharedRecentFilesChanged;
         _localization.LanguageChanged += OnLanguageChanged;
         RefreshRecentFiles();
-        _ = CheckForUpdatesAsync(userInitiated: false);
+
+        // Only the first window in the process checks the update feed.
+        if (UpdateService.TryBeginStartupCheck())
+        {
+            _ = CheckForUpdatesAsync(userInitiated: false);
+        }
     }
 
     public event EventHandler<int>? ScrollToPageRequested;
@@ -197,9 +199,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isDragOver;
-
-    [ObservableProperty]
-    private bool _isDarkTheme;
 
     private bool _hasSearchResults;
 
@@ -310,21 +309,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public bool IsWelcomeVisible => !IsDocumentOpen && !IsBusy;
 
+    /// <summary>Label shown on the window's tab strip.</summary>
+    public string TabTitle => IsDocumentOpen && !string.IsNullOrWhiteSpace(FileName)
+        ? FileName
+        : _localization.T("L.NewTab");
+
+    /// <summary>Where this tab is scrolled to; used when its view is re-attached.</summary>
+    public NavigationPoint CurrentPosition =>
+        new(CurrentPage, Math.Clamp(_reading.PageOffset, 0, 1));
+
     public bool IsSidebarShown => IsDocumentOpen && IsSidebarVisible;
 
     public bool IsLightTheme => !IsDarkTheme;
 
-    public bool IsSystemTheme => string.Equals(_themeMode, ThemeModes.System, StringComparison.Ordinal);
+    public bool IsDarkTheme => _theme.IsDark;
+
+    public bool IsSystemTheme => _theme.IsSystem;
 
     public string ThemeTooltip => _localization.Format(
         "L.ThemeTooltipFormat",
-        _localization.T(_themeMode switch
-        {
-            ThemeModes.Dark => "L.ThemeDark",
-            ThemeModes.Light => "L.ThemeLight",
-            ThemeModes.HighContrast => "L.ThemeHighContrast",
-            _ => "L.ThemeSystem"
-        }));
+        _localization.T(ThemeService.ModeLabelKey(_theme.Mode)));
 
     public bool HasError => !string.IsNullOrWhiteSpace(ErrorMessage);
 
@@ -396,10 +400,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         var path = await _dialogs.PickPdfAsync();
-        if (!string.IsNullOrWhiteSpace(path))
+        if (string.IsNullOrWhiteSpace(path))
         {
-            await OpenPathAsync(path);
+            return;
         }
+
+        // Opening a second document must not throw away the one being read: put it in a
+        // new tab. The welcome screen (no document open) keeps using this tab.
+        if (IsDocumentOpen && _tabs is not null)
+        {
+            _tabs.OpenInNewTab(path);
+            return;
+        }
+
+        await OpenPathAsync(path);
     }
 
     [RelayCommand]
@@ -421,6 +435,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _settingsService.RemoveRecentFile(_settings, path);
         _settingsService.Save(_settings);
+        _services.NotifyRecentFilesChanged();
         RefreshRecentFiles();
         await Task.CompletedTask;
     }
@@ -430,6 +445,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         _settings.RecentFiles.Clear();
         _settingsService.Save(_settings);
+        _services.NotifyRecentFilesChanged();
         RefreshRecentFiles();
     }
 
@@ -452,40 +468,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private void ToggleTheme()
+    private void ToggleTheme() => _theme.Cycle();
+
+    /// <summary>Opens a second, empty window.</summary>
+    [RelayCommand]
+    private void NewWindow() => _windows.OpenNewWindow();
+
+    /// <summary>Opens the current document in another window.</summary>
+    [RelayCommand]
+    private void OpenInNewWindow()
     {
-        SetThemeMode(
-            _themeMode switch
-            {
-                ThemeModes.System => ThemeModes.Light,
-                ThemeModes.Light => ThemeModes.Dark,
-                ThemeModes.Dark => ThemeModes.HighContrast,
-                _ => ThemeModes.System
-            },
-            persist: true);
-    }
-
-    /// <summary>
-    /// Cycles System → Light → Dark → High contrast → System. "System" keeps following
-    /// the OS instead of pinning a fixed theme.
-    /// </summary>
-    public void SetThemeMode(string mode, bool persist)
-    {
-        _themeMode = NormalizeThemeMode(mode);
-        _settings.Theme = _themeMode;
-        IsDarkTheme = ResolveIsDark(_themeMode);
-
-        // IsDarkTheme may be unchanged (e.g. System-light → Light), so apply explicitly.
-        ApplyTheme();
-
-        OnPropertyChanged(nameof(IsSystemTheme));
-        OnPropertyChanged(nameof(IsLightTheme));
-        OnPropertyChanged(nameof(ThemeTooltip));
-
-        if (persist)
+        if (!IsDocumentOpen || string.IsNullOrWhiteSpace(FilePath))
         {
-            _settingsService.Save(_settings);
+            return;
         }
+
+        _windows.OpenInNewWindow(FilePath);
     }
 
     [RelayCommand]
@@ -1509,6 +1507,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         _settingsService.RemoveRecentFile(_settings, path);
         _settingsService.Save(_settings);
+        _services.NotifyRecentFilesChanged();
         RefreshRecentFiles();
         await Task.CompletedTask;
     }
@@ -1517,6 +1516,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         _settingsService.AddRecentFile(_settings, filePath);
         _settingsService.Save(_settings);
+        _services.NotifyRecentFilesChanged();
         RefreshRecentFiles();
     }
 
@@ -1565,8 +1565,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    partial void OnFileNameChanged(string value) => OnPropertyChanged(nameof(TabTitle));
+
     partial void OnIsDocumentOpenChanged(bool value)
     {
+        OnPropertyChanged(nameof(TabTitle));
         OnPropertyChanged(nameof(IsWelcomeVisible));
         OnPropertyChanged(nameof(IsSidebarShown));
         OnPropertyChanged(nameof(CanGoPrevious));
@@ -1586,10 +1589,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(IsWelcomeVisible));
 
-    partial void OnIsDarkThemeChanged(bool value)
+    /// <summary>
+    /// Keeps every window in step: the theme lives in <see cref="ThemeService"/>, so a
+    /// change made in one window notifies all of them.
+    /// </summary>
+    private void OnSharedRecentFilesChanged(object? sender, EventArgs e) => RefreshRecentFiles();
+    private void OnThemeChanged(object? sender, EventArgs e)
     {
-        ApplyTheme();
+        OnPropertyChanged(nameof(IsDarkTheme));
         OnPropertyChanged(nameof(IsLightTheme));
+        OnPropertyChanged(nameof(IsSystemTheme));
+        OnPropertyChanged(nameof(ThemeTooltip));
     }
 
     partial void OnHasSearchedChanged(bool value) => OnPropertyChanged(nameof(HasNoSearchResults));
@@ -1687,124 +1697,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasNoRecentFiles));
     }
 
-    private void ApplyTheme()
-    {
-        if (Application.Current is not { } application)
-        {
-            return;
-        }
-
-        application.RequestedThemeVariant = _themeMode switch
-        {
-            ThemeModes.Light => ThemeVariant.Light,
-            ThemeModes.Dark or ThemeModes.HighContrast => ThemeVariant.Dark,
-            // Default lets Avalonia follow the operating system.
-            _ => ThemeVariant.Default
-        };
-
-        ApplyHighContrastPalette(
-            application,
-            string.Equals(_themeMode, ThemeModes.HighContrast, StringComparison.Ordinal));
-    }
-
-    /// <summary>
-    /// Avalonia 11 has no high-contrast theme variant, so the high-contrast palette is a
-    /// flat dictionary merged on top of <c>Styles/Colors.axaml</c>. Later merged
-    /// dictionaries win, so every key it defines overrides the light/dark palette.
-    /// </summary>
-    private void ApplyHighContrastPalette(Application application, bool enabled)
-    {
-        if (!enabled)
-        {
-            if (_highContrastPalette is not null)
-            {
-                application.Resources.MergedDictionaries.Remove(_highContrastPalette);
-                _highContrastPalette = null;
-            }
-
-            return;
-        }
-
-        if (_highContrastPalette is not null)
-        {
-            return;
-        }
-
-        try
-        {
-            var include = new ResourceInclude(new Uri("avares://AirPdf/"))
-            {
-                Source = new Uri("avares://AirPdf/Styles/HighContrast.axaml")
-            };
-
-            if (include.Loaded is { } palette)
-            {
-                application.Resources.MergedDictionaries.Add(palette);
-                _highContrastPalette = palette;
-            }
-        }
-        catch
-        {
-            // A missing or malformed palette must not stop the app from starting; the
-            // window simply keeps the light/dark palette.
-        }
-    }
-
-    private static string NormalizeThemeMode(string? mode) => mode switch
-    {
-        ThemeModes.Light => ThemeModes.Light,
-        ThemeModes.Dark => ThemeModes.Dark,
-        ThemeModes.HighContrast => ThemeModes.HighContrast,
-        _ => ThemeModes.System
-    };
-
-    private static string NormalizeZoomMode(string? mode) => mode switch
-    {
-        ZoomModes.FitPage => ZoomModes.FitPage,
-        ZoomModes.Manual => ZoomModes.Manual,
-        _ => ZoomModes.FitWidth
-    };
-
-    private static bool ResolveIsDark(string mode) => mode switch
-    {
-        ThemeModes.Dark or ThemeModes.HighContrast => true,
-        ThemeModes.Light => false,
-        _ => SystemIsDark()
-    };
-
-    private static bool SystemIsDark()
-    {
-        try
-        {
-            return Application.Current?.PlatformSettings?.GetColorValues().ThemeVariant
-                == PlatformThemeVariant.Dark;
-        }
-        catch
-        {
-            // Headless or unusual platform hosts may not expose theme values.
-            return false;
-        }
-    }
-
-    private void OnPlatformColorValuesChanged(object? sender, PlatformColorValues e)
-    {
-        if (!IsSystemTheme)
-        {
-            return;
-        }
-
-        Dispatcher.UIThread.Post(() =>
-        {
-            if (!IsSystemTheme)
-            {
-                return;
-            }
-
-            IsDarkTheme = e.ThemeVariant == PlatformThemeVariant.Dark;
-            ApplyTheme();
-        });
-    }
-
     private void PushHistory()
     {
         if (!IsDocumentOpen || PageCount <= 0)
@@ -1844,14 +1736,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             UseShellExecute = true
         });
 
-    private static class ThemeModes
-    {
-        public const string System = "System";
-        public const string Light = "Light";
-        public const string Dark = "Dark";
-        public const string HighContrast = "HighContrast";
-    }
 
+    private static string NormalizeZoomMode(string? mode) => mode switch
+    {
+        ZoomModes.FitPage => ZoomModes.FitPage,
+        ZoomModes.Manual => ZoomModes.Manual,
+        _ => ZoomModes.FitWidth
+    };
     private static class ZoomModes
     {
         public const string FitWidth = "fit-width";
@@ -1862,11 +1753,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _localization.LanguageChanged -= OnLanguageChanged;
-
-        if (Application.Current?.PlatformSettings is { } platformSettings)
-        {
-            platformSettings.ColorValuesChanged -= OnPlatformColorValuesChanged;
-        }
+        _theme.Changed -= OnThemeChanged;
+        _services.RecentFilesChanged -= OnSharedRecentFilesChanged;
 
         CancelSafely(_loadCancellation);
         CancelSafely(_searchCancellation);

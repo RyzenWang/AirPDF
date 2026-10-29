@@ -13,8 +13,18 @@ public sealed class UpdateService
 {
     private const string RepositoryUrl = "https://github.com/RyzenWang/AirPDF";
 
+    /// <summary>
+    /// Startup checks are a process-level concern: with several windows open, only the
+    /// first one should hit the update feed and download.
+    /// </summary>
+    private static int _startupCheckStarted;
+
     private readonly Lazy<UpdateManager> _manager = new(
         () => new UpdateManager(new GithubSource(RepositoryUrl, null, false)));
+
+    /// <summary>True for the first caller in this process, false afterwards.</summary>
+    public static bool TryBeginStartupCheck() =>
+        Interlocked.Exchange(ref _startupCheckStarted, 1) == 0;
 
     private UpdateManager Manager => _manager.Value;
 

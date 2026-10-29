@@ -57,6 +57,10 @@ small .NET application with a hand-built Avalonia interface.
 - **Status bar** with the page position and a reading-progress percentage.
 - **Links** — internal destinations jump to their page, `http`/`https`/`mailto`
   links open in your browser or mail client, and the cursor turns into a hand.
+- **Multiple windows** (`Ctrl+N`, or open the current file in a new window) sharing
+  one settings store, theme, and language.
+- **Tabs** — `Ctrl+T` adds a document to the same window, and each tab keeps its own
+  zoom, scroll position, search results, and reading position.
 - **Back navigation** with `Alt+Left` after any outline, thumbnail, search, or
   page jump.
 - **Right-click menu** for copy, select all, and showing the file in the folder.
@@ -164,6 +168,9 @@ for the required repository secrets and the exact release process.
 | --- | --- |
 | `Ctrl+O` / `Cmd+O` | Open a PDF |
 | `Ctrl+W` / `Cmd+W` | Close the document |
+| `Ctrl+N` / `Cmd+N` | Open a new window |
+| `Ctrl+T` / `Cmd+T` | Open a new tab |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
 | `Ctrl+F` / `Cmd+F` | Find in document |
 | `F3` / `Shift+F3` | Next / previous search match |
 | `Alt+Left` | Return to the previous position |
@@ -237,7 +244,8 @@ docs/                   Screenshots and architecture notes
   results themselves still work.
 - Links are not clickable on pages with a non-zero `/Rotate` value, and only
   `http`, `https`, and `mailto` targets are followed.
-- One document per window; no tabs.
+- One document per tab; `Ctrl+W` closes the tab (the last one closes its document and
+  leaves the window on the welcome screen).
 - Release binaries are signed only when the maintainer signing secrets are
   configured. Unsigned Windows/macOS builds may show platform warnings.
 - Mobile and browser targets are out of scope for the desktop reader.
@@ -249,7 +257,8 @@ docs/                   Screenshots and architecture notes
 - [ ] Per-document bookmarks
 - [ ] Rotated-page search highlights
 - [ ] Annotations (highlight, ink, notes)
-- [ ] Tabs and multi-window support
+- [x] Multiple windows
+- [x] Tabs
 - [ ] Additional UI languages (English and Simplified Chinese are available)
 - [ ] Configure production Windows signing and Apple notarization credentials
 - [ ] UI/end-to-end coverage for zoom, search, language switching, and updates

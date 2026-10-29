@@ -10,7 +10,7 @@ namespace AirPdf.App.Services;
 /// such as <c>L.Open</c>; code-generated text goes through <see cref="T"/> and
 /// <see cref="Format"/>.
 /// </summary>
-public sealed class LocalizationService
+public sealed class LocalizationService : IDisposable
 {
     public const string English = "en";
     public const string ChineseSimplified = "zh-CN";
@@ -123,6 +123,12 @@ public sealed class LocalizationService
             ["L.SelectAll"] = ("Select all", "全选"),
             ["L.OpenContainingFolder"] = ("Show in folder", "打开所在文件夹"),
             ["L.LinkError"] = ("AirPDF could not open this link.", "无法打开此链接。"),
+            ["L.OpenInNewWindow"] = ("Open in new window", "在新窗口中打开"),
+            ["L.NewWindow"] = ("New window (Ctrl+N)", "新建窗口（Ctrl+N）"),
+            ["L.NewTab"] = ("New tab", "新标签页"),
+            ["L.NewTabHint"] = ("New tab (Ctrl+T)", "新建标签页（Ctrl+T）"),
+            ["L.CloseTab"] = ("Close tab", "关闭标签页"),
+            ["L.OpenInNewTab"] = ("Open in new tab", "在新标签页中打开"),
             ["L.ExplorerError"] = ("AirPDF could not open the file's folder.", "无法打开文件所在文件夹。"),
             ["L.NavigateBack"] = ("Back to previous position (Alt+Left)", "返回上一个位置（Alt+Left）"),
             ["L.PageNumberLabel"] = ("Page number", "页码"),
@@ -226,4 +232,15 @@ public sealed class LocalizationService
         PdfFailure.Unsupported => T("L.ErrorUnsupported"),
         _ => T("L.ErrorUnknown")
     };
+
+    /// <summary>Removes this instance's resource dictionary from the application.</summary>
+    public void Dispose()
+    {
+        if (_dictionary is not null && Application.Current is { } application)
+        {
+            application.Resources.MergedDictionaries.Remove(_dictionary);
+        }
+
+        _dictionary = null;
+    }
 }
