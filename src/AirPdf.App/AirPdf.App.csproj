@@ -33,6 +33,22 @@
     <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.22" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
     <PackageReference Include="Velopack" Version="1.2.161" />
+
+    <!--
+      Avalonia.Skia pulls SkiaSharp.NativeAssets.Linux 2.88.9 while PDFtoImage pulls
+      SkiaSharp.NativeAssets.Linux.NoDependencies 4.150.1. They are different package ids, so
+      NuGet does not unify them, and both ship runtimes/linux-x64/native/libSkiaSharp.so. The
+      2.88.9 copy wins the file conflict, which leaves the 4.150.1 managed SkiaSharp talking to
+      a native library it refuses to load:
+
+        The version of the native libSkiaSharp library (88.1) is incompatible with this
+        version of SkiaSharp.
+
+      Dropping the old package's native assets leaves the 4.150.1 one as the only provider.
+      Windows and macOS are unaffected: there the package ids match, so NuGet unified them.
+      Remove this once Avalonia depends on SkiaSharp 3 or later.
+    -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.88.9" ExcludeAssets="native" />
   </ItemGroup>
 
   <ItemGroup>
