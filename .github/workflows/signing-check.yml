@@ -148,18 +148,20 @@ jobs:
         if: inputs.package
         shell: pwsh
         run: |
-          # vpk signs the application binary in place before packaging it, so the
-          # published exe is checked alongside the installer.
-          $files = @(
-            'publish/win-x64/AirPdf.exe',
-            'releases/win/AirPDF-win-Setup.exe'
-          )
+          # vpk signs a copy of the application files while building the package,
+          # so the packaged binaries are checked, not the publish directory.
+          Expand-Archive -Path 'releases/win/AirPDF-win-Portable.zip' `
+            -DestinationPath 'releases/win/portable' -Force
+
+          $files = @('releases/win/AirPDF-win-Setup.exe') +
+            @(Get-ChildItem 'releases/win/portable' -Recurse -Include 'AirPdf.exe', 'Update.exe' |
+              Select-Object -ExpandProperty FullName)
+
+          if ($files.Count -lt 2) {
+            throw "Expected the installer plus packaged binaries, found $($files.Count)."
+          }
 
           foreach ($file in $files) {
-            if (-not (Test-Path $file)) {
-              throw "$file was not produced."
-            }
-
             $signature = Get-AuthenticodeSignature -FilePath $file
             if ($signature.Status -eq 'NotSigned') {
               throw "$file is not signed."
@@ -296,7 +298,8 @@ jobs:
           openssl req -x509 -newkey rsa:2048 -sha256 -nodes \
             -keyout "$RUNNER_TEMP/test.key" -out "$RUNNER_TEMP/test.crt" -days 1 \
             -subj "/CN=AirPDF Test Signing (not for release)" \
-            -addext "extendedKeyUsage=codeSigning" \
+            -addext "keyUsage=critical,digitalSignature" \
+            -addext "extendedKeyUsage=critical,codeSigning" \
             -addext "basicConstraints=critical,CA:FALSE"
           openssl pkcs12 -export -out "$RUNNER_TEMP/test.p12" \
             -inkey "$RUNNER_TEMP/test.key" -in "$RUNNER_TEMP/test.crt" \
