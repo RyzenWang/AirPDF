@@ -1,0 +1,395 @@
+name: Signing check
+
+# Verifies what the release workflow would be able to sign, without publishing
+# anything. It is safe to run at any time: when no credentials are configured it
+# mints a throwaway self-signed certificate and proves the signing pipeline still
+# works, then reports that real credentials are missing.
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Build and sign the real installers (slow)
+        type: boolean
+        default: true
+      notarize:
+        description: Also submit the macOS package to Apple (needs credentials)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  VPK_VERSION: 1.2.161
+
+jobs:
+  windows:
+    name: Windows signing
+    runs-on: windows-latest
+    env:
+      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Report configured credentials
+        shell: pwsh
+        run: |
+          $cert = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64)
+          $password = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)
+
+          "certificate: $cert" >> $env:GITHUB_STEP_SUMMARY
+          "password:    $password" >> $env:GITHUB_STEP_SUMMARY
+
+          if ($cert -xor $password) {
+            throw 'Windows signing is half configured: set both WINDOWS_CERTIFICATE_BASE64 and WINDOWS_CERTIFICATE_PASSWORD.'
+          }
+
+          if ($cert) {
+            Write-Host 'Using the configured Windows code-signing certificate.' -ForegroundColor Green
+          }
+          else {
+            Write-Host 'No Windows certificate configured; this run will prove the pipeline with a throwaway certificate.' -ForegroundColor Yellow
+          }
+
+      - name: Write the certificate from the secret
+        if: env.WINDOWS_CERTIFICATE_BASE64 != ''
+        shell: pwsh
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP 'configured.pfx'
+          [IO.File]::WriteAllBytes($path, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          "SIGNING_CERT_PATH=$path" >> $env:GITHUB_ENV
+          "SIGNING_REAL_CERT=true" >> $env:GITHUB_ENV
+
+      - name: Mint a throwaway certificate
+        if: env.WINDOWS_CERTIFICATE_BASE64 == ''
+        shell: pwsh
+        run: |
+          $path = Join-Path $env:RUNNER_TEMP 'test-codesign.pfx'
+          ./packaging/signing/New-TestCertificate.ps1 -OutputPath $path -Password 'test'
+          "SIGNING_CERT_PATH=$path" >> $env:GITHUB_ENV
+          "SIGNING_CERT_PASSWORD=test" >> $env:GITHUB_ENV
+          "SIGNING_REAL_CERT=false" >> $env:GITHUB_ENV
+
+      - name: Use the configured password
+        if: env.WINDOWS_CERTIFICATE_PASSWORD != ''
+        shell: pwsh
+        run: '"SIGNING_CERT_PASSWORD=$env:WINDOWS_CERTIFICATE_PASSWORD" >> $env:GITHUB_ENV'
+
+      - name: Validate the certificate the way the release does
+        shell: pwsh
+        run: |
+          ./packaging/signing/Set-SigningSecrets.ps1 `
+            -Target windows `
+            -CertificatePath $env:SIGNING_CERT_PATH `
+            -CertificatePassword $env:SIGNING_CERT_PASSWORD `
+            -DryRun
+
+      - name: Record the signing thumbprint
+        shell: pwsh
+        run: |
+          $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
+            $env:SIGNING_CERT_PATH,
+            $env:SIGNING_CERT_PASSWORD,
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+          "SIGNING_THUMBPRINT=$($cert.Thumbprint)" >> $env:GITHUB_ENV
+          "thumbprint: $($cert.Thumbprint)" >> $env:GITHUB_STEP_SUMMARY
+          "subject: $($cert.Subject)" >> $env:GITHUB_STEP_SUMMARY
+          "expires: $($cert.NotAfter.ToString('yyyy-MM-dd'))" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Install Velopack CLI
+        shell: pwsh
+        run: dotnet tool install vpk --version $env:VPK_VERSION --tool-path .vpk
+
+      - name: Publish and sign an installer
+        if: inputs.package
+        shell: pwsh
+        run: |
+          dotnet publish src/AirPdf.App/AirPdf.App.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:Version=0.0.0-check `
+            -o publish/win-x64
+
+          $signParams = "/td sha256 /fd sha256 /f `"$env:SIGNING_CERT_PATH`" /p `"$env:SIGNING_CERT_PASSWORD`""
+
+          # A self-signed certificate cannot use a public timestamp authority
+          # meaningfully, and the runner may not reach it; only timestamp with a
+          # real certificate.
+          if ($env:SIGNING_REAL_CERT -eq 'true') {
+            $signParams += ' /tr http://timestamp.digicert.com'
+          }
+
+          & "$PWD\.vpk\vpk.exe" pack `
+            --packId AirPDF `
+            --packVersion 0.0.0-check `
+            --packDir publish/win-x64 `
+            --mainExe AirPdf.exe `
+            --packTitle AirPDF `
+            --packAuthors "AirPDF contributors" `
+            --icon src/AirPdf.App/Assets/airpdf.ico `
+            --runtime win-x64 `
+            --channel win `
+            --outputDir releases/win `
+            --signParams $signParams
+
+      - name: Verify every signed binary
+        if: inputs.package
+        shell: pwsh
+        run: |
+          $files = @(
+            'releases/win/AirPDF-win-Setup.exe',
+            'releases/win/AirPDF-win-Portable.zip'
+          ) | Where-Object { Test-Path $_ }
+
+          foreach ($file in $files) {
+            if ($file -like '*.zip') { continue }
+
+            $signature = Get-AuthenticodeSignature -FilePath $file
+            if ($signature.Status -eq 'NotSigned') {
+              throw "$file is not signed."
+            }
+
+            if ($signature.SignerCertificate.Thumbprint -ne $env:SIGNING_THUMBPRINT) {
+              throw "$file was signed by $($signature.SignerCertificate.Thumbprint), expected $env:SIGNING_THUMBPRINT."
+            }
+
+            if ($env:SIGNING_REAL_CERT -eq 'true' -and $signature.Status -ne 'Valid') {
+              throw "$file has status $($signature.Status): $($signature.StatusMessage)"
+            }
+
+            Write-Host "$file -> $($signature.Status)" -ForegroundColor Green
+            "$file -> $($signature.Status)" >> $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Summarise the outcome
+        shell: pwsh
+        run: |
+          if ($env:SIGNING_REAL_CERT -eq 'true') {
+            "Windows: signed with the configured certificate." >> $env:GITHUB_STEP_SUMMARY
+          }
+          else {
+            "Windows: pipeline verified with a throwaway certificate. No real certificate is configured, so published installers would be unsigned." >> $env:GITHUB_STEP_SUMMARY
+          }
+
+  macos:
+    name: macOS signing
+    runs-on: macos-latest
+    env:
+      MACOS_CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+      MACOS_INSTALLER_CERTIFICATE_BASE64: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_BASE64 }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_APP_SIGN_IDENTITY: ${{ secrets.MACOS_APP_SIGN_IDENTITY }}
+      MACOS_INSTALLER_SIGN_IDENTITY: ${{ secrets.MACOS_INSTALLER_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      MACOS_KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Report configured credentials
+        shell: bash
+        run: |
+          report() {
+            local name="$1" value="$2"
+            if [[ -n "$value" ]]; then
+              echo "| $name | configured |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| $name | missing |" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          }
+
+          echo "| Secret | State |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | --- |" >> "$GITHUB_STEP_SUMMARY"
+          report MACOS_CERTIFICATE_BASE64 "$MACOS_CERTIFICATE_BASE64"
+          report MACOS_INSTALLER_CERTIFICATE_BASE64 "$MACOS_INSTALLER_CERTIFICATE_BASE64"
+          report MACOS_CERTIFICATE_PASSWORD "$MACOS_CERTIFICATE_PASSWORD"
+          report MACOS_APP_SIGN_IDENTITY "$MACOS_APP_SIGN_IDENTITY"
+          report MACOS_INSTALLER_SIGN_IDENTITY "$MACOS_INSTALLER_SIGN_IDENTITY"
+          report APPLE_ID "$APPLE_ID"
+          report APPLE_APP_PASSWORD "$APPLE_APP_PASSWORD"
+          report APPLE_TEAM_ID "$APPLE_TEAM_ID"
+          report MACOS_KEYCHAIN_PASSWORD "$MACOS_KEYCHAIN_PASSWORD"
+
+          if [[ -n "$MACOS_CERTIFICATE_BASE64" ]]; then
+            for required in MACOS_INSTALLER_CERTIFICATE_BASE64 MACOS_CERTIFICATE_PASSWORD \
+                            MACOS_APP_SIGN_IDENTITY MACOS_INSTALLER_SIGN_IDENTITY \
+                            APPLE_ID APPLE_APP_PASSWORD APPLE_TEAM_ID MACOS_KEYCHAIN_PASSWORD; do
+              if [[ -z "${!required}" ]]; then
+                echo "::error::macOS signing is half configured: $required is missing."
+                exit 1
+              fi
+            done
+            echo "MacOS: configured." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "MacOS: no credentials; verifying the codesign path with a throwaway identity." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Import the configured certificates
+        if: env.MACOS_CERTIFICATE_BASE64 != ''
+        shell: bash
+        run: |
+          CERT_PATH="$RUNNER_TEMP/developer-id-application.p12"
+          INSTALLER_PATH="$RUNNER_TEMP/developer-id-installer.p12"
+          KEYCHAIN_PATH="$RUNNER_TEMP/airpdf-signing.keychain-db"
+
+          python3 - "$CERT_PATH" "$MACOS_CERTIFICATE_BASE64" <<'PY'
+          import base64, sys
+          open(sys.argv[1], "wb").write(base64.b64decode(sys.argv[2]))
+          PY
+          python3 - "$INSTALLER_PATH" "$MACOS_INSTALLER_CERTIFICATE_BASE64" <<'PY'
+          import base64, sys
+          open(sys.argv[1], "wb").write(base64.b64decode(sys.argv[2]))
+          PY
+
+          security create-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security import "$INSTALLER_PATH" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$MACOS_KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | tee -a "$GITHUB_STEP_SUMMARY"
+
+          if ! security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep -q "$MACOS_APP_SIGN_IDENTITY"; then
+            echo "::error::The keychain has no identity matching '$MACOS_APP_SIGN_IDENTITY'."
+            exit 1
+          fi
+
+      - name: Create a throwaway identity
+        if: env.MACOS_CERTIFICATE_BASE64 == ''
+        shell: bash
+        run: |
+          KEYCHAIN_PATH="$RUNNER_TEMP/airpdf-test.keychain-db"
+          PASSWORD="airpdf-test"
+
+          security create-keychain -p "$PASSWORD" "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$PASSWORD" "$KEYCHAIN_PATH"
+
+          openssl req -x509 -newkey rsa:2048 -sha256 -nodes \
+            -keyout "$RUNNER_TEMP/test.key" -out "$RUNNER_TEMP/test.crt" -days 1 \
+            -subj "/CN=AirPDF Test Signing (not for release)" \
+            -addext "extendedKeyUsage=codeSigning"
+          openssl pkcs12 -export -out "$RUNNER_TEMP/test.p12" \
+            -inkey "$RUNNER_TEMP/test.key" -in "$RUNNER_TEMP/test.crt" \
+            -passout "pass:$PASSWORD"
+          security import "$RUNNER_TEMP/test.p12" -P "$PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+      - name: Prove codesign can use the identity
+        shell: bash
+        run: |
+          printf '#!/bin/sh\nexit 0\n' > "$RUNNER_TEMP/probe.sh"
+          chmod +x "$RUNNER_TEMP/probe.sh"
+
+          if [[ -n "$MACOS_APP_SIGN_IDENTITY" ]]; then
+            IDENTITY="$MACOS_APP_SIGN_IDENTITY"
+          else
+            IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | sed -n 's/.*"\(.*\)"/\1/p' | head -1)"
+          fi
+
+          if [[ -z "$IDENTITY" ]]; then
+            echo "::error::No code-signing identity is available."
+            exit 1
+          fi
+
+          codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN_PATH" "$RUNNER_TEMP/probe.sh"
+          codesign --verify --strict --verbose=2 "$RUNNER_TEMP/probe.sh"
+
+          echo "identity: $IDENTITY" >> "$GITHUB_STEP_SUMMARY"
+          codesign -dv "$RUNNER_TEMP/probe.sh" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Install Velopack CLI
+        if: inputs.package
+        shell: bash
+        run: dotnet tool install vpk --version "$VPK_VERSION" --tool-path .vpk
+
+      - name: Publish and sign a package
+        if: inputs.package && env.MACOS_CERTIFICATE_BASE64 != ''
+        shell: bash
+        run: |
+          dotnet publish src/AirPdf.App/AirPdf.App.csproj \
+            -c Release -r osx-arm64 --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:Version=0.0.0-check \
+            -o publish/osx-arm64
+
+          args=(
+            pack
+            --packId "AirPDF-osx-arm64"
+            --packVersion 0.0.0-check
+            --packDir publish/osx-arm64
+            --mainExe AirPdf
+            --packTitle AirPDF
+            --packAuthors "AirPDF contributors"
+            --icon src/AirPdf.App/Assets/airpdf.icns
+            --runtime osx-arm64
+            --channel osx-arm64
+            --outputDir releases/osx-arm64
+            --signAppIdentity "$MACOS_APP_SIGN_IDENTITY"
+            --signInstallIdentity "$MACOS_INSTALLER_SIGN_IDENTITY"
+            --keychain "$KEYCHAIN_PATH"
+          )
+
+          if [[ "${{ inputs.notarize }}" == "true" ]]; then
+            xcrun notarytool store-credentials "airpdf-notary" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_PASSWORD" \
+              --keychain "$KEYCHAIN_PATH"
+            args+=(--notaryProfile airpdf-notary)
+          fi
+
+          ./.vpk/vpk "${args[@]}"
+
+          PKG=$(find releases/osx-arm64 -name '*.pkg' | head -1)
+          pkgutil --check-signature "$PKG" | tee -a "$GITHUB_STEP_SUMMARY"
+
+          if [[ "${{ inputs.notarize }}" == "true" ]]; then
+            spctl --assess --type install --verbose=4 "$PKG" | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+  summary:
+    name: Signing summary
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Report
+        run: |
+          echo "Windows job: ${{ needs.windows.result }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "MacOS job:   ${{ needs.macos.result }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "A passing run without credentials means the pipeline works but published builds would be unsigned." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail when a job failed
+        if: needs.windows.result != 'success' || needs.macos.result != 'success'
+        run: exit 1

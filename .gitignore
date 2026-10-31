@@ -31,3 +31,14 @@ desktop.ini
 # Local runtime files
 *.log
 settings.local.json
+
+# Signing material must never be committed. Certificates and keys are supplied
+# as repository secrets; see docs/SIGNING.md.
+*.pfx
+*.p12
+*.p7b
+*.cer
+*.crt
+*.key
+*.pem
+*.snk

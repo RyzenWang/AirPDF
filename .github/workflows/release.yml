@@ -60,6 +60,24 @@ jobs:
           $version = $env:GITHUB_REF_NAME.TrimStart("v")
           "value=$version" >> $env:GITHUB_OUTPUT
 
+      - name: Check signing configuration
+        shell: pwsh
+        run: |
+          $cert = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64)
+          $password = -not [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)
+
+          if ($cert -xor $password) {
+            throw 'Windows signing is half configured: set both WINDOWS_CERTIFICATE_BASE64 and WINDOWS_CERTIFICATE_PASSWORD, or neither.'
+          }
+
+          if ($cert) {
+            "Windows: signing with the configured certificate." >> $env:GITHUB_STEP_SUMMARY
+          }
+          else {
+            "Windows: no certificate configured, the installer will be unsigned." >> $env:GITHUB_STEP_SUMMARY
+            Write-Warning 'Publishing an unsigned Windows installer. SmartScreen will warn until the file builds reputation.'
+          }
+
       - name: Publish
         shell: pwsh
         run: >
@@ -161,6 +179,31 @@ jobs:
         id: version
         shell: bash
         run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Check signing configuration
+        shell: bash
+        run: |
+          if [[ -z "${MACOS_CERTIFICATE_BASE64:-}" ]]; then
+            echo "MacOS: no certificates configured, packages will be unsigned and blocked by Gatekeeper." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Publishing unsigned macOS packages. Gatekeeper will refuse them on other machines."
+            exit 0
+          fi
+
+          missing=0
+          for required in MACOS_INSTALLER_CERTIFICATE_BASE64 MACOS_CERTIFICATE_PASSWORD \
+                          MACOS_APP_SIGN_IDENTITY MACOS_INSTALLER_SIGN_IDENTITY \
+                          APPLE_ID APPLE_APP_PASSWORD APPLE_TEAM_ID MACOS_KEYCHAIN_PASSWORD; do
+            if [[ -z "${!required:-}" ]]; then
+              echo "::error::macOS signing is half configured: $required is missing."
+              missing=1
+            fi
+          done
+
+          if [[ "$missing" -ne 0 ]]; then
+            exit 1
+          fi
+
+          echo "MacOS: signing and notarizing with the configured certificates." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Publish
         shell: bash

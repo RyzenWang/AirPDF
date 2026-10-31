@@ -116,9 +116,19 @@ Tag 发布会使用 [Velopack](https://velopack.io/) 生成：
 安装后的 Windows / macOS 版本会检查 GitHub 上的稳定版，后台下载并显示
 “重启以更新”。便携版和源码运行不会自动更新。
 
-工作流包含可选的 Windows 代码签名以及 macOS 签名 / 公证步骤。所需 Secrets
-和发布流程见 [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)。未配置签名时仍会
-生成未签名安装包，Windows SmartScreen 和 macOS Gatekeeper 可能要求确认。
+工作流包含可选的 Windows 代码签名以及 macOS 签名 / 公证步骤。证书获取与
+Secrets 配置见 [docs/SIGNING.md](docs/SIGNING.md)，发布流程见
+[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)。
+
+`packaging/signing/Set-SigningSecrets.ps1` 会校验证书并上传为 Secret。
+**Signing check** 工作流可以在不发布任何版本的前提下验证配置：
+
+```bash
+gh workflow run signing-check.yml --repo RyzenWang/AirPDF
+```
+
+未配置签名时仍会生成未签名安装包，Windows SmartScreen 和 macOS Gatekeeper
+可能要求确认。
 
 ## 快捷键
 

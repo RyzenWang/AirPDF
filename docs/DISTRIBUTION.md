@@ -58,10 +58,18 @@ exist:
 - `WINDOWS_CERTIFICATE_BASE64` — base64 of the `.pfx`
 - `WINDOWS_CERTIFICATE_PASSWORD` — PFX password
 
-When absent, it still produces an unsigned installer. Unsigned builds may
-trigger SmartScreen. For production, prefer Azure Artifact Signing (or an
-EV/OV certificate stored in an HSM) and add the appropriate `vpk` signing
-parameters; modern OV certificates often cannot be exported as a portable PFX.
+`packaging/signing/Set-SigningSecrets.ps1 -Target windows` validates the
+certificate and sets both secrets in one step. Setting only one of the two now
+fails the job instead of silently shipping an unsigned installer.
+
+When absent, the workflow still produces an unsigned installer and says so in the
+run summary. Unsigned builds may trigger SmartScreen. For production, prefer
+Azure Trusted Signing (or an EV/OV certificate stored in an HSM) and add the
+appropriate `vpk` signing parameters; modern OV certificates often cannot be
+exported as a portable PFX.
+
+The `Signing check` workflow verifies the configuration without publishing
+anything. See [SIGNING.md](SIGNING.md) for the full credential guide.
 
 ## macOS signing and notarization
 
@@ -89,6 +97,11 @@ notarizes the `.app` and `.pkg`, and staples the result.
 
 Without those secrets, the macOS jobs still create unsigned packages. Gatekeeper
 will block them on a normal user machine until they are signed and notarized.
+Configuring a certificate without the Apple credentials now fails the job rather
+than producing a package that cannot be opened.
+
+See [SIGNING.md](SIGNING.md) for how to obtain the certificates, set every
+secret, and verify the result.
 
 ## In-app updates
 

@@ -158,8 +158,17 @@ download it in the background, and show a **Restart to update** action. Portable
 and source builds do not self-update.
 
 The workflow also contains optional Windows code-signing and macOS
-codesign/notarization steps. See [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md)
-for the required repository secrets and the exact release process.
+codesign/notarization steps. See [docs/SIGNING.md](docs/SIGNING.md) for how to
+obtain the certificates and store them as secrets, and
+[docs/DISTRIBUTION.md](docs/DISTRIBUTION.md) for the exact release process.
+
+`packaging/signing/Set-SigningSecrets.ps1` validates a certificate and uploads
+it. The **Signing check** workflow verifies the configuration without publishing
+anything, and passes once the certificates are in place:
+
+```bash
+gh workflow run signing-check.yml --repo RyzenWang/AirPDF
+```
 
 > Release binaries are currently unsigned. Windows SmartScreen and macOS
 > Gatekeeper may ask for confirmation until signing is added.
