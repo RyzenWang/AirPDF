@@ -6,6 +6,30 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+### Added
+
+- `packaging/signing/Set-SigningSecrets.ps1` validates a Windows or macOS
+  code-signing certificate (private key present, Code Signing extended key usage,
+  not expired) and uploads it as the repository secrets the release workflow
+  reads.
+- `packaging/signing/New-TestCertificate.ps1` mints a throwaway self-signed
+  certificate so the signing pipeline can be exercised without a purchased
+  certificate.
+- A `Signing check` workflow that inspects the configured credentials without
+  publishing anything, and otherwise proves the signing path end to end with a
+  temporary certificate.
+- `docs/SIGNING.md` covering certificate acquisition, secret names, verification,
+  rotation, and cost.
+
+### Changed
+
+- The release workflow now fails when signing is half configured (a certificate
+  without its password, or a macOS certificate without the Apple credentials)
+  instead of silently publishing an unsigned build, and records the signing state
+  in the run summary.
+- Certificate and key files are ignored by git so private material cannot be
+  committed by accident.
+
 ## [0.2.0] - 2026-10-29
 
 ### Added
