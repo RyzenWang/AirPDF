@@ -119,7 +119,7 @@ jobs:
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
             -p:EnableCompressionInSingleFile=true `
-            -p:Version=0.0.0-check `
+            -p:Version=0.0.1 `
             -o publish/win-x64
 
           $signParams = "/td sha256 /fd sha256 /f `"$env:SIGNING_CERT_PATH`" /p `"$env:SIGNING_CERT_PASSWORD`""
@@ -133,7 +133,7 @@ jobs:
 
           & "$PWD\.vpk\vpk.exe" pack `
             --packId AirPDF `
-            --packVersion 0.0.0-check `
+            --packVersion 0.0.1 `
             --packDir publish/win-x64 `
             --mainExe AirPdf.exe `
             --packTitle AirPDF `
@@ -148,13 +148,17 @@ jobs:
         if: inputs.package
         shell: pwsh
         run: |
+          # vpk signs the application binary in place before packaging it, so the
+          # published exe is checked alongside the installer.
           $files = @(
-            'releases/win/AirPDF-win-Setup.exe',
-            'releases/win/AirPDF-win-Portable.zip'
-          ) | Where-Object { Test-Path $_ }
+            'publish/win-x64/AirPdf.exe',
+            'releases/win/AirPDF-win-Setup.exe'
+          )
 
           foreach ($file in $files) {
-            if ($file -like '*.zip') { continue }
+            if (-not (Test-Path $file)) {
+              throw "$file was not produced."
+            }
 
             $signature = Get-AuthenticodeSignature -FilePath $file
             if ($signature.Status -eq 'NotSigned') {
@@ -286,12 +290,14 @@ jobs:
           PASSWORD="airpdf-test"
 
           security create-keychain -p "$PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$PASSWORD" "$KEYCHAIN_PATH"
 
           openssl req -x509 -newkey rsa:2048 -sha256 -nodes \
             -keyout "$RUNNER_TEMP/test.key" -out "$RUNNER_TEMP/test.crt" -days 1 \
             -subj "/CN=AirPDF Test Signing (not for release)" \
-            -addext "extendedKeyUsage=codeSigning"
+            -addext "extendedKeyUsage=codeSigning" \
+            -addext "basicConstraints=critical,CA:FALSE"
           openssl pkcs12 -export -out "$RUNNER_TEMP/test.p12" \
             -inkey "$RUNNER_TEMP/test.key" -in "$RUNNER_TEMP/test.crt" \
             -passout "pass:$PASSWORD"
@@ -299,7 +305,15 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -s -k "$PASSWORD" "$KEYCHAIN_PATH"
           security list-keychain -d user -s "$KEYCHAIN_PATH"
 
+          # A self-signed certificate only counts as a valid codesigning identity
+          # once it is trusted; without this, find-identity lists nothing.
+          sudo security add-trusted-cert -d -r trustRoot \
+            -k /Library/Keychains/System.keychain "$RUNNER_TEMP/test.crt"
+
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+          echo "TEST_SIGN_IDENTITY=AirPDF Test Signing (not for release)" >> "$GITHUB_ENV"
+
+          security find-identity -v -p codesigning "$KEYCHAIN_PATH" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Prove codesign can use the identity
         shell: bash
@@ -310,7 +324,7 @@ jobs:
           if [[ -n "$MACOS_APP_SIGN_IDENTITY" ]]; then
             IDENTITY="$MACOS_APP_SIGN_IDENTITY"
           else
-            IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | sed -n 's/.*"\(.*\)"/\1/p' | head -1)"
+            IDENTITY="${TEST_SIGN_IDENTITY:-}"
           fi
 
           if [[ -z "$IDENTITY" ]]; then
@@ -338,13 +352,13 @@ jobs:
             -p:PublishSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true \
             -p:EnableCompressionInSingleFile=true \
-            -p:Version=0.0.0-check \
+            -p:Version=0.0.1 \
             -o publish/osx-arm64
 
           args=(
             pack
             --packId "AirPDF-osx-arm64"
-            --packVersion 0.0.0-check
+            --packVersion 0.0.1
             --packDir publish/osx-arm64
             --mainExe AirPdf
             --packTitle AirPDF
