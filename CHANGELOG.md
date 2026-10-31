@@ -6,6 +6,12 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-31
+
+A packaging release. The application binaries are unchanged from 0.2.0; this
+version publishes the signing tooling and makes the release pipeline state
+explicit.
+
 ### Added
 
 - `packaging/signing/Set-SigningSecrets.ps1` validates a Windows or macOS
@@ -29,6 +35,11 @@ semantic versioning once it reaches 1.0.
   in the run summary.
 - Certificate and key files are ignored by git so private material cannot be
   committed by accident.
+
+### Notes
+
+- No code-signing credentials are configured in this repository yet, so the
+  published installers are unsigned.
 
 ## [0.2.0] - 2026-10-29
 
