@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Builds a sideloadable MSIX package for AirPDF from a folder publish.
 
@@ -157,47 +157,73 @@ $sourceIcon = Join-Path $root 'src/AirPdf.App/Assets/airpdf.png'
 $assetsDirectory = Join-Path $layoutDirectory 'Assets'
 New-Item -ItemType Directory -Path $assetsDirectory -Force | Out-Null
 
-$sizes = @{
-    'Square44x44Logo.png'   = 44
-    'Square150x150Logo.png' = 150
-    'StoreLogo.png'         = 50
-    'Wide310x150Logo.png'   = 0
-    'SplashScreen.png'      = 0
+# System.Drawing ships with Windows, so the assets can be produced without an
+# image library or a Python dependency on the build agent.
+Add-Type -AssemblyName System.Drawing
+
+function New-PackageImage {
+    param(
+        [string] $SourcePath,
+        [string] $Target,
+        [int] $Width,
+        [int] $Height,
+        [bool] $Tile
+    )
+
+    $sourceImage = [System.Drawing.Image]::FromFile($SourcePath)
+    try {
+        $bitmap = New-Object System.Drawing.Bitmap($Width, $Height)
+        try {
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            try {
+                $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+                $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+                $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+
+                if ($Tile) {
+                    # Wide tiles and the splash screen sit on the app's paper tone.
+                    $graphics.Clear([System.Drawing.Color]::FromArgb(255, 246, 244, 239))
+                    $scale = [Math]::Min($Width / $sourceImage.Width, $Height / $sourceImage.Height)
+                    $drawWidth = [int]($sourceImage.Width * $scale)
+                    $drawHeight = [int]($sourceImage.Height * $scale)
+                }
+                else {
+                    $graphics.Clear([System.Drawing.Color]::Transparent)
+                    $drawWidth = $Width
+                    $drawHeight = $Height
+                }
+
+                $x = [int](($Width - $drawWidth) / 2)
+                $y = [int](($Height - $drawHeight) / 2)
+                $graphics.DrawImage($sourceImage, $x, $y, $drawWidth, $drawHeight)
+            }
+            finally {
+                $graphics.Dispose()
+            }
+
+            $bitmap.Save($Target, [System.Drawing.Imaging.ImageFormat]::Png)
+        }
+        finally {
+            $bitmap.Dispose()
+        }
+    }
+    finally {
+        $sourceImage.Dispose()
+    }
 }
 
-$python = @'
-import sys
-from PIL import Image
+$images = @(
+    @{ Name = 'Square44x44Logo.png'; Width = 44; Height = 44; Tile = $false },
+    @{ Name = 'Square150x150Logo.png'; Width = 150; Height = 150; Tile = $false },
+    @{ Name = 'StoreLogo.png'; Width = 50; Height = 50; Tile = $false },
+    @{ Name = 'Wide310x150Logo.png'; Width = 310; Height = 150; Tile = $true },
+    @{ Name = 'SplashScreen.png'; Width = 620; Height = 300; Tile = $true }
+)
 
-source, target, width, height = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
-image = Image.open(source).convert("RGBA")
-if width == height:
-    image = image.resize((width, height), Image.LANCZOS)
-    image.save(target, "PNG")
-else:
-    canvas = Image.new("RGBA", (width, height), (246, 244, 239, 255))
-    scaled = image.copy()
-    scaled.thumbnail((height, height), Image.LANCZOS)
-    canvas.paste(scaled, ((width - scaled.width) // 2, (height - scaled.height) // 2), scaled)
-    canvas.save(target, "PNG")
-'@
-
-$pythonPath = Join-Path $env:TEMP 'airpdf-msix-assets.py'
-Set-Content -Path $pythonPath -Value $python -Encoding utf8
-
-foreach ($entry in $sizes.GetEnumerator()) {
-    $width = if ($entry.Value -gt 0) { $entry.Value } else { 310 }
-    $height = if ($entry.Value -gt 0) { $entry.Value } else { 150 }
-
-    switch ($entry.Key) {
-        'Wide310x150Logo.png' { $width = 310; $height = 150 }
-        'SplashScreen.png'    { $width = 620; $height = 300 }
-    }
-
-    $target = Join-Path $assetsDirectory $entry.Key
-    & python $pythonPath $sourceIcon $target $width $height
-    if ($LASTEXITCODE -ne 0) { throw "Failed to generate $($entry.Key)." }
-    Write-Host "  $($entry.Key) ${width}x${height}"
+foreach ($image in $images) {
+    $target = Join-Path $assetsDirectory $image.Name
+    New-PackageImage -SourcePath $sourceIcon -Target $target -Width $image.Width -Height $image.Height -Tile $image.Tile
+    Write-Host "  $($image.Name) $($image.Width)x$($image.Height)"
 }
 
 Write-Step 'Expanding the manifest'
@@ -292,3 +318,5 @@ if ($failed -gt 0) {
 Write-Host ''
 Write-Host 'Sideload with: Add-AppxPackage -Path <package>' -ForegroundColor Yellow
 Write-Host 'A sideloaded package must be signed with a certificate the machine trusts.' -ForegroundColor Yellow
+
+
