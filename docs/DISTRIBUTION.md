@@ -31,6 +31,10 @@ produced a binary that demanded `GLIBC_2.38` and refused to start on 22.04. The 
 are therefore pinned to `ubuntu-22.04`, and both workflows read the required symbol version
 off the produced binary with `objdump -T` and fail if it goes above 2.35.
 
+The shipped 0.3.2 archive was checked the same way and needs at most `GLIBC_2.34`, and it has
+been run successfully on Ubuntu 22.04. macOS has only been built, not run, on this machine;
+the AOT runtime behaviour there is unverified.
+
 AOT and trimming fail silently when a reflection path loses its metadata: a trimmed build
 once stopped writing the settings file while otherwise behaving normally. The Windows
 publish step therefore fails on any IL warning and on an output that is unexpectedly large,
