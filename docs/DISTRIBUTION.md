@@ -18,12 +18,18 @@ For a tag such as `v0.2.0`, the workflow publishes:
 The `releases.*.json` files are required by the in-app updater. Portable and
 source builds do not self-update; install with the Windows Setup or macOS pkg
 to enable automatic updates.
-The Windows build is published with `PublishTrimmed`, which roughly halves the download
-(53 MB to 28 MB). Trimming fails silently when a reflection path loses its metadata — it
-once stopped the app writing its settings file — so the Windows publish step fails on any
-IL warning, and on a build that is unexpectedly large. `ci.yml` runs the same check on
-every pull request, so a regression is caught long before a tag. macOS and Linux are still
-published untrimmed.
+The Windows build is published with NativeAOT. Everything is compiled ahead of time, so the
+app starts in well under a second instead of several: measured to first window, 0.7 s
+against 5.0 s for the trimmed JIT build, with the rest of the time spread across Avalonia
+initialisation, XAML loading and first layout rather than any single slow call. The
+uncompressed output is larger (60 MB against 28 MB), but Velopack compresses the payload, so
+the download grows only from 33.4 MB to 35.0 MB.
+
+AOT and trimming fail silently when a reflection path loses its metadata: a trimmed build
+once stopped writing the settings file while otherwise behaving normally. The Windows
+publish step therefore fails on any IL warning and on an output that is unexpectedly large,
+and `ci.yml` runs the same check on every pull request so a regression is caught long before
+a tag. macOS and Linux are still published untrimmed.
 
 ## Local packaging
 

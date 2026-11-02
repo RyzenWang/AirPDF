@@ -58,13 +58,14 @@
   </ItemGroup>
 
   <!--
-    Keep two dependencies whole when trimming. Neither is annotated for trimming, so the
-    analyzer cannot tell whether their internals reflect over their own types; rooting them
-    costs nothing measurable (the trimmed single-file is 27.69 MB either way) and removes the
-    guesswork. Ignored when trimming is off.
+    Keep PdfPig whole when trimming: it is not annotated for trimming, so the analyzer cannot
+    tell whether its internals reflect over their own types, and rooting it costs little.
+    Velopack is deliberately NOT rooted. Rooting it made the AOT compiler compile its COM
+    shortcut class, which reports "will always throw" because its IL cannot be compiled;
+    without the root that code is unreachable and trimmed away, the warning disappears, and
+    the AOT binary is 1.1 MB smaller. Ignored when trimming is off.
   -->
   <ItemGroup>
-    <TrimmerRootAssembly Include="Velopack" />
     <TrimmerRootAssembly Include="UglyToad.PdfPig" />
   </ItemGroup>
   <ItemGroup>

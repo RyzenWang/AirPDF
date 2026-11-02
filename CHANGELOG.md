@@ -6,6 +6,14 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- The Windows build is published with NativeAOT. Starting the reader no longer compiles
+  anything, which took the time to first window from about 5 s to 0.7 s; the download grows
+  from 33.4 MB to 35.0 MB because Velopack compresses the payload. The publish step and
+  every pull request fail on any AOT or trimming warning, since either can remove a
+  reflection path that only breaks at runtime.
+
 ## [0.3.0] - 2026-11-02
 
 Rotated pages work end to end, and the Windows download halves.
