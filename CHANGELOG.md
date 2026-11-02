@@ -6,14 +6,18 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-02
+
+Every platform is now compiled ahead of time.
+
 ### Changed
 
-- The Linux and macOS builds are published with NativeAOT too, so every platform starts as
-  fast as Windows. The Linux runner installs `clang` and `zlib1g-dev` for the native link;
-  macOS uses the Xcode toolchain already on the runner. The release jobs and every pull
-  request fail on any AOT warning, per platform, since Windows says nothing about Linux or
-  macOS.
-
+- The Linux and macOS builds are published with NativeAOT too, so all three platforms start
+  in well under a second instead of several. The Linux runner installs `clang` and
+  `zlib1g-dev` for the native link; macOS uses the Xcode toolchain already on the runner.
+- The release jobs and every pull request now fail on any AOT warning for each platform
+  separately, because Windows says nothing about Linux or macOS: they have different
+  toolchains and different native assets.
 ## [0.3.1] - 2026-11-02
 
 The Windows build is compiled ahead of time, and starts in well under a second.
