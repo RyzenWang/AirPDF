@@ -414,6 +414,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # A checkout is required before the tag message can be read: this job used to start with
+      # download-artifact and had no .git directory at all.
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download artifacts
         uses: actions/download-artifact@v4
         with:
