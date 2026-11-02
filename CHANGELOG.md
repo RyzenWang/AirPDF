@@ -6,18 +6,6 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
-## [0.3.3] - 2026-11-02
-
-Fixes the Linux archive refusing to start on Ubuntu 22.04.
-
-### Fixed
-
-- The Linux build no longer demands `GLIBC_2.38`. NativeAOT links against the build machine's
-  glibc, and building on `ubuntu-latest` (24.04) produced a binary that died on 22.04 with
-  "version `GLIBC_2.38' not found". The Linux jobs are pinned to `ubuntu-22.04` (glibc 2.35),
-  and both workflows read the required symbol version off the produced binary and fail if it
-  creeps above 2.35, since the failure is invisible until somebody runs it on an older
-  distribution. This covers Ubuntu 22.04+ and Debian 12+.
 ## [0.3.2] - 2026-11-02
 
 Every platform is now compiled ahead of time.
@@ -30,6 +18,16 @@ Every platform is now compiled ahead of time.
 - The release jobs and every pull request now fail on any AOT warning for each platform
   separately, because Windows says nothing about Linux or macOS: they have different
   toolchains and different native assets.
+
+### Fixed
+
+- The Linux build no longer demands `GLIBC_2.38`. NativeAOT links against the build machine's
+  glibc, and building on `ubuntu-latest` (24.04) produced a binary that died on 22.04 with
+  "version `GLIBC_2.38' not found". The Linux jobs are pinned to `ubuntu-22.04` (glibc 2.35),
+  and both workflows read the required symbol version off the produced binary and fail if it
+  creeps above 2.35, since the failure is invisible until somebody runs it on an older
+  distribution. Measured on the shipped binary: it needs at most `GLIBC_2.34`, which covers
+  Ubuntu 22.04+, Debian 12+, and RHEL 9+.
 ## [0.3.1] - 2026-11-02
 
 The Windows build is compiled ahead of time, and starts in well under a second.
