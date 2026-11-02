@@ -1,4 +1,4 @@
-# MSIX packaging
+﻿# MSIX packaging
 
 Proof of concept for shipping AirPDF through the Microsoft Store as an MSIX
 package. Nothing here is wired into `.github/workflows/release.yml`; the Velopack
@@ -32,7 +32,7 @@ generates the logo assets from `src/AirPdf.App/Assets/airpdf.png`, expands
 the parts Microsoft certifies.
 
 `makeappx` is resolved from an installed Windows SDK, or downloaded on demand
-from the `Microsoft.Windows.SDK.BuildTools` NuGet package — no elevation and no
+from the `Microsoft.Windows.SDK.BuildTools` NuGet package 鈥?no elevation and no
 SDK install needed.
 
 Sign with a certificate whose subject matches the manifest `Publisher`:
@@ -46,7 +46,7 @@ Use `-SkipPublish` to repack an existing `artifacts/msix/app` folder.
 
 ## What the manifest declares
 
-- `rescap:runFullTrust` — a PDF reader needs unconstrained file system access to
+- `rescap:runFullTrust` 鈥?a PDF reader needs unconstrained file system access to
   the documents the user opens.
 - `.pdf` file type association, so Windows can offer AirPDF as a handler. Windows
   always prompts before changing the default; the manifest cannot claim it.
@@ -59,7 +59,8 @@ The app must never write beside its executable. AirPDF keeps `settings.json` and
 
 - Package builds and passes every structural check the script asserts.
 - The folder-published app runs and opens a PDF.
-- Signing with a test certificate produces a valid signature block.
+- Signing with a test certificate produces a signature that `signtool verify /pa` accepts once the certificate is trusted.
+- Sideloading needs the root certificate in `LocalMachine`, so installing locally requires an elevated shell; the `MSIX check` workflow does it on a runner.
 
 ## Verified on a runner
 
@@ -82,3 +83,4 @@ the app, and uninstalls.
 - **AOT.** Store packaging uses a folder publish. The NativeAOT build is still
   used for the Velopack channel; whether to switch the Store channel to AOT is a
   separate decision.
+
