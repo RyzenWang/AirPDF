@@ -363,14 +363,31 @@ jobs:
         with:
           path: artifacts
 
+      # The user-facing summary is written into the annotated tag, so read it back and use it
+      # as the release body. Leaving the body empty does not do this: v0.3.0 and v0.3.1 both
+      # published with an empty body, and generate_release_notes reduced v0.3.0 to a compare
+      # link.
+      - name: Read the tag message
+        id: notes
+        shell: bash
+        run: |
+          git fetch --force --depth=1 origin "+refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          message=$(git tag -l --format='%(contents)' "${GITHUB_REF_NAME}")
+          if [ -z "$message" ]; then
+            echo "::warning::The tag has no message; the release body will be empty."
+          fi
+          {
+            echo 'body<<RELEASE_NOTES_EOF'
+            echo "$message"
+            echo 'RELEASE_NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           files: |
             artifacts/**/AirPDF-*
             artifacts/**/releases.*.json
-          # No generate_release_notes and no body: the action uses the annotated tag message,
-          # which is where the user-facing summary is written. Auto-generated notes reduced
-          # v0.3.0 to a single compare link.
+          body: ${{ steps.notes.outputs.body }}
           draft: false
           prerelease: ${{ contains(github.ref_name, '-preview') }}

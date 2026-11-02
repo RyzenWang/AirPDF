@@ -157,6 +157,11 @@ To test updates end to end:
 - creates a GitHub Release with all installer, portable, full-package, and
   `releases.*.json` assets.
 
+The release body is the annotated tag message, read back by the workflow. Write the
+user-facing summary into the tag (`git tag -a v0.3.1 -F notes.txt`), not into the release
+page by hand: leaving the body to be generated produced an empty page for v0.3.1 and only a
+compare link for v0.3.0.
+
 The workflow does not run on pull requests. Use a temporary tag on a fork or a
 manual test workflow if you need to validate packaging changes without
 publishing a real release.
