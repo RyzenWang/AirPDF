@@ -30,6 +30,16 @@ once stopped writing the settings file while otherwise behaving normally. The Wi
 publish step therefore fails on any IL warning and on an output that is unexpectedly large,
 and `ci.yml` runs the same check on every pull request so a regression is caught long before
 a tag. macOS and Linux are still published untrimmed.
+The AOT build's update path is verified rather than assumed. Installed from the Setup
+package, the app reports `IsInstalled`, reads the release feed and compares versions; against
+a local feed advertising a newer package it downloads and unpacks it. This is worth checking
+by hand because an AOT break here is silent: the update check catches its own exceptions, so
+users would simply never be offered an update.
+
+Note that Velopack is deliberately not rooted for trimming. Rooting it made the AOT compiler
+compile a COM shortcut class whose IL cannot be compiled, which warned that it "will always
+throw"; the app never reaches that code, so leaving it trimmable removes the warning and
+1.1 MB.
 
 ## Local packaging
 
