@@ -6,32 +6,31 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-02
+
+Rotated pages work end to end, and the Windows download halves.
+
 ### Changed
 
 - The Windows build is trimmed, taking the download from 53 MB to 28 MB. The release
   step fails on any IL warning rather than shipping a build whose reflection paths were
   removed; the same check runs on every pull request. macOS and Linux are unchanged for
   now.
-- The text layer is read through PDFium's text API instead of PdfPig, using the
-  document handle pages are already rendered from. PdfPig applies `/Rotate` to its
-  letters before grouping them, so rotated pages came back as single letters or
-  reversed text; PDFium reports characters in reading order with boxes in unrotated
-  page space. PdfPig still supplies metadata and the outline.
+- The text layer is read through PDFium's text API instead of PdfPig, using the document
+  handle pages are already rendered from. PdfPig applies `/Rotate` to its letters before
+  grouping them, so rotated pages came back as single letters or reversed text; PDFium
+  reports characters in reading order with boxes in unrotated page space. PdfPig still
+  supplies metadata and the outline, and CJK text keeps its own per-character selection
+  units because the search text no longer invents spaces between them.
 
 ### Fixed
 
-- Rotated pages are fully supported: links, search highlights, and text selection.
-  Both halves were geometry plus ordering — the document's page box already accounts
-  for `/Rotate` while content rectangles do not, so they are mapped through a shared
-  `PageGeometry` transform, and the text layer supplies characters in reading order.
-  Verified by rendering rotated fixtures and checking that the reported rectangles
-  cover the ink that was drawn.
-- Link annotations are now clickable on pages with a non-zero `/Rotate` value. PDFium
-  reports annotation rectangles in the page's own unrotated space while the page box
-  already accounts for the rotation, so the rectangle is mapped through a shared
-  `PageGeometry` transform. Verified by rendering rotated fixtures and checking that
-  the reported rectangle covers the block that was drawn.
-
+- Rotated pages are fully supported: links, search highlights, and text selection. Two
+  halves were broken. Geometry: the document's page box already accounts for `/Rotate`
+  while content rectangles do not, so they are mapped through a shared `PageGeometry`
+  transform. Ordering: the text layer now supplies characters in reading order. Verified
+  by rendering rotated fixtures and checking that every reported rectangle covers the ink
+  that was drawn, rather than comparing a transform against itself.
 ## [0.2.1] - 2026-10-31
 
 A packaging release. The application binaries are unchanged from 0.2.0; this
