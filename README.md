@@ -60,7 +60,7 @@ small .NET application with a hand-built Avalonia interface.
 - **Multiple windows** (`Ctrl+N`, or open the current file in a new window) sharing
   one settings store, theme, and language.
 - **Tabs** — `Ctrl+T` adds a document to the same window, and each tab keeps its own
-- **NativeAOT** — the Windows and Linux releases are compiled ahead of time, so the
+- **NativeAOT** — every release is compiled ahead of time, so the
   window appears in well under a second instead of several.
   zoom, scroll position, search results, and reading position.
 - **Back navigation** with `Alt+Left` after any outline, thumbnail, search, or
@@ -87,7 +87,7 @@ small .NET application with a hand-built Avalonia interface.
 | Raster transport | SkiaSharp | Fast, predictable pixel handling. |
 | Text layer | PDFium (`FPDFText_*`) | Characters arrive in reading order from the engine that renders the page, so search, selection, and rotated pages agree with what is drawn. PdfPig supplies metadata and the outline. |
 | MVVM | CommunityToolkit.Mvvm | Small, source-generated, no framework lock-in. |
-| Compilation | NativeAOT (Windows, Linux) | No JIT at startup: measured 0.7 s to first window against 5.0 s on Windows. |
+| Compilation | NativeAOT (Windows, Linux, macOS) | No JIT at startup: measured 0.7 s to first window against 5.0 s on Windows. |
 
 ## Requirements
 
@@ -149,7 +149,7 @@ dotnet publish src/AirPdf.App -c Release -r win-x64 \
   -p:EnableCompressionInSingleFile=true
 ```
 
-NativeAOT, which is what the Windows and Linux releases ship:
+NativeAOT, which is what every release ships:
 
 ```bash
 dotnet publish src/AirPdf.App -c Release -r win-x64 `
@@ -284,7 +284,7 @@ docs/                   Screenshots and architecture notes
 - [x] Tabs
 - [ ] Additional UI languages (English and Simplified Chinese are available)
 - [ ] Configure production Windows signing and Apple notarization credentials
-- [x] NativeAOT (Windows and Linux; macOS still ships a JIT build)
+- [x] NativeAOT (Windows, Linux, and macOS)
 - [ ] UI/end-to-end coverage for zoom, search, language switching, and updates
 
 Contributions and issue reports are welcome. If you want to pick up a roadmap

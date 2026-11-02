@@ -224,18 +224,43 @@ jobs:
 
           echo "MacOS: signing and notarizing with the configured certificates." >> "$GITHUB_STEP_SUMMARY"
 
+      # Same gate as Windows and Linux: an AOT build that lost a reflection path still starts
+      # and then misbehaves at run time. Xcode's clang comes with the runner image.
       - name: Publish
         shell: bash
-        run: >
-          dotnet publish src/AirPdf.App/AirPdf.App.csproj
-          -c Release
-          -r ${{ matrix.rid }}
-          --self-contained true
-          -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=true
-          -p:Version=${{ steps.version.outputs.value }}
-          -o publish/${{ matrix.rid }}
+        run: |
+          set -o pipefail
+          log=$(dotnet publish src/AirPdf.App/AirPdf.App.csproj \
+            -c Release \
+            -r ${{ matrix.rid }} \
+            -p:PublishAot=true \
+            -p:StripSymbols=true \
+            -p:Version=${{ steps.version.outputs.value }} \
+            -o publish/${{ matrix.rid }} 2>&1) || {
+            echo "$log"
+            echo "::error::AOT publish failed"
+            exit 1
+          }
+          echo "$log"
+
+          if echo "$log" | grep -Eq 'warning IL[0-9]{4}'; then
+            echo "$log" | grep -E 'warning IL[0-9]{4}'
+            echo "::error::AOT produced IL warnings; fix them before releasing."
+            exit 1
+          fi
+
+          test -f "publish/${{ matrix.rid }}/AirPdf" || {
+            echo "::error::The AOT publish output has no AirPdf binary."
+            exit 1
+          }
+
+          mb=$(du -sm "publish/${{ matrix.rid }}" | cut -f1)
+          if [ "$mb" -gt 90 ]; then
+            echo "::error::AOT output is ${mb} MB, far above the expected ~60 MB; AOT may not be applied."
+            exit 1
+          fi
+
+          echo "macOS ${{ matrix.arch }}: NativeAOT build is ${mb} MB over $(find "publish/${{ matrix.rid }}" -type f | wc -l) files, no IL warnings." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install Velopack CLI
         shell: bash

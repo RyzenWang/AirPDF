@@ -113,3 +113,41 @@ jobs:
           fi
 
           echo "AOT Linux build: ${mb} MB over $(find publish/aot-check-linux -type f | wc -l) files, no IL warnings." >> "$GITHUB_STEP_SUMMARY"
+
+      # macOS links with Xcode's clang, which the runner image already provides, and builds
+      # both architectures at release time; the arm64 runner checks the arm64 build.
+      - name: Check AOT build (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -o pipefail
+          log=$(dotnet publish src/AirPdf.App/AirPdf.App.csproj \
+            -c Release \
+            -r osx-arm64 \
+            -p:PublishAot=true \
+            -p:StripSymbols=true \
+            -o publish/aot-check-osx 2>&1) || {
+            echo "$log"
+            echo "::error::AOT publish failed"
+            exit 1
+          }
+          echo "$log"
+
+          if echo "$log" | grep -Eq 'warning IL[0-9]{4}'; then
+            echo "$log" | grep -E 'warning IL[0-9]{4}'
+            echo "::error::AOT produced IL warnings: a reflection path came back."
+            exit 1
+          fi
+
+          test -f publish/aot-check-osx/AirPdf || {
+            echo "::error::The AOT publish output has no AirPdf binary."
+            exit 1
+          }
+
+          mb=$(du -sm publish/aot-check-osx | cut -f1)
+          if [ "$mb" -gt 90 ]; then
+            echo "::error::AOT output is ${mb} MB, far above the expected ~60 MB."
+            exit 1
+          fi
+
+          echo "AOT macOS arm64 build: ${mb} MB over $(find publish/aot-check-osx -type f | wc -l) files, no IL warnings." >> "$GITHUB_STEP_SUMMARY"
