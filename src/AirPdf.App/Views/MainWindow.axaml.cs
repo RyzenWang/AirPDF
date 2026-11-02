@@ -94,15 +94,19 @@ public partial class MainWindow : Window
         Closed += OnClosed;
     }
 
-    private MainWindowViewModel CreateTabViewModel() =>
-        new(
+    private MainWindowViewModel CreateTabViewModel()
+    {
+        var documents = new PdfDocumentService();
+
+        return new MainWindowViewModel(
             _services,
-            new PdfDocumentService(),
-            new PdfSearchService(),
-            new PdfTextService(),
+            documents,
+            new PdfSearchService(documents),
+            new PdfTextService(documents),
             new DialogService(() => this, _services.Localization),
             _windows,
             _tabs);
+    }
 
     private void OnTabsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {

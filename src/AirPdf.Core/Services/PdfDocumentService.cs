@@ -116,6 +116,39 @@ public sealed class PdfDocumentService : IDisposable
             cancellationToken);
     }
 
+    /// <summary>Page count of the open document, or 0 when nothing is open.</summary>
+    public int OpenPageCount => _session?.PageCount ?? 0;
+
+    /// <summary>Reads one page's text layer through the resident document handle.</summary>
+    public Task<PdfTextPage> GetTextPageAsync(int pageNumber, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var session = _session;
+                    if (session is null || pageNumber > session.PageCount)
+                    {
+                        return new PdfTextPage { PageNumber = pageNumber, Words = [] };
+                    }
+
+                    return session.GetTextPage(pageNumber);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
     /// <summary>Releases the resident PDFium handle for the open document.</summary>
     public void CloseDocument()
     {

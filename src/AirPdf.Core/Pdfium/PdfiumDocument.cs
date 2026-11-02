@@ -202,8 +202,8 @@ public sealed class PdfiumDocument : IDisposable
     /// Returns the link annotations of one page, normalized to the page.
     /// </summary>
     /// <remarks>
-    /// Rotated pages are skipped: PDFium reports annotation bounds in unrotated page space,
-    /// and the transform is the same one search highlights and text selection already lack.
+    /// Rotated pages are handled: annotation bounds arrive in unrotated page space and are
+    /// mapped with <see cref="PageGeometry"/>.
     /// Links never throw — a malformed annotation dictionary must not break a page.
     /// </remarks>
     public IReadOnlyList<PdfLink> GetLinks(int pageNumber)
@@ -218,17 +218,18 @@ public sealed class PdfiumDocument : IDisposable
 
         try
         {
-            if (PdfiumNative.GetPageRotation(page) % 4 != 0)
+            // PDFium already applies /Rotate to the page box it reports, while link
+            // rectangles come back in the page's own unrotated space, so the box has to be
+            // turned back before the transform is applied.
+            var box = ReadUnrotatedBox(page);
+            if (box is not { } pageBox)
             {
                 return [];
             }
 
-            var width = PdfiumNative.GetPageWidthF(page);
-            var height = PdfiumNative.GetPageHeightF(page);
-            if (width <= 0 || height <= 0)
-            {
-                return [];
-            }
+            var pageWidth = pageBox.Width;
+            var pageHeight = pageBox.Height;
+            var rotation = pageBox.Rotation;
 
             var links = new List<PdfLink>();
             var position = 0;
@@ -240,17 +241,16 @@ public sealed class PdfiumDocument : IDisposable
                     continue;
                 }
 
-                var left = Math.Min(rect.Left, rect.Right);
-                var right = Math.Max(rect.Left, rect.Right);
-                var bottom = Math.Min(rect.Top, rect.Bottom);
-                var top = Math.Max(rect.Top, rect.Bottom);
+                var bounds = PageGeometry.ToDisplayRect(
+                    rect.Left,
+                    rect.Top,
+                    rect.Right,
+                    rect.Bottom,
+                    pageWidth,
+                    pageHeight,
+                    rotation);
 
-                var x = Math.Clamp(left / width, 0, 1);
-                var w = Math.Clamp((right - left) / width, 0, 1 - x);
-                var y = Math.Clamp((height - top) / height, 0, 1);
-                var h = Math.Clamp((top - bottom) / height, 0, 1 - y);
-
-                if (w <= 0.0001 || h <= 0.0001)
+                if (bounds.Width <= 0.0001 || bounds.Height <= 0.0001)
                 {
                     continue;
                 }
@@ -259,7 +259,7 @@ public sealed class PdfiumDocument : IDisposable
                 {
                     links.Add(new PdfLink
                     {
-                        Bounds = new PdfSearchRect(x, y, w, h),
+                        Bounds = bounds,
                         Kind = kind,
                         Uri = uri,
                         PageNumber = targetPage
@@ -279,24 +279,106 @@ public sealed class PdfiumDocument : IDisposable
         }
     }
 
-    public void Dispose()
+    /// <summary>
+    /// The page's own box (before <c>/Rotate</c>) plus the rotation in degrees. PDFium
+    /// reports the page box already rotated, so quarter turns are swapped back here; callers
+    /// then map content-space rectangles with <see cref="PageGeometry"/>.
+    /// </summary>
+    private (double Width, double Height, int Rotation)? ReadUnrotatedBox(IntPtr page)
     {
-        if (_disposed)
+        var quarters = ((PdfiumNative.GetPageRotation(page) % 4) + 4) % 4;
+
+        var displayWidth = PdfiumNative.GetPageWidthF(page);
+        var displayHeight = PdfiumNative.GetPageHeightF(page);
+        if (displayWidth <= 0 || displayHeight <= 0)
         {
-            return;
+            return null;
         }
 
-        _disposed = true;
+        return quarters is 1 or 3
+            ? (displayHeight, displayWidth, quarters * 90)
+            : (displayWidth, displayHeight, quarters * 90);
+    }
 
-        if (_handle != IntPtr.Zero)
+    /// <summary>
+    /// Reads the page's text layer through PDFium: characters in reading order with boxes in
+    /// unrotated page space, grouped into words and normalized for display.
+    /// </summary>
+    public PdfTextPage GetTextPage(int pageNumber)
+    {
+        ThrowIfDisposed();
+
+        var page = PdfiumNative.LoadPage(_handle, pageNumber - 1);
+        if (page == IntPtr.Zero)
         {
-            PdfiumNative.CloseDocument(_handle);
-            _handle = IntPtr.Zero;
+            return new PdfTextPage { PageNumber = pageNumber, Words = [] };
         }
 
-        _stream.Dispose();
-        GC.KeepAlive(_readBlock);
-        GC.KeepAlive(_fileAccess);
+        var textPage = IntPtr.Zero;
+        try
+        {
+            if (ReadUnrotatedBox(page) is not { } box)
+            {
+                return new PdfTextPage { PageNumber = pageNumber, Words = [] };
+            }
+
+            textPage = PdfiumText.LoadPage(page);
+            if (textPage == IntPtr.Zero)
+            {
+                return new PdfTextPage { PageNumber = pageNumber, Words = [] };
+            }
+
+            var count = PdfiumText.CountChars(textPage);
+            if (count <= 0)
+            {
+                return new PdfTextPage { PageNumber = pageNumber, Words = [] };
+            }
+
+            var chars = new List<PdfTextChar>(count);
+            for (var index = 0; index < count; index++)
+            {
+                var code = PdfiumText.GetUnicode(textPage, index);
+                if (code == 0)
+                {
+                    continue;
+                }
+
+                var text = ToText(code);
+                if (text is null)
+                {
+                    continue;
+                }
+
+                if (PdfiumText.GetCharBox(textPage, index, out var left, out var right, out var bottom, out var top) == 0)
+                {
+                    continue;
+                }
+
+                chars.Add(new PdfTextChar(
+                    text,
+                    Math.Min(left, right),
+                    Math.Min(bottom, top),
+                    Math.Max(left, right),
+                    Math.Max(bottom, top),
+                    PdfiumText.GetFontSize(textPage, index)));
+            }
+
+            return PdfTextPageBuilder.Build(pageNumber, chars, box.Width, box.Height, box.Rotation);
+        }
+        catch
+        {
+            // A malformed content stream must not take a page down.
+            return new PdfTextPage { PageNumber = pageNumber, Words = [] };
+        }
+        finally
+        {
+            if (textPage != IntPtr.Zero)
+            {
+                PdfiumText.ClosePage(textPage);
+            }
+
+            PdfiumNative.ClosePage(page);
+        }
     }
 
     private bool TryReadTarget(IntPtr link, out PdfLinkKind kind, out string? uri, out int pageNumber)
@@ -374,6 +456,37 @@ public sealed class PdfiumDocument : IDisposable
         {
             Marshal.FreeHGlobal(buffer);
         }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        if (_handle != IntPtr.Zero)
+        {
+            PdfiumNative.CloseDocument(_handle);
+            _handle = IntPtr.Zero;
+        }
+
+        _stream.Dispose();
+        GC.KeepAlive(_readBlock);
+        GC.KeepAlive(_fileAccess);
+    }
+
+    private static string? ToText(uint code)
+    {
+        // PDFium hands back UTF-16 code units; a lone surrogate cannot be encoded alone.
+        if (code is >= 0xD800 and <= 0xDFFF)
+        {
+            return null;
+        }
+
+        return char.ConvertFromUtf32((int)code);
     }
 
     private static int ReadBlock(FileStream stream, CULong position, IntPtr buffer, CULong size)

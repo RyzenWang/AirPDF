@@ -29,8 +29,8 @@ public sealed class PdfDocumentInfo
 /// <remarks>
 /// Page rotation is deliberately not carried here. Reading it costs a full page-dictionary
 /// parse per page, which dominated open time on long documents while nothing consumed the
-/// value; the services that do need it (<c>PdfSearchService</c>, <c>PdfTextService</c>)
-/// read it from PdfPig for the individual pages they touch.
+/// value; the text layer reads it from PDFium per page, through
+/// <c>PdfiumDocument.GetTextPage</c>.
 /// </remarks>
 public sealed record PdfPageInfo(int Number, double Width, double Height)
 {

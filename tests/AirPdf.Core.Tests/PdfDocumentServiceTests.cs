@@ -105,7 +105,9 @@ public sealed class PdfDocumentServiceTests
     [Fact]
     public async Task SearchAsync_FindsTextWithHighlightGeometry()
     {
-        var service = new PdfSearchService();
+        using var documents = new PdfDocumentService();
+        await documents.OpenAsync(SamplePath);
+        var service = new PdfSearchService(documents);
 
         var hits = await service.SearchAsync(SamplePath, "AirPDF");
 
@@ -118,7 +120,9 @@ public sealed class PdfDocumentServiceTests
     [Fact]
     public async Task SearchAsync_HandlesNonAsciiText()
     {
-        var service = new PdfSearchService();
+        using var documents = new PdfDocumentService();
+        await documents.OpenAsync(SamplePath);
+        var service = new PdfSearchService(documents);
 
         var hits = await service.SearchAsync(SamplePath, "轻量");
 
@@ -129,7 +133,9 @@ public sealed class PdfDocumentServiceTests
     [Fact]
     public async Task ExtractTextAsync_ReturnsWordGeometry()
     {
-        var service = new PdfTextService();
+        using var documents = new PdfDocumentService();
+        await documents.OpenAsync(SamplePath);
+        var service = new PdfTextService(documents);
         var pages = new List<PdfTextPage>();
         var progress = new InlineProgress<PdfTextPage>(pages.Add);
 
@@ -152,7 +158,9 @@ public sealed class PdfDocumentServiceTests
     [Fact]
     public async Task ExtractPagesAsync_LoadsOnlyRequestedPages()
     {
-        var service = new PdfTextService();
+        using var documents = new PdfDocumentService();
+        await documents.OpenAsync(SamplePath);
+        var service = new PdfTextService(documents);
 
         var pages = await service.ExtractPagesAsync(SamplePath, new[] { 7 }, password: null);
 

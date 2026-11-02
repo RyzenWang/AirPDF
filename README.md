@@ -249,12 +249,9 @@ docs/                   Screenshots and architecture notes
 ## Limitations
 
 - Text selection is word-granular rather than character-granular.
-- Text selection is unavailable on pages with a non-zero `/Rotate` value.
 - No annotations, form filling, printing, or PDF editing.
-- Search highlights are hidden on pages with a non-zero `/Rotate` value; the
-  results themselves still work.
-- Links are not clickable on pages with a non-zero `/Rotate` value, and only
-  `http`, `https`, and `mailto` targets are followed.
+- Only `http`, `https`, and `mailto` link targets are followed; `Launch` and
+  remote-`GoTo` actions are ignored so a document cannot start a program.
 - One document per tab; `Ctrl+W` closes the tab (the last one closes its document and
   leaves the window on the welcome screen).
 - Release binaries are signed only when the maintainer signing secrets are
@@ -266,7 +263,7 @@ docs/                   Screenshots and architecture notes
 - [x] PDF hyperlinks and internal link navigation
 - [ ] Native printing and "Save a copy"
 - [ ] Per-document bookmarks
-- [ ] Rotated-page search highlights
+- [x] Rotated pages (links, search highlights, text selection)
 - [ ] Annotations (highlight, ink, notes)
 - [x] Multiple windows
 - [x] Tabs

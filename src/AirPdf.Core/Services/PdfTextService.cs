@@ -1,30 +1,43 @@
-using System.Text.RegularExpressions;
 using AirPdf.Core.Models;
-using UglyToad.PdfPig;
 
 namespace AirPdf.Core.Services;
 
 /// <summary>
-/// Extracts word-level text geometry for selection. This is intentionally
-/// separate from search: search can stop at a result cap, while selection
-/// needs a stable, ordered word index for the pages being read.
+/// Reads the text layer through PDFium's text API, using the same document handle the pages
+/// are rendered from.
 /// </summary>
+/// <remarks>
+/// This replaced PdfPig for the text layer. PdfPig applies <c>/Rotate</c> to its letters
+/// before grouping them, so a quarter turn came back as single-letter words and a half turn
+/// as reversed text; PDFium reports characters in reading order with boxes in unrotated page
+/// space, which <see cref="Pdfium.PdfTextPageBuilder"/> maps and groups.
+/// </remarks>
 public sealed class PdfTextService
 {
-    private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
+    private readonly PdfDocumentService _documents;
 
-    public Task ExtractAsync(
+    public PdfTextService(PdfDocumentService documents) => _documents = documents;
+
+    /// <summary>Walks the whole document, reporting each page as it is read.</summary>
+    public async Task ExtractAsync(
         string filePath,
         string? password,
         IProgress<PdfTextPage>? progress,
-        CancellationToken cancellationToken = default) =>
-        Task.Run(() => ExtractCore(filePath, password, progress, cancellationToken), cancellationToken);
+        CancellationToken cancellationToken = default)
+    {
+        var pageCount = _documents.OpenPageCount;
 
-    /// <summary>
-    /// Extracts only the requested pages, opening the document once. Used by
-    /// the reader to load text lazily as pages become visible.
-    /// </summary>
-    public Task<IReadOnlyList<PdfTextPage>> ExtractPagesAsync(
+        for (var pageNumber = 1; pageNumber <= pageCount; pageNumber++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var page = await _documents.GetTextPageAsync(pageNumber, cancellationToken).ConfigureAwait(false);
+            progress?.Report(page);
+        }
+    }
+
+    /// <summary>Extracts only the requested pages.</summary>
+    public async Task<IReadOnlyList<PdfTextPage>> ExtractPagesAsync(
         string filePath,
         IReadOnlyCollection<int> pageNumbers,
         string? password,
@@ -40,165 +53,16 @@ public sealed class PdfTextService
 
         if (normalized.Length == 0)
         {
-            return Task.FromResult<IReadOnlyList<PdfTextPage>>([]);
+            return [];
         }
 
-        return Task.Run(
-            () => ExtractPagesCore(filePath, normalized, password, cancellationToken),
-            cancellationToken);
-    }
-
-    private static void ExtractCore(
-        string filePath,
-        string? password,
-        IProgress<PdfTextPage>? progress,
-        CancellationToken cancellationToken)
-    {
-        try
+        var results = new List<PdfTextPage>(normalized.Length);
+        foreach (var pageNumber in normalized)
         {
-            using var document = PdfDocument.Open(filePath, new ParsingOptions
-            {
-                Password = password!,
-                UseLenientParsing = true,
-                SkipMissingFonts = true
-            });
-
-            foreach (var page in document.GetPages())
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                progress?.Report(ExtractPageSafe(page));
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new PdfDocumentException(
-                PdfFailure.Unknown,
-                "The text layer could not be read.",
-                ex);
-        }
-    }
-
-    private static IReadOnlyList<PdfTextPage> ExtractPagesCore(
-        string filePath,
-        IReadOnlyList<int> pageNumbers,
-        string? password,
-        CancellationToken cancellationToken)
-    {
-        var results = new List<PdfTextPage>(pageNumbers.Count);
-
-        try
-        {
-            using var document = PdfDocument.Open(filePath, new ParsingOptions
-            {
-                Password = password!,
-                UseLenientParsing = true,
-                SkipMissingFonts = true
-            });
-
-            foreach (var pageNumber in pageNumbers)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                if (pageNumber > document.NumberOfPages)
-                {
-                    continue;
-                }
-
-                try
-                {
-                    results.Add(ExtractPageSafe(document.GetPage(pageNumber)));
-                }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch
-                {
-                    results.Add(EmptyPage(pageNumber));
-                }
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            throw new PdfDocumentException(
-                PdfFailure.Unknown,
-                "The text layer could not be read.",
-                ex);
+            cancellationToken.ThrowIfCancellationRequested();
+            results.Add(await _documents.GetTextPageAsync(pageNumber, cancellationToken).ConfigureAwait(false));
         }
 
         return results;
     }
-
-    private static PdfTextPage ExtractPageSafe(UglyToad.PdfPig.Content.Page page)
-    {
-        try
-        {
-            return ExtractPage(page);
-        }
-        catch
-        {
-            return EmptyPage(page.Number);
-        }
-    }
-
-    private static PdfTextPage EmptyPage(int pageNumber) => new()
-    {
-        PageNumber = pageNumber,
-        Words = []
-    };
-
-    private static PdfTextPage ExtractPage(UglyToad.PdfPig.Content.Page page)
-    {
-        var pageWidth = page.Width;
-        var pageHeight = page.Height;
-
-        if (pageWidth <= 0 || pageHeight <= 0 || page.Rotation.Value % 360 != 0)
-        {
-            return EmptyPage(page.Number);
-        }
-
-        var words = new List<PdfTextWord>();
-        foreach (var word in page.GetWords())
-        {
-            var text = Normalize(word.Text);
-            if (text.Length == 0)
-            {
-                continue;
-            }
-
-            var box = word.BoundingBox;
-            var x = Math.Clamp(box.Left / pageWidth, 0, 1);
-            var y = Math.Clamp((pageHeight - box.Top) / pageHeight, 0, 1);
-            var width = Math.Clamp(box.Width / pageWidth, 0, 1 - x);
-            var height = Math.Clamp(box.Height / pageHeight, 0, 1 - y);
-
-            if (width <= 0.0001 || height <= 0.0001)
-            {
-                continue;
-            }
-
-            words.Add(new PdfTextWord
-            {
-                Index = words.Count,
-                Text = text,
-                Bounds = new PdfSearchRect(x, y, width, height)
-            });
-        }
-
-        return new PdfTextPage
-        {
-            PageNumber = page.Number,
-            Words = words
-        };
-    }
-
-    private static string Normalize(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? string.Empty : Whitespace.Replace(value, " ").Trim();
 }

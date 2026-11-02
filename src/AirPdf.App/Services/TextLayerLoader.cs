@@ -4,9 +4,9 @@ using AirPdf.Core.Services;
 namespace AirPdf.App.Services;
 
 /// <summary>
-/// Loads PdfPig text layers on demand. Opening a document no longer parses the
-/// whole text layer; pages are requested as they become visible or are needed
-/// for a selection, and pending requests are batched into one PdfPig open.
+/// Loads PDFium text layers on demand. Opening a document does not read the whole
+/// text layer; pages are requested as they become visible or are needed for a
+/// selection, through the resident document handle.
 /// </summary>
 public sealed class TextLayerLoader : IDisposable
 {

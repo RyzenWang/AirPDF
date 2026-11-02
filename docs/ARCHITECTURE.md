@@ -29,7 +29,7 @@ front end.
 
 `PdfSearchService`
 
-- Opens the text layer with PdfPig.
+- Opens the text layer with PDFium (`FPDFText_*`), the same handle pages render from.
 - Builds an ordered token stream per page and searches it case-insensitively.
 - Returns snippets and word rectangles normalized to the page (`0..1`, origin
   top-left).
@@ -53,7 +53,7 @@ front end.
   render generation. A page is rendered only while its view is attached to the
   visual tree; stale renders are discarded.
 - `ThumbnailViewModel` uses the same renderer at a fixed preview width.
-- `TextLayerLoader` extracts PdfPig word geometry lazily for the pages that are
+- `TextLayerLoader` extracts PDFium word geometry lazily for the pages that are
   visible or needed by a selection. Requests are batched and cancelled when the
   document closes.
 - `PdfPageList` is a `ListBox` with a custom template that exposes the internal
@@ -72,7 +72,7 @@ file
   ├─ PDFium (one document handle per open document) ──► SKBitmap ──► WriteableBitmap ──► Image
   │        (serialized)                                  (copy pixels, no PNG round-trip)
   │
-  └─ PdfPig ──► words + bounding boxes ──► normalized search rectangles
+  └─ PDFium ──► characters + boxes ──► words ──► normalized search rectangles
 ```
 
 ### Why a resident document handle?
@@ -93,7 +93,7 @@ PDFium has no managed, cross-platform Avalonia integration that is both free
 and maintained for this use case. Rasterizing pages into a virtualized list is
 simple, predictable, and fast enough for reading. The trade-off is that text
 selection and accessible text extraction from the visual layer are not
-available yet; search uses the separate PdfPig text layer.
+available yet; search and selection use the separate PDFium text layer.
 
 ### Render sizing
 
@@ -172,7 +172,7 @@ there — PDFium returns annotation bounds in unrotated page space.
 
 ## Text selection
 
-`PdfTextService` extracts ordered word geometry from PdfPig on demand. Each
+`PdfTextService` extracts ordered word geometry from PDFium on demand. Each
 `PdfTextPage` carries normalized word rectangles. Selection state is stored as
 `(page, word index)` pairs in `TextSelectionController`; dragging maps
 the pointer to a page through the realized `PdfPageView` controls and expands
@@ -243,7 +243,7 @@ The last tab is never removed: closing it closes its document, which is exactly 
 Icon-only buttons carry `AutomationProperties.Name` fed from the same localization
 catalog as their tooltips, and the page, thumbnail, outline, search-result, and
 recent-file lists expose names. The document text itself is a bitmap, so UI
-Automation cannot read it; the PdfPig text layer is the only source of readable
+Automation cannot read it; the PDFium text layer is the only source of readable
 text today.
 
 ## Command line

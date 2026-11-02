@@ -173,14 +173,19 @@ public sealed class WindowViewModelTests : IDisposable
         _services ??= new AppServices(_settingsDirectory);
         var services = _services;
 
-        _host = new WindowViewModel(() => new MainWindowViewModel(
+        _host = new WindowViewModel(() =>
+        {
+            var documents = new PdfDocumentService();
+
+            return new MainWindowViewModel(
             services,
-            new PdfDocumentService(),
-            new PdfSearchService(),
-            new PdfTextService(),
+            documents,
+            new PdfSearchService(documents),
+            new PdfTextService(documents),
             _dialog,
             new StubWindowService(),
-            _host));
+            _host);
+        });
 
         return _host;
     }

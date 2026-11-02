@@ -15,7 +15,7 @@ namespace AirPdf.Core.Pdfium;
 /// </remarks>
 internal static class PdfiumNative
 {
-    private const string Library = "pdfium";
+    internal const string Library = "pdfium";
 
     /// <summary><c>FPDF_ANNOT</c>: render annotations.</summary>
     internal const int RenderAnnot = 0x01;

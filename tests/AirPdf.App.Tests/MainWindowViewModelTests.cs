@@ -345,11 +345,12 @@ public sealed class MainWindowViewModelTests
 
         private MainWindowViewModel CreateViewModel()
         {
+            var documents = new PdfDocumentService();
             var viewModel = new MainWindowViewModel(
                 Services,
-                new PdfDocumentService(),
-                new PdfSearchService(),
-                new PdfTextService(),
+                documents,
+                new PdfSearchService(documents),
+                new PdfTextService(documents),
                 new StubDialogService(),
                 Windows);
 
