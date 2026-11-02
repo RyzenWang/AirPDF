@@ -18,18 +18,20 @@ For a tag such as `v0.2.0`, the workflow publishes:
 The `releases.*.json` files are required by the in-app updater. Portable and
 source builds do not self-update; install with the Windows Setup or macOS pkg
 to enable automatic updates.
-The Windows build is published with NativeAOT. Everything is compiled ahead of time, so the
-app starts in well under a second instead of several: measured to first window, 0.7 s
-against 5.0 s for the trimmed JIT build, with the rest of the time spread across Avalonia
-initialisation, XAML loading and first layout rather than any single slow call. The
-uncompressed output is larger (60 MB against 28 MB), but Velopack compresses the payload, so
-the download grows only from 33.4 MB to 35.0 MB.
+The Windows and Linux builds are published with NativeAOT. Everything is compiled ahead of
+time, so the app starts in well under a second instead of several: measured to first window
+on Windows, 0.7 s against 5.0 s for the trimmed JIT build, with the rest of the time spread
+across Avalonia initialisation, XAML loading and first layout rather than any single slow
+call. The Windows output is larger uncompressed (60 MB against 28 MB), but Velopack
+compresses the payload, so the installer grows only from 33.4 MB to 35.0 MB. Linux ships a
+tar.gz of the AOT output; macOS still builds JIT.
 
 AOT and trimming fail silently when a reflection path loses its metadata: a trimmed build
 once stopped writing the settings file while otherwise behaving normally. The Windows
 publish step therefore fails on any IL warning and on an output that is unexpectedly large,
-and `ci.yml` runs the same check on every pull request so a regression is caught long before
-a tag. macOS and Linux are still published untrimmed.
+and `ci.yml` runs the same check for both the Windows and Linux AOT builds on every pull
+request so a regression is caught long before a tag. The Linux runner installs `clang` and
+`zlib1g-dev` first, since NativeAOT links natively and the image does not ship them.
 The AOT build's update path is verified rather than assumed. Installed from the Setup
 package, the app reports `IsInstalled`, reads the release feed and compares versions; against
 a local feed advertising a newer package it downloads and unpacks it. This is worth checking

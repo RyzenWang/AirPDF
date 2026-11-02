@@ -69,3 +69,47 @@ jobs:
           if ($mb -gt 90) { throw ('AOT output is {0:N0} MB; that is far above the expected ~60 MB.' -f $mb) }
 
           ('AOT Windows build: {0:N1} MB over {1} files, no IL warnings.' -f $mb, (Get-ChildItem publish/aot-check -Recurse -File).Count) >> $env:GITHUB_STEP_SUMMARY
+
+      # Linux and macOS have their own native toolchains and their own native assets, so the
+      # Windows check says nothing about them. Linux ships an AOT build, so it gets checked
+      # here too; macOS still ships a JIT build and needs no check yet.
+      - name: Install AOT toolchain (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Check AOT build (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -o pipefail
+          log=$(dotnet publish src/AirPdf.App/AirPdf.App.csproj \
+            -c Release \
+            -r linux-x64 \
+            -p:PublishAot=true \
+            -p:StripSymbols=true \
+            -o publish/aot-check-linux 2>&1) || {
+            echo "$log"
+            echo "::error::AOT publish failed"
+            exit 1
+          }
+          echo "$log"
+
+          if echo "$log" | grep -Eq 'warning IL[0-9]{4}'; then
+            echo "$log" | grep -E 'warning IL[0-9]{4}'
+            echo "::error::AOT produced IL warnings: a reflection path came back."
+            exit 1
+          fi
+
+          test -f publish/aot-check-linux/AirPdf || {
+            echo "::error::The AOT publish output has no AirPdf binary."
+            exit 1
+          }
+
+          mb=$(du -sm publish/aot-check-linux | cut -f1)
+          if [ "$mb" -gt 90 ]; then
+            echo "::error::AOT output is ${mb} MB, far above the expected ~60 MB."
+            exit 1
+          fi
+
+          echo "AOT Linux build: ${mb} MB over $(find publish/aot-check-linux -type f | wc -l) files, no IL warnings." >> "$GITHUB_STEP_SUMMARY"

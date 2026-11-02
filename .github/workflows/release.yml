@@ -327,18 +327,49 @@ jobs:
         shell: bash
         run: echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      # NativeAOT needs clang and zlib; the Windows job gets MSVC and the Windows SDK from the
+      # runner image, but the Linux image needs these two installed explicitly.
+      - name: Install AOT toolchain
+        shell: bash
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      # Same gate as Windows: an AOT build that lost a reflection path still starts and then
+      # misbehaves at run time, so any IL warning fails the release.
       - name: Publish
         shell: bash
-        run: >
-          dotnet publish src/AirPdf.App/AirPdf.App.csproj
-          -c Release
-          -r linux-x64
-          --self-contained true
-          -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=true
-          -p:Version=${{ steps.version.outputs.value }}
-          -o publish/linux-x64
+        run: |
+          set -o pipefail
+          log=$(dotnet publish src/AirPdf.App/AirPdf.App.csproj \
+            -c Release \
+            -r linux-x64 \
+            -p:PublishAot=true \
+            -p:StripSymbols=true \
+            -p:Version=${{ steps.version.outputs.value }} \
+            -o publish/linux-x64 2>&1) || {
+            echo "$log"
+            echo "::error::AOT publish failed"
+            exit 1
+          }
+          echo "$log"
+
+          if echo "$log" | grep -Eq 'warning IL[0-9]{4}'; then
+            echo "$log" | grep -E 'warning IL[0-9]{4}'
+            echo "::error::AOT produced IL warnings; fix them before releasing."
+            exit 1
+          fi
+
+          test -f publish/linux-x64/AirPdf || {
+            echo "::error::The AOT publish output has no AirPdf binary."
+            exit 1
+          }
+
+          mb=$(du -sm publish/linux-x64 | cut -f1)
+          if [ "$mb" -gt 90 ]; then
+            echo "::error::AOT output is ${mb} MB, far above the expected ~60 MB; AOT may not be applied."
+            exit 1
+          fi
+
+          echo "Linux: NativeAOT build is ${mb} MB over $(find publish/linux-x64 -type f | wc -l) files, no IL warnings." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Package
         shell: bash

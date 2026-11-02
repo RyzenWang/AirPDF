@@ -6,6 +6,13 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- The Linux build is published with NativeAOT too, so it starts as fast as the Windows one.
+  The Linux runner installs `clang` and `zlib1g-dev` for the native link, and the release job
+  and every pull request fail on any AOT warning, as they already did on Windows. macOS still
+  builds JIT.
+
 ## [0.3.1] - 2026-11-02
 
 The Windows build is compiled ahead of time, and starts in well under a second.

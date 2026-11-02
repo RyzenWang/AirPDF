@@ -43,7 +43,7 @@ AirPDF 打开得快、渲染得稳，然后安静地退到页面后面。没有�
   主题和语言。
 - **标签页**：`Ctrl+T` 在同一窗口里再开一份文档，每个标签各自保留缩放、滚动位置、
   搜索结果和阅读位置。
-- **Windows 版使用 NativeAOT**：发布版提前编译，窗口出现时间从数秒降到一秒以内。
+- **使用 NativeAOT**：Windows 与 Linux 发布版提前编译，窗口出现时间从数秒降到一秒以内。
 - **返回上一个位置**：目录、缩略图、搜索或页码跳转后，`Alt+Left` 回到跳转前。
 - **右键菜单**：复制选中内容、全选、打开文件所在文件夹。
 - **无障碍**：工具栏按钮、输入框和列表都带有供屏幕阅读器识别的名称。
@@ -63,7 +63,7 @@ AirPDF 打开得快、渲染得稳，然后安静地退到页面后面。没有�
 | 位图传输 | SkiaSharp | 快速、可控的像素处理。 |
 | 文本层 | PDFium（`FPDFText_*`） | 由渲染同一引擎按阅读顺序给出字符，搜索、选择与旋转页和实际绘制一致；PdfPig 负责元数据与目录。 |
 | MVVM | CommunityToolkit.Mvvm | 小而克制的源生成 MVVM。 |
-| 编译方式 | NativeAOT（Windows） | 启动时无 JIT：实测首窗 0.7 秒，对比 5.0 秒。 |
+| 编译方式 | NativeAOT（Windows、Linux） | 启动时无 JIT：Windows 实测首窗 0.7 秒，对比 5.0 秒。 |
 
 ## 从源码运行
 
@@ -107,7 +107,7 @@ dotnet publish src/AirPdf.App -c Release -r win-x64 \
   -p:EnableCompressionInSingleFile=true
 ```
 
-NativeAOT，也是 Windows 发布版使用的方式：
+NativeAOT，也是 Windows 与 Linux 发布版使用的方式：
 
 ```bash
 dotnet publish src/AirPdf.App -c Release -r win-x64 `
@@ -210,7 +210,7 @@ docs/                   截图与架构说明
 - [x] 标签页
 - [ ] 更多界面语言（当前已有英文与简体中文）
 - [ ] 配置正式 Windows 签名与 Apple 公证凭据
-- [x] NativeAOT（Windows 已使用；macOS 与 Linux 仍为 JIT 构建）
+- [x] NativeAOT（Windows 与 Linux 已使用；macOS 仍为 JIT 构建）
 - [ ] 缩放、搜索、语言切换和更新的 UI / 端到端测试
 
 ## 参与贡献
