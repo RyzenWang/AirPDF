@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 
 namespace AirPdf.Core.Services;
@@ -108,27 +109,14 @@ public sealed class SettingsService
 
     public string SettingsPath { get; }
 
+    /// <summary>Previous good copy, used when <see cref="SettingsPath"/> is unreadable.</summary>
+    public string BackupPath => SettingsPath + ".bak";
+
     public AppSettings Load()
     {
         lock (_gate)
         {
-            try
-            {
-                if (!File.Exists(SettingsPath))
-                {
-                    return new AppSettings();
-                }
-
-                var json = File.ReadAllText(SettingsPath);
-                var settings = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettings) ?? new AppSettings();
-                settings.RecentFiles ??= [];
-                settings.ReadingPositions ??= [];
-                return settings;
-            }
-            catch
-            {
-                return new AppSettings();
-            }
+            return Read(SettingsPath) ?? Read(BackupPath) ?? new AppSettings();
         }
     }
 
@@ -140,14 +128,137 @@ public sealed class SettingsService
             {
                 Directory.CreateDirectory(SettingsDirectory);
                 var json = JsonSerializer.Serialize(settings, SettingsJsonContext.Default.AppSettings);
-                var tempPath = SettingsPath + ".tmp";
-                File.WriteAllText(tempPath, json);
-                File.Move(tempPath, SettingsPath, overwrite: true);
+                WriteSettings(json);
             }
             catch
             {
                 // Preferences should never prevent reading a document.
             }
+        }
+    }
+
+    /// <summary>
+    /// Writes over the existing file when there is one.
+    /// </summary>
+    /// <remarks>
+    /// Overwriting in place is not just an optimisation. A packaged (MSIX) build runs with
+    /// AppData redirection: creating a file under AppData sends it to the package's private
+    /// cache, but opening a file that already exists at its real location does not. Because
+    /// the old implementation always wrote a temporary file and renamed it, it always created
+    /// a file, so a packaged build silently forked the user's settings into the cache. Opening
+    /// the real file keeps both builds on one file.
+    ///
+    /// The cost is that an interrupted overwrite can truncate the file, so the previous good
+    /// copy is kept in <see cref="BackupPath"/> and <see cref="Load"/> falls back to it.
+    /// </remarks>
+    private void WriteSettings(string json)
+    {
+        var exists = File.Exists(SettingsPath);
+        if (exists)
+        {
+            BackUpCurrentSettings();
+        }
+
+        if (exists)
+        {
+            try
+            {
+                WriteInPlace(json);
+                return;
+            }
+            catch (IOException)
+            {
+                // Another process holds the file, or the volume refused the open.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Read-only profile, or a policy blocked the write.
+            }
+        }
+
+        WriteAtomically(json);
+    }
+
+    private void WriteInPlace(string json)
+    {
+        using var stream = new FileStream(
+            SettingsPath,
+            FileMode.Open,
+            FileAccess.Write,
+            FileShare.None);
+
+        var bytes = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(json);
+        stream.SetLength(0);
+        stream.Write(bytes, 0, bytes.Length);
+        stream.Flush(flushToDisk: true);
+    }
+
+    private void WriteAtomically(string json)
+    {
+        var tempPath = SettingsPath + ".tmp";
+        try
+        {
+            File.WriteAllText(tempPath, json, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            File.Move(tempPath, SettingsPath, overwrite: true);
+        }
+        finally
+        {
+            // A failed move must not leave a stray file behind on the next start.
+            try
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+            catch
+            {
+                // Best effort only.
+            }
+        }
+    }
+
+    private void BackUpCurrentSettings()
+    {
+        try
+        {
+            File.Copy(SettingsPath, BackupPath, overwrite: true);
+        }
+        catch
+        {
+            // A missing or locked backup only weakens crash recovery, not saving.
+        }
+    }
+
+    private static AppSettings? Read(string path)
+    {
+        try
+        {
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            var json = File.ReadAllText(path);
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                return null;
+            }
+
+            var settings = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettings);
+            if (settings is null)
+            {
+                return null;
+            }
+
+            settings.RecentFiles ??= [];
+            settings.ReadingPositions ??= [];
+            settings.Bookmarks ??= [];
+            return settings;
+        }
+        catch
+        {
+            return null;
         }
     }
 
