@@ -27,6 +27,16 @@ semantic versioning once it reaches 1.0.
 - The welcome screen lists bookmarks from every document, showing the file name and page, and
   clicking one opens that file at the bookmark.
 
+### Fixed
+
+- Settings are now overwritten in place instead of being re-created through a temporary
+  file, so an installed package and the portable build share one `settings.json`. A
+  packaged (MSIX) build redirects *new* files under `%APPDATA%` into its private cache but
+  leaves *existing* ones alone, and the temporary-file write always counted as new — the
+  Store build would have forked recent files, bookmarks, and reading positions into a
+  hidden copy. The previous file is kept as `settings.json.bak` and loaded when the live
+  file is missing, empty, or truncated.
+
 ## [0.3.2] - 2026-11-02
 
 Every platform is now compiled ahead of time.

@@ -90,7 +90,8 @@ Measured on a runner:
 | `%LOCALAPPDATA%\Packages\AirPDF_<hash>\LocalCache\Roaming\AirPdf\settings.json` | kept `language=zh-CN` **and** received the opened document |
 
 So reads fall back to the real file — the packaged app starts from the settings
-the unpackaged build left behind — while writes land in the package cache.
+the unpackaged build left behind — while writes landed in the package cache before
+the `SettingsService` change described below.
 
 Microsoft documents the cause: a new file under `AppData` is redirected, but *"if
 the file is opened from the real `AppData` location, then no virtualization for
@@ -102,13 +103,23 @@ What follows:
 
 - No migration code is needed. Existing users keep their bookmarks, recent files,
   and reading positions when they move to the Store build.
-- Changes made in the Store build do not reach the real file, so switching back to
-  the Velopack build shows stale settings. Saving in place would fix that; it trades
-  the atomic temp-and-rename for a direct overwrite, so it needs its own crash
-  safety.
-- A user whose first AirPDF install is the Store build keeps settings in the package
-  cache, and uninstalling the package removes them.
+- `SettingsService` now overwrites the existing file instead of writing a temporary
+  file and renaming it, which is what makes the "opened from the real location"
+  rule apply. Measured after that change on the same runner:
+
+  | copy | result |
+  | --- | --- |
+  | real `%APPDATA%\AirPdf\settings.json` | `language=zh-CN` **and** the opened document |
+  | package cache | absent |
+
+  The Velopack build and the Store build therefore share one settings file.
+- A user whose first AirPDF install is the Store build still creates that file
+  inside the package cache, and uninstalling the package removes it. That is the
+  platform's behaviour for new files and cannot be avoided from inside the package.
 - The `crash.log` follows the same rule, so a Store user's log lives in the cache.
+- The in-place overwrite can truncate the file if the process dies mid-write, so the
+  previous copy is kept as `settings.json.bak` and loaded when the live file is
+  unreadable.
 
 ## Not done yet
 

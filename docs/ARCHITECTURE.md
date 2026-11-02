@@ -41,8 +41,16 @@ front end.
 
 - Stores a small JSON document under the platform's per-user application data
   folder (`%APPDATA%`, `~/Library/Application Support`, or `~/.config`).
-- Saves atomically through a temporary file and never lets a settings failure
-  block reading.
+- Overwrites an existing file in place and only falls back to writing a temporary
+  file and renaming it when there is nothing to overwrite. This is not a
+  performance choice: a packaged (MSIX) build runs with AppData redirection, where
+  *creating* a file sends it to the package's private cache, but *opening* a file
+  that already exists at its real location does not. Writing through a temporary
+  file always created one, so a Store build silently forked the user's settings.
+- Keeps the previous copy as `settings.json.bak` and loads it when the live file is
+  missing, empty, or truncated, because an interrupted in-place write is now
+  possible.
+- Never lets a settings failure block reading.
 - Serializes through a source-generated `JsonSerializerContext`. The reflection-based
   overloads are marked as requiring unreferenced and dynamic code, and a trimmed build
   silently stopped writing the file, so this is not a style choice.
