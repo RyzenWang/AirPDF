@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX manifest for AirPDF.
+
+  This file is a template: Build-Msix.ps1 replaces the {{TOKENS}} before packing.
+  Do not hand-edit the generated copy under artifacts/.
+
+  Notes for reviewers:
+    * The app ships as a full-trust Win32 process (rescap:runFullTrust). A PDF
+      reader needs unrestricted file system access to the files the user opens,
+      which the app-container model does not provide.
+    * Because the package installs into a read-only WindowsApps folder, the app
+      must never write next to its executable. AirPDF stores settings and the
+      crash log in %APPDATA%\AirPdf, which satisfies that.
+    * .pdf is declared so Windows can offer AirPDF as a handler. Windows always
+      asks the user before changing the default handler; the manifest cannot
+      claim it silently.
+-->
+<Package
+    xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+    xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+    xmlns:uap10="http://schemas.microsoft.com/appx/manifest/uap/windows10/10"
+    xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+    xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+    IgnorableNamespaces="uap uap10 rescap desktop6">
+
+  <Identity
+      Name="{{IDENTITY_NAME}}"
+      Publisher="{{PUBLISHER}}"
+      Version="{{VERSION}}"
+      ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>AirPDF</DisplayName>
+    <PublisherDisplayName>{{PUBLISHER_DISPLAY_NAME}}</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>A feather-light, cross-platform PDF reader built with .NET and Avalonia.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily
+        Name="Windows.Desktop"
+        MinVersion="10.0.19041.0"
+        MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+    <Resource Language="zh-cn" />
+  </Resources>
+
+  <Applications>
+    <Application Id="AirPDF"
+                 Executable="AirPdf.exe"
+                 EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+          DisplayName="AirPDF"
+          Description="A feather-light, cross-platform PDF reader built with .NET and Avalonia."
+          BackgroundColor="transparent"
+          Square150x150Logo="Assets\Square150x150Logo.png"
+          Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+        <uap:SplashScreen Image="Assets\SplashScreen.png" BackgroundColor="#F6F4EF" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="airpdf">
+            <uap:DisplayName>PDF document</uap:DisplayName>
+            <uap:Logo>Assets\Square44x44Logo.png</uap:Logo>
+            <uap:SupportedFileTypes>
+              <uap:FileType>.pdf</uap:FileType>
+            </uap:SupportedFileTypes>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

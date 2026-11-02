@@ -1,0 +1,127 @@
+name: MSIX check
+
+# Proves the MSIX packaging path end to end: build the package, sign it with a
+# throwaway certificate, install it, confirm Windows registered it, launch the
+# app, and uninstall. Nothing is published.
+#
+# This exists because sideloading requires the signing certificate to be trusted
+# machine-wide, which needs elevation; local development usually cannot do it.
+on:
+  workflow_dispatch:
+    inputs:
+      install:
+        description: Install the package and launch the app
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  msix:
+    name: Build and install MSIX
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build the package
+        shell: pwsh
+        run: |
+          ./packaging/signing/New-TestCertificate.ps1 `
+            -OutputPath "$env:RUNNER_TEMP/msix-test.pfx" -Password test
+
+          ./packaging/msix/Build-Msix.ps1 `
+            -Version 0.0.1.0 `
+            -Publisher "CN=AirPDF Test Signing (not for release)" `
+            -CertificatePath "$env:RUNNER_TEMP/msix-test.pfx" `
+            -CertificatePassword test
+
+      - name: Trust the test certificate
+        if: inputs.install
+        shell: pwsh
+        run: |
+          $pfx = "$env:RUNNER_TEMP/msix-test.pfx"
+          $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
+            $pfx, 'test',
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable)
+
+          $cer = "$env:RUNNER_TEMP/msix-test.cer"
+          [IO.File]::WriteAllBytes($cer, $cert.Export('Cert'))
+
+          Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
+          "trusted $($cert.Thumbprint)" | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+
+      - name: Install the package
+        if: inputs.install
+        shell: pwsh
+        run: |
+          $package = Get-ChildItem artifacts/msix/*.msix | Select-Object -First 1
+          Add-AppxPackage -Path $package.FullName -ErrorAction Stop
+
+          $app = Get-AppxPackage -Name AirPDF
+          if (-not $app) { throw 'The package installed but Windows does not list it.' }
+
+          $app | Select-Object Name, PackageFullName, Version, InstallLocation |
+            Format-List | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
+
+          $manifest = Get-AppxPackageManifest -Package $app.PackageFullName
+          $application = $manifest.Package.Applications.Application
+          if ($application.EntryPoint -ne 'Windows.FullTrustApplication') {
+            throw "Unexpected entry point: $($application.EntryPoint)"
+          }
+          if ($application.Executable -ne 'AirPdf.exe') {
+            throw "Unexpected executable: $($application.Executable)"
+          }
+
+          $association = $manifest.Package.Applications.Application.Extensions.Extension |
+            Where-Object { $_.Category -eq 'windows.fileTypeAssociation' }
+          if (-not $association) { throw 'The .pdf association is missing from the installed manifest.' }
+
+          "registered $($app.Version) with the pdf association" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Launch the packaged app
+        if: inputs.install
+        shell: pwsh
+        run: |
+          $app = Get-AppxPackage -Name AirPDF
+          $exe = Join-Path $app.InstallLocation 'AirPdf.exe'
+          if (-not (Test-Path $exe)) { throw "The installed package has no AirPdf.exe at $exe." }
+
+          # Launching from InstallLocation is what the shell does for a full-trust
+          # packaged app; the process inherits package identity.
+          $process = Start-Process -FilePath $exe -PassThru
+          Start-Sleep -Seconds 12
+
+          $process.Refresh()
+          if ($process.HasExited) {
+            throw "The packaged app exited with code $($process.ExitCode) instead of staying open."
+          }
+
+          "the packaged app is running as pid $($process.Id)" >> $env:GITHUB_STEP_SUMMARY
+          $process | Stop-Process -Force
+
+      - name: Uninstall
+        if: always() && inputs.install
+        shell: pwsh
+        run: |
+          Get-AppxPackage -Name AirPDF | Remove-AppxPackage -ErrorAction Continue || $true
+          Get-ChildItem 'Cert:\LocalMachine\TrustedPeople' |
+            Where-Object { $_.Subject -like '*AirPDF Test Signing*' } |
+            Remove-Item -Force -ErrorAction Continue
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AirPDF-msix
+          path: artifacts/msix/*.msix
