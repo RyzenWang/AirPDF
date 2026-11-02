@@ -261,6 +261,9 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         QueueRender();
     }
 
+    /// <summary>True while a page view is showing this page and it may render.</summary>
+    public bool IsActive => _isActive;
+
     public void Deactivate()
     {
         _isActive = false;

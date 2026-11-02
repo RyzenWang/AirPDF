@@ -19,6 +19,8 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        Dispatcher.UIThread.UnhandledException += (_, e) =>
+            CrashLog.Write("Dispatcher.UnhandledException", e.Exception);
         if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
         {
             base.OnFrameworkInitializationCompleted();

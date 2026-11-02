@@ -8,6 +8,8 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        CrashLog.Install();
+
         // Velopack must handle install/update hooks before any UI starts.
         VelopackApp.Build().Run();
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);

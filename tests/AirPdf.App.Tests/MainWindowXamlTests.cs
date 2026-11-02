@@ -1,6 +1,9 @@
 using AirPdf.App.Controls;
+using AirPdf.App.Rendering;
 using AirPdf.App.Services;
 using AirPdf.App.ViewModels;
+using AirPdf.Core.Models;
+using AirPdf.Core.Services;
 using AirPdf.App.Views;
 using Avalonia;
 using Avalonia.Automation;
@@ -188,6 +191,41 @@ public sealed class MainWindowXamlTests : IDisposable
         Assert.NotNull(button);
         Assert.Same(viewModel.GoHomeCommand, button!.Command);
         Assert.False(string.IsNullOrWhiteSpace(AutomationProperties.GetName(button)));
+    }
+    /// <summary>
+    /// Item containers are reused when the page list switches documents. The previous page used
+    /// to stay active, keeping its bitmap and rendering in the background, which is what made
+    /// switching tabs and scrolling creep upwards in memory.
+    /// </summary>
+    [AvaloniaFact]
+    public void PdfPageView_ReleasesThePreviousPageWhenItsDataContextChanges()
+    {
+        using var documents = new PdfDocumentService();
+        var localization = new LocalizationService();
+        var sample = Path.Combine(AppContext.BaseDirectory, "Assets", "sample.pdf");
+        var renderer = new PdfPageRenderer(documents, sample, null);
+        var first = new PageViewModel(renderer, new PdfPageInfo(1, 612, 792), localization);
+        var second = new PageViewModel(renderer, new PdfPageInfo(2, 612, 792), localization);
+
+        var view = new PdfPageView { DataContext = first };
+        var window = new Window { Content = view, Width = 420, Height = 620 };
+
+        try
+        {
+            window.Show();
+            Assert.True(first.IsActive);
+
+            view.DataContext = second;
+
+            Assert.False(first.IsActive);
+            Assert.True(second.IsActive);
+        }
+        finally
+        {
+            window.Close();
+            first.Dispose();
+            second.Dispose();
+        }
     }
     private MainWindow CreateWindow()
     {

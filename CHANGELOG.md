@@ -8,6 +8,9 @@ semantic versioning once it reaches 1.0.
 
 ### Added
 
+- A crash log. Unhandled exceptions on any thread, including the UI thread, are appended to
+  `crash.log` next to `settings.json`, because a crash otherwise leaves nothing behind to look
+  at.
 - The welcome screen is now the first tab, named Home, so the tab strip exists from the
   first document and returning home no longer closes what you are reading. The logo and
   wordmark in the toolbar form one button back to it, and a document already open in another
@@ -39,6 +42,10 @@ Every platform is now compiled ahead of time.
 
 ### Fixed
 
+- Switching tabs no longer leaves the previous document's pages active. The page item
+  container is reused when the list switches documents, and nothing detached the old page, so
+  it stayed active: its bitmap was never trimmed and it kept re-rendering. Memory crept up as
+  you switched and scrolled, which is what made scrolling after a tab switch end in a crash.
 - The Linux build no longer demands `GLIBC_2.38`. NativeAOT links against the build machine's
   glibc, and building on `ubuntu-latest` (24.04) produced a binary that died on 22.04 with
   "version `GLIBC_2.38' not found". The Linux jobs are pinned to `ubuntu-22.04` (glibc 2.35),
@@ -87,6 +94,10 @@ Rotated pages work end to end, and the Windows download halves.
 
 ### Fixed
 
+- Switching tabs no longer leaves the previous document's pages active. The page item
+  container is reused when the list switches documents, and nothing detached the old page, so
+  it stayed active: its bitmap was never trimmed and it kept re-rendering. Memory crept up as
+  you switched and scrolled, which is what made scrolling after a tab switch end in a crash.
 - Rotated pages are fully supported: links, search highlights, and text selection. Two
   halves were broken. Geometry: the document's page box already accounts for `/Rotate`
   while content rectangles do not, so they are mapped through a shared `PageGeometry`
@@ -101,6 +112,9 @@ explicit.
 
 ### Added
 
+- A crash log. Unhandled exceptions on any thread, including the UI thread, are appended to
+  `crash.log` next to `settings.json`, because a crash otherwise leaves nothing behind to look
+  at.
 - The welcome screen is now the first tab, named Home, so the tab strip exists from the
   first document and returning home no longer closes what you are reading. The logo and
   wordmark in the toolbar form one button back to it, and a document already open in another
@@ -136,6 +150,9 @@ explicit.
 
 ### Added
 
+- A crash log. Unhandled exceptions on any thread, including the UI thread, are appended to
+  `crash.log` next to `settings.json`, because a crash otherwise leaves nothing behind to look
+  at.
 - The welcome screen is now the first tab, named Home, so the tab strip exists from the
   first document and returning home no longer closes what you are reading. The logo and
   wordmark in the toolbar form one button back to it, and a document already open in another
@@ -205,6 +222,10 @@ explicit.
 
 ### Fixed
 
+- Switching tabs no longer leaves the previous document's pages active. The page item
+  container is reused when the list switches documents, and nothing detached the old page, so
+  it stayed active: its bitmap was never trimmed and it kept re-rendering. Memory crept up as
+  you switched and scrolled, which is what made scrolling after a tab switch end in a crash.
 - Rendering keeps the PDFium document handle open while a document is displayed instead of
   reparsing the file for every page. Measured on a 9,277-page / 35 MB document: a page
   render dropped from 0.72 s to 0.023 s, and opening dropped from 7.1 s to 1.9 s. Page
@@ -227,6 +248,9 @@ First public preview.
 
 ### Added
 
+- A crash log. Unhandled exceptions on any thread, including the UI thread, are appended to
+  `crash.log` next to `settings.json`, because a crash otherwise leaves nothing behind to look
+  at.
 - The welcome screen is now the first tab, named Home, so the tab strip exists from the
   first document and returning home no longer closes what you are reading. The logo and
   wordmark in the toolbar form one button back to it, and a document already open in another
@@ -249,6 +273,10 @@ First public preview.
 
 ### Fixed
 
+- Switching tabs no longer leaves the previous document's pages active. The page item
+  container is reused when the list switches documents, and nothing detached the old page, so
+  it stayed active: its bitmap was never trimmed and it kept re-rendering. Memory crept up as
+  you switched and scrolled, which is what made scrolling after a tab switch end in a crash.
 - Zooming in and out could terminate the process. Cancellation tokens are now
   retired safely, and replaced page bitmaps are released after the compositor
   has had a chance to finish the frame.

@@ -6,10 +6,12 @@ namespace AirPdf.App.Views;
 
 public partial class PdfPageView : UserControl
 {
+    private PageViewModel? _attachedPage;
+
     public PdfPageView()
     {
         InitializeComponent();
-        DataContextChanged += (_, _) => AttachPage();
+        DataContextChanged += (_, _) => ReattachPage();
     }
 
     protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -20,18 +22,37 @@ public partial class PdfPageView : UserControl
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
     {
-        if (DataContext is PageViewModel page)
+        DetachPage();
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    /// <summary>
+    /// The item container is reused when the page list switches documents, so the previous
+    /// page has to be released explicitly: nothing detaches it from the visual tree, and an
+    /// active page keeps its bitmap and keeps rendering in the background.
+    /// </summary>
+    private void ReattachPage()
+    {
+        DetachPage();
+        AttachPage();
+    }
+
+    private void DetachPage()
+    {
+        if (_attachedPage is { } page)
         {
             page.Deactivate();
+            _attachedPage = null;
         }
-
-        base.OnDetachedFromVisualTree(e);
     }
 
     private void AttachPage()
     {
-        if (DataContext is PageViewModel page && TopLevel.GetTopLevel(this) is { } topLevel)
+        if (DataContext is PageViewModel page
+            && !ReferenceEquals(page, _attachedPage)
+            && TopLevel.GetTopLevel(this) is { } topLevel)
         {
+            _attachedPage = page;
             page.Activate(topLevel.RenderScaling);
 
             // Link annotations are needed for hit-testing, so fetch them with the render.
