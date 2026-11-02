@@ -372,6 +372,8 @@ jobs:
           files: |
             artifacts/**/AirPDF-*
             artifacts/**/releases.*.json
-          generate_release_notes: true
+          # No generate_release_notes and no body: the action uses the annotated tag message,
+          # which is where the user-facing summary is written. Auto-generated notes reduced
+          # v0.3.0 to a single compare link.
           draft: false
           prerelease: ${{ contains(github.ref_name, '-preview') }}
