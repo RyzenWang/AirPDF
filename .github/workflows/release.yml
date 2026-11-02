@@ -336,7 +336,10 @@ jobs:
   linux:
     name: Linux portable
     needs: test
-    runs-on: ubuntu-latest
+    # Pinned to the oldest runner still offered: NativeAOT links against the build machine's
+    # glibc, and ubuntu-latest (24.04) produced a binary that demanded GLIBC_2.38 and refused
+    # to start on 22.04. 22.04 needs GLIBC_2.35, which is the floor this project supports.
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
@@ -395,6 +398,16 @@ jobs:
           fi
 
           echo "Linux: NativeAOT build is ${mb} MB over $(find publish/linux-x64 -type f | wc -l) files, no IL warnings." >> "$GITHUB_STEP_SUMMARY"
+
+          # The glibc floor is invisible until someone on an older distro runs the binary, so
+          # read it off the produced executable and fail when it creeps up.
+          floor=$(objdump -T publish/linux-x64/AirPdf | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1)
+          echo "Linux: requires ${floor} at most." >> "$GITHUB_STEP_SUMMARY"
+          max_allowed=2.35
+          if [ "$(printf '%s\n' "$max_allowed" "${floor#GLIBC_}" | sort -V | tail -1)" != "$max_allowed" ]; then
+            echo "::error::The binary requires ${floor}, above the supported ${max_allowed}; build on an older runner."
+            exit 1
+          fi
 
       - name: Package
         shell: bash

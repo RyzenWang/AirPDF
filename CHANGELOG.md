@@ -6,6 +6,14 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- The Linux build no longer refuses to start on older distributions. NativeAOT links against
+  the build machine's glibc, and building on `ubuntu-latest` (24.04) produced a binary that
+  demanded `GLIBC_2.38` and died on Ubuntu 22.04 with "version `GLIBC_2.38' not found". The
+  Linux jobs are pinned to `ubuntu-22.04` (glibc 2.35), and both workflows now read the
+  required symbol version off the produced binary and fail if it creeps above 2.35.
+
 ## [0.3.2] - 2026-11-02
 
 Every platform is now compiled ahead of time.

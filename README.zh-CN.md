@@ -90,6 +90,8 @@ dotnet build AirPdf.sln -c Release
 dotnet test AirPdf.sln -c Release
 ```
 
+Linux 构建在 Ubuntu 22.04 上产出，因此需要 glibc 2.35 或更高（Ubuntu 22.04+、Debian 12+）。
+NativeAOT 会链接构建机的 glibc，更老的发行版无法启动该二进制。
 发布 NativeAOT 版本还需要 C++ 工具链：Windows 上需要 MSVC 生成工具与 Windows SDK，
 macOS 上需要 Xcode，Linux 上需要 clang。普通的 `dotnet build` 不需要。
 

@@ -19,7 +19,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # Linux is pinned to 22.04 so CI builds the same glibc floor the release ships. See
+        # the comment on the release workflow's linux job.
+        os: [ubuntu-22.04, windows-latest, macos-latest]
 
     steps:
       - name: Checkout
@@ -113,6 +115,14 @@ jobs:
           fi
 
           echo "AOT Linux build: ${mb} MB over $(find publish/aot-check-linux -type f | wc -l) files, no IL warnings." >> "$GITHUB_STEP_SUMMARY"
+
+          floor=$(objdump -T publish/aot-check-linux/AirPdf | grep -o 'GLIBC_[0-9.]*' | sort -Vu | tail -1)
+          echo "AOT Linux build requires ${floor} at most." >> "$GITHUB_STEP_SUMMARY"
+          max_allowed=2.35
+          if [ "$(printf '%s\n' "$max_allowed" "${floor#GLIBC_}" | sort -V | tail -1)" != "$max_allowed" ]; then
+            echo "::error::The binary requires ${floor}, above the supported ${max_allowed}."
+            exit 1
+          fi
 
       # macOS links with Xcode's clang, which the runner image already provides, and builds
       # both architectures at release time; the arm64 runner checks the arm64 build.

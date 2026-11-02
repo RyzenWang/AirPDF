@@ -26,6 +26,11 @@ call. The Windows output is larger uncompressed (60 MB against 28 MB), but Velop
 compresses the payload, so the installer grows only from 33.4 MB to 35.0 MB. Linux ships a
 tar.gz of the AOT output; macOS builds one pkg per architecture the same way.
 
+NativeAOT links against the glibc of the machine that builds it, and `ubuntu-latest` (24.04)
+produced a binary that demanded `GLIBC_2.38` and refused to start on 22.04. The Linux jobs
+are therefore pinned to `ubuntu-22.04`, and both workflows read the required symbol version
+off the produced binary with `objdump -T` and fail if it goes above 2.35.
+
 AOT and trimming fail silently when a reflection path loses its metadata: a trimmed build
 once stopped writing the settings file while otherwise behaving normally. The Windows
 publish step therefore fails on any IL warning and on an output that is unexpectedly large,

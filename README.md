@@ -100,6 +100,9 @@ small .NET application with a hand-built Avalonia interface.
 
 The published builds are self-contained; end users do not need .NET installed.
 
+The Linux build is produced on Ubuntu 22.04 and therefore needs glibc 2.35 or newer
+(Ubuntu 22.04+, Debian 12+). NativeAOT links against the build machine's glibc, so an
+older distribution will refuse to start the binary.
 Building the NativeAOT release additionally needs a C++ toolchain: the MSVC build tools
 and the Windows SDK on Windows, Xcode on macOS, clang on Linux. A plain `dotnet build`
 does not.
