@@ -77,28 +77,38 @@ argument being ignored.
 
 ## Behaviour that differs from the Velopack build
 
-**%APPDATA% is redirected.** A packaged app's writes to `%APPDATA%` land in the
-package's own cache:
+**%APPDATA% is redirected, but only for writes.** The workflow measures this
+rather than assuming it. It seeds the real settings file with a language marker,
+launches the packaged app with a document (which forces a save), and then reads
+both copies.
 
-```
-%LOCALAPPDATA%\Packages\AirPDF_<publisherhash>\LocalCache\Roaming\AirPdf\settings.json
-```
+Measured on a runner:
 
-Consequences worth deciding on before shipping to the Store:
+| copy | result |
+| --- | --- |
+| real `%APPDATA%\AirPdf\settings.json` | kept `language=zh-CN`, did **not** receive the opened document |
+| `%LOCALAPPDATA%\Packages\AirPDF_<hash>\LocalCache\Roaming\AirPdf\settings.json` | kept `language=zh-CN` **and** received the opened document |
 
-- Recent files, bookmarks, reading positions, theme, and language live in a
-  different file than the Velopack install uses, so the two channels do not share
-  state.
-- A user moving from the Velopack build to the Store build may or may not inherit
-  their old settings, depending on whether Windows falls back to the real file on
-  read. That needs a test on a physical machine; the CI check only asserts where
-  writes go.
-- Uninstalling the package removes that cache, so leaving the Store build loses
-  most preferences.
+So reads fall back to the real file — the packaged app starts from the settings
+the unpackaged build left behind — while writes land in the package cache.
 
-If sharing one settings file matters, the fix is to read and write an explicit
-path under `%LOCALAPPDATA%` that is not redirected, or to copy the real
-`%APPDATA%\AirPdf\settings.json` into the package cache on first run.
+Microsoft documents the cause: a new file under `AppData` is redirected, but *"if
+the file is opened from the real `AppData` location, then no virtualization for
+that file occurs."* AirPDF saves by writing `settings.json.tmp` and renaming it,
+which always creates a new file, so the write is redirected even when the
+destination already exists.
+
+What follows:
+
+- No migration code is needed. Existing users keep their bookmarks, recent files,
+  and reading positions when they move to the Store build.
+- Changes made in the Store build do not reach the real file, so switching back to
+  the Velopack build shows stale settings. Saving in place would fix that; it trades
+  the atomic temp-and-rename for a direct overwrite, so it needs its own crash
+  safety.
+- A user whose first AirPDF install is the Store build keeps settings in the package
+  cache, and uninstalling the package removes them.
+- The `crash.log` follows the same rule, so a Store user's log lives in the cache.
 
 ## Not done yet
 
