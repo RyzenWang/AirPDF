@@ -23,6 +23,8 @@ public partial class MainWindow : Window
     private MainWindowViewModel _viewModel = null!;
     private bool _suppressScrollSync;
     private bool _suppressThumbnailSync;
+    private bool _thumbnailSyncPending;
+    private bool _handlingScrollChanged;
     private bool _isSelectingText;
     private bool _selectionPressInProgress;
     private bool _selectionMoved;
@@ -484,8 +486,30 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Laying out a page can invalidate layout again, which raises this event while it is
+        // still being handled; recursing through it ends in a stack overflow.
+        if (_handlingScrollChanged)
+        {
+            CrashLog.Write("NestedPagesScrollChanged", null);
+            return;
+        }
+
+        _handlingScrollChanged = true;
+        try
+        {
+            HandlePagesScrollChanged();
+        }
+        finally
+        {
+            _handlingScrollChanged = false;
+        }
+    }
+
+    private void HandlePagesScrollChanged()
+    {
+
         var viewer = PagesList.Viewer;
-        if (viewer is null)
+        if (viewer is null || viewer.Extent.Height <= 0)
         {
             return;
         }
@@ -627,7 +651,30 @@ public partial class MainWindow : Window
         UpdateThumbnailSelection();
     }
 
+    /// <summary>
+    /// Coalesces thumbnail selection updates and runs them outside the current layout pass.
+    /// The scroll handler fires while the scroll viewer is laying out, and
+    /// ListBox.ScrollIntoView invalidates layout, so calling it from there recursed until the
+    /// stack overflowed - which is how scrolling after a tab switch killed the process.
+    /// </summary>
     private void UpdateThumbnailSelection()
+    {
+        if (_thumbnailSyncPending)
+        {
+            return;
+        }
+
+        _thumbnailSyncPending = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _thumbnailSyncPending = false;
+                UpdateThumbnailSelectionCore();
+            },
+            DispatcherPriority.Background);
+    }
+
+    private void UpdateThumbnailSelectionCore()
     {
         var index = _viewModel.CurrentPage - 1;
         if (index < 0 || index >= _viewModel.Thumbnails.Count)

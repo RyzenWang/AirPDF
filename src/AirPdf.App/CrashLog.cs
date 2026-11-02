@@ -26,8 +26,15 @@ internal static class CrashLog
         TaskScheduler.UnobservedTaskException += (_, e) =>
             Write("TaskScheduler.UnobservedTaskException", e.Exception);
 
+        // Normal shutdown exits with 0; anything else is worth a line, since the process is
+        // about to disappear without another chance to say why.
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
-            Write("ProcessExit", null);
+        {
+            if (Environment.ExitCode != 0)
+            {
+                Write($"ProcessExit({Environment.ExitCode})", null);
+            }
+        };
     }
 
     public static void Write(string source, Exception? exception)
