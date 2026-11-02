@@ -43,6 +43,9 @@ front end.
   folder (`%APPDATA%`, `~/Library/Application Support`, or `~/.config`).
 - Saves atomically through a temporary file and never lets a settings failure
   block reading.
+- Serializes through a source-generated `JsonSerializerContext`. The reflection-based
+  overloads are marked as requiring unreferenced and dynamic code, and a trimmed build
+  silently stopped writing the file, so this is not a style choice.
 
 ### AirPdf.App
 

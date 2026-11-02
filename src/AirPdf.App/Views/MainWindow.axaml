@@ -25,8 +25,10 @@
             BorderThickness="0,0,0,1"
             Padding="8,4">
       <StackPanel Orientation="Horizontal" Spacing="4">
+        <!-- The strip binds to the tab host, not to the active document, so it declares its
+             own data type instead of opting out of compiled bindings. -->
         <ListBox x:Name="TabList"
-                 x:CompileBindings="False"
+                 x:DataType="vm:WindowViewModel"
                  Background="Transparent"
                  BorderThickness="0"
                  Padding="0"
@@ -39,7 +41,7 @@
             </ItemsPanelTemplate>
           </ListBox.ItemsPanel>
           <ListBox.ItemTemplate>
-            <DataTemplate>
+            <DataTemplate x:DataType="vm:MainWindowViewModel">
               <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,2">
                 <TextBlock Text="{Binding TabTitle}"
                            MaxWidth="200"
@@ -393,10 +395,10 @@
                               IsVisible="{Binding IsDocumentOpen}"
                               AutomationProperties.Name="{DynamicResource L.Pages}"
                               ViewerScrollChanged="OnPagesScrollChanged">
-          <!-- x:CompileBindings is opted out for the context menu: it is hosted in a
-               popup and does not take part in the window's compiled-binding scope. -->
+          <!-- The menu lives in a popup, so it carries its own data type for compiled
+               bindings; its DataContext still comes from the page list at runtime. -->
           <controls:PdfPageList.ContextMenu>
-            <ContextMenu x:CompileBindings="False">
+            <ContextMenu x:DataType="vm:MainWindowViewModel">
               <MenuItem Header="{DynamicResource L.CopySelection}"
                         Command="{Binding CopySelectionCommand}"
                         IsEnabled="{Binding HasSelection}" />

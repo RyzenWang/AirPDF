@@ -87,6 +87,22 @@ public sealed class MainWindowXamlTests : IDisposable
         Assert.Contains(items, item => item.Command is null);
     }
 
+    /// <summary>
+    /// The tab strip binds to the tab host rather than to the document, so it declares its
+    /// own data type instead of opting out of compiled bindings. This asserts those bindings
+    /// resolve at runtime, since a wrong data type fails silently rather than at build time.
+    /// </summary>
+    [AvaloniaFact]
+    public void TabStrip_BindsToTheTabHost()
+    {
+        var window = CreateWindow();
+        var list = window.FindControl<ListBox>("TabList");
+
+        Assert.NotNull(list);
+        var tabs = Assert.IsAssignableFrom<IEnumerable<MainWindowViewModel>>(list!.ItemsSource);
+        Assert.Single(tabs);
+        Assert.Same(tabs.First(), list.SelectedItem);
+    }
     private MainWindow CreateWindow()
     {
         var services = new AppServices(_settingsDirectory);

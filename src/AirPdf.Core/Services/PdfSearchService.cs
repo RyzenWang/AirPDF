@@ -9,11 +9,12 @@ namespace AirPdf.Core.Services;
 /// Full-document text search. It walks the same PDFium text layer the reader selects from, so
 /// search and selection agree, and rotated pages are searchable like any other.
 /// </summary>
-public sealed class PdfSearchService
+public sealed partial class PdfSearchService
 {
     private const int MaxResults = 250;
 
-    private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
+    [GeneratedRegex(@"\s+")]
+    private static partial Regex Whitespace();
 
     private readonly PdfDocumentService _documents;
 
@@ -184,7 +185,7 @@ public sealed class PdfSearchService
     }
 
     private static string NormalizeWhitespace(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? string.Empty : Whitespace.Replace(value, " ").Trim();
+        string.IsNullOrWhiteSpace(value) ? string.Empty : Whitespace().Replace(value, " ").Trim();
 
     private readonly record struct SearchWord(int Start, int End, PdfSearchRect Bounds);
 }

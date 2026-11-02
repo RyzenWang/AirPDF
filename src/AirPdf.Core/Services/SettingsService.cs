@@ -68,11 +68,6 @@ public sealed class SettingsService
 {
     private const int MaxRecentFiles = 10;
     private readonly object _gate = new();
-    private readonly JsonSerializerOptions _options = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    };
 
     public SettingsService(string? settingsDirectory = null)
     {
@@ -96,7 +91,7 @@ public sealed class SettingsService
                 }
 
                 var json = File.ReadAllText(SettingsPath);
-                var settings = JsonSerializer.Deserialize<AppSettings>(json, _options) ?? new AppSettings();
+                var settings = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.AppSettings) ?? new AppSettings();
                 settings.RecentFiles ??= [];
                 settings.ReadingPositions ??= [];
                 return settings;
@@ -115,7 +110,7 @@ public sealed class SettingsService
             try
             {
                 Directory.CreateDirectory(SettingsDirectory);
-                var json = JsonSerializer.Serialize(settings, _options);
+                var json = JsonSerializer.Serialize(settings, SettingsJsonContext.Default.AppSettings);
                 var tempPath = SettingsPath + ".tmp";
                 File.WriteAllText(tempPath, json);
                 File.Move(tempPath, SettingsPath, overwrite: true);
