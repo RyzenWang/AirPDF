@@ -125,6 +125,23 @@
     <Setter Property="Opacity" Value="0.82" />
   </Style>
 
+  <Style Selector="Button.home">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.home /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="8" />
+  </Style>
+  <Style Selector="Button.home:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Opacity" Value="0.82" />
+  </Style>
+  <Style Selector="Button.home:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Opacity" Value="0.7" />
+  </Style>
   <Style Selector="Button.tab">
     <Setter Property="Background" Value="Transparent" />
     <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />

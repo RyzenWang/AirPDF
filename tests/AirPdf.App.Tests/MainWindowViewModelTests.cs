@@ -221,6 +221,32 @@ public sealed class MainWindowViewModelTests
         Assert.Equal(3, context.ViewModel.CurrentPage);
     }
     [AvaloniaFact]
+    public async Task GoHome_ClosesTheDocumentAndKeepsTheReadingPosition()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 4, pageOffset: 0.3);
+
+        context.ViewModel.GoHomeCommand.Execute(null);
+
+        Assert.False(context.ViewModel.IsDocumentOpen);
+        Assert.True(context.ViewModel.IsWelcomeVisible);
+        Assert.Contains(
+            context.Services.Settings.ReadingPositions,
+            entry => entry.Page == 4);
+    }
+
+    [AvaloniaFact]
+    public void GoHome_WithoutADocument_DoesNothing()
+    {
+        using var context = new TestContext();
+
+        context.ViewModel.GoHomeCommand.Execute(null);
+
+        Assert.False(context.ViewModel.IsDocumentOpen);
+        Assert.True(context.ViewModel.IsWelcomeVisible);
+    }
+    [AvaloniaFact]
     public async Task Bookmarks_AreReloadedWhenTheDocumentIsOpenedAgain()
     {
         using var context = new TestContext();

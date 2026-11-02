@@ -3,6 +3,7 @@ using AirPdf.App.Services;
 using AirPdf.App.ViewModels;
 using AirPdf.App.Views;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Xunit;
@@ -174,6 +175,18 @@ public sealed class MainWindowXamlTests : IDisposable
         Assert.Same(viewModel.Bookmarks, list!.ItemsSource);
         Assert.True(viewModel.HasNoBookmarks);
         Assert.False(viewModel.IsBookmarksTabSelected);
+    }
+    /// <summary>The logo in the toolbar is the way back to the welcome screen.</summary>
+    [AvaloniaFact]
+    public void HomeButton_IsBoundToTheGoHomeCommand()
+    {
+        var window = CreateWindow();
+        var viewModel = Assert.IsType<MainWindowViewModel>(window.DataContext);
+        var button = window.FindControl<Button>("HomeButton");
+
+        Assert.NotNull(button);
+        Assert.Same(viewModel.GoHomeCommand, button!.Command);
+        Assert.False(string.IsNullOrWhiteSpace(AutomationProperties.GetName(button)));
     }
     private MainWindow CreateWindow()
     {

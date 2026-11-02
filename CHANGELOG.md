@@ -8,6 +8,10 @@ semantic versioning once it reaches 1.0.
 
 ### Added
 
+- The AirPDF logo in the toolbar returns to the welcome screen. It closes the open document,
+  which saves the reading position first, so the effect is reversible: open the file again
+  and you are back where you were.
+
 - Per-document bookmarks. `Ctrl+D` marks the current page and scroll offset, the sidebar
   gains a Bookmarks tab listing them with page numbers, clicking one jumps there and records
   a back step, and they are stored per file in the settings file next to the reading

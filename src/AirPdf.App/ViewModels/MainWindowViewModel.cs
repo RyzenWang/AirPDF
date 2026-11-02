@@ -480,6 +480,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _documentService.CloseDocument();
     }
 
+    /// <summary>
+    /// The logo in the toolbar: returns to the welcome screen. Closing the document is exactly
+    /// that, and it saves the reading position on the way out, so nothing is lost.
+    /// </summary>
+    [RelayCommand]
+    private void GoHome()
+    {
+        if (IsDocumentOpen)
+        {
+            CloseDocument();
+        }
+    }
+
     [RelayCommand]
     private void ToggleSidebar()
     {

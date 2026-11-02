@@ -89,15 +89,22 @@
             Padding="14,9">
       <Grid ColumnDefinitions="Auto,*,Auto">
         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <Border Width="31" Height="31" CornerRadius="8" Background="{DynamicResource AccentBrush}">
-            <Path Data="{StaticResource IconPlane}"
-                  Fill="White"
-                  Stretch="Uniform"
-                  Width="18"
-                  Height="18"
-                  HorizontalAlignment="Center"
-                  VerticalAlignment="Center" />
-          </Border>
+          <!-- The logo doubles as the way back to the welcome screen. -->
+          <Button x:Name="HomeButton"
+                  Classes="home"
+                  Command="{Binding GoHomeCommand}"
+                  ToolTip.Tip="{DynamicResource L.Home}"
+                  AutomationProperties.Name="{DynamicResource L.Home}">
+            <Border Width="31" Height="31" CornerRadius="8" Background="{DynamicResource AccentBrush}">
+              <Path Data="{StaticResource IconPlane}"
+                    Fill="White"
+                    Stretch="Uniform"
+                    Width="18"
+                    Height="18"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center" />
+            </Border>
+          </Button>
           <TextBlock Text="AirPDF"
                      FontSize="15.5"
                      FontWeight="Bold"
