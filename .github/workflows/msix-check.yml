@@ -59,7 +59,11 @@ jobs:
           $cer = "$env:RUNNER_TEMP/msix-test.cer"
           [IO.File]::WriteAllBytes($cer, $cert.Export('Cert'))
 
+          # A self-signed package certificate terminates the chain in itself, so it
+          # has to be trusted as a root as well as a trusted person; otherwise
+          # Add-AppxPackage fails with 0x800B0109.
           Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
+          Import-Certificate -FilePath $cer -CertStoreLocation 'Cert:\LocalMachine\Root' | Out-Null
           "trusted $($cert.Thumbprint)" | Tee-Object -Append $env:GITHUB_STEP_SUMMARY
 
       - name: Install the package
@@ -116,9 +120,11 @@ jobs:
         shell: pwsh
         run: |
           Get-AppxPackage -Name AirPDF | Remove-AppxPackage -ErrorAction Continue || $true
-          Get-ChildItem 'Cert:\LocalMachine\TrustedPeople' |
-            Where-Object { $_.Subject -like '*AirPDF Test Signing*' } |
-            Remove-Item -Force -ErrorAction Continue
+          foreach ($store in @('Cert:\LocalMachine\TrustedPeople', 'Cert:\LocalMachine\Root')) {
+            Get-ChildItem $store |
+              Where-Object { $_.Subject -like '*AirPDF Test Signing*' } |
+              Remove-Item -Force -ErrorAction Continue
+          }
 
       - name: Upload the package
         uses: actions/upload-artifact@v4
