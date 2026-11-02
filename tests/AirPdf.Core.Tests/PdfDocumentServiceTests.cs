@@ -4,6 +4,7 @@ using Xunit;
 
 namespace AirPdf.Core.Tests;
 
+[Collection(PdfiumCollection.Name)]
 public sealed class PdfDocumentServiceTests
 {
     private static readonly string SamplePath =

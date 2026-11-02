@@ -17,6 +17,7 @@ namespace AirPdf.Core.Tests;
 /// serializes every call behind a process-wide gate; reaching for the low-level handle from a
 /// test class that xUnit runs in parallel with another one crashes the test host.
 /// </remarks>
+[Collection(PdfiumCollection.Name)]
 public sealed class PdfiumTextPageTests
 {
     private static readonly string SamplePath =

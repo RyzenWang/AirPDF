@@ -8,6 +8,7 @@ namespace AirPdf.Core.Tests;
 /// <c>links.pdf</c> is a two-page fixture: page 1 carries an external URI link, page 2 an
 /// internal link back to page 1. See tests/Assets/README.md for how it is built.
 /// </summary>
+[Collection(PdfiumCollection.Name)]
 public sealed class PdfLinkTests
 {
     private static readonly string LinksPath =

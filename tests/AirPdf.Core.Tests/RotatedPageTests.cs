@@ -11,6 +11,7 @@ namespace AirPdf.Core.Tests;
 /// rendered page actually has content under it. A transform off by one quarter turn lands on
 /// blank paper and fails these assertions.
 /// </summary>
+[Collection(PdfiumCollection.Name)]
 public sealed class RotatedPageTests
 {
     [Theory]
