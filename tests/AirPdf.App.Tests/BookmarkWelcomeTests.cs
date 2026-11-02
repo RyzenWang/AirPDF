@@ -1,15 +1,16 @@
 using AirPdf.App.Services;
 using AirPdf.App.ViewModels;
 using AirPdf.App.Views;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Xunit;
 
 namespace AirPdf.App.Tests;
 
 /// <summary>
-/// Opening a bookmark from the welcome screen is the one path that opens a document and
-/// jumps in the same gesture, so it is worth checking that the target page actually renders
-/// rather than staying a placeholder.
+/// The welcome screen is a tab now, so clicking one of its bookmarks has to deal with a
+/// document that may already be open in another tab: it must focus that tab rather than open
+/// a second copy, and the target page must actually render.
 /// </summary>
 public sealed class BookmarkWelcomeTests : IDisposable
 {
@@ -28,52 +29,60 @@ public sealed class BookmarkWelcomeTests : IDisposable
     }
 
     [AvaloniaFact]
-    public async Task OpeningABookmarkFromTheWelcomeScreen_RendersTheTargetPage()
+    public async Task OpeningABookmarkFromHome_FocusesTheOpenTabAndRendersThePage()
     {
         var services = new AppServices(_settingsDirectory);
         var window = new MainWindow(services, new StubWindowService(), null, restoreWindowPosition: false);
         window.Show();
 
-        var viewModel = Assert.IsType<MainWindowViewModel>(window.DataContext);
+        var home = Assert.IsType<MainWindowViewModel>(window.DataContext);
+        Assert.True(home.IsHomeTab);
 
-        await viewModel.OpenPathAsync(SamplePath);
-        viewModel.UpdateCurrentPageFromScroll(pageNumber: 3, pageOffset: 0);
-        viewModel.AddBookmarkCommand.Execute(null);
-        var bookmark = Assert.Single(viewModel.AllBookmarks);
+        await home.OpenPathAsync(SamplePath);
 
-        viewModel.CloseDocumentCommand.Execute(null);
-        await Task.Delay(300);
-        Assert.False(viewModel.IsDocumentOpen);
-        Assert.True(viewModel.IsWelcomeVisible);
+        var document = Assert.Single(Tabs(window).Where(tab => !tab.IsHomeTab));
+        await WaitUntilAsync(() => document.IsDocumentOpen);
+        Assert.True(document.IsDocumentOpen);
 
-        await viewModel.OpenBookmarkCommand.ExecuteAsync(bookmark);
-        await WaitForRenderAsync(viewModel, expectedPageIndex: 2);
+        document.UpdateCurrentPageFromScroll(pageNumber: 3, pageOffset: 0);
+        document.AddBookmarkCommand.Execute(null);
+        var bookmark = Assert.Single(document.AllBookmarks);
 
-        Assert.True(viewModel.IsDocumentOpen);
-        Assert.False(viewModel.IsWelcomeVisible);
+        // Back to home: the document stays open in its tab.
+        document.GoHomeCommand.Execute(null);
+        Assert.Same(home, window.DataContext);
+        Assert.True(document.IsDocumentOpen);
 
-        // The window consumed the jump during the restore pass instead of a second scroll.
-        Assert.Null(viewModel.TakePendingOpenPosition());
+        home.OpenBookmarkCommand.Execute(bookmark);
+        await WaitUntilAsync(() => ReferenceEquals(window.DataContext, document) && document.Pages.Count > 2);
+        await WaitUntilAsync(() => document.Pages.Count > 2 && document.Pages[2].Image is not null);
 
-        // The target page must have been realised, which only happens when the view is scrolled
-        // to it; a placeholder is the failure the reader reported.
-        Assert.NotNull(viewModel.Pages[2].Image);
-        Assert.False(viewModel.Pages[2].ShowPlaceholder);
-        Assert.Null(viewModel.Pages[2].RenderError);
+        // The existing tab was focused instead of a duplicate being opened for the same file.
+        Assert.Single(Tabs(window).Where(tab => !tab.IsHomeTab));
+        Assert.Same(document, window.DataContext);
 
-        // CurrentPage is deliberately not asserted: it is derived from the scroll offset, and a
-        // headless window has no real layout, so the offset is clamped to 0 and the page number
-        // falls back to 1. The rendered page above is the platform-independent signal.
+        // The target page was realised and rendered: a placeholder is what the reader saw.
+        Assert.NotNull(document.Pages[2].Image);
+        Assert.False(document.Pages[2].ShowPlaceholder);
+        Assert.Null(document.Pages[2].RenderError);
 
         window.Close();
     }
 
-    private static async Task WaitForRenderAsync(MainWindowViewModel viewModel, int expectedPageIndex)
+    private static IReadOnlyList<MainWindowViewModel> Tabs(MainWindow window)
+    {
+        var list = window.FindControl<ListBox>("TabList");
+        Assert.NotNull(list);
+
+        return list!.ItemsSource is IEnumerable<MainWindowViewModel> tabs ? tabs.ToList() : [];
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(8);
         while (DateTime.UtcNow < deadline)
         {
-            if (viewModel.Pages.Count > expectedPageIndex && viewModel.Pages[expectedPageIndex].Image is not null)
+            if (condition())
             {
                 return;
             }

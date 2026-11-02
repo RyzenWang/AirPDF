@@ -102,8 +102,9 @@ public sealed class MainWindowXamlTests : IDisposable
 
         Assert.NotNull(list);
         var tabs = Assert.IsAssignableFrom<IEnumerable<MainWindowViewModel>>(list!.ItemsSource);
-        Assert.Single(tabs);
-        Assert.Same(tabs.First(), list.SelectedItem);
+        var home = Assert.Single(tabs);
+        Assert.True(home.IsHomeTab);
+        Assert.Same(home, list.SelectedItem);
     }
     /// <summary>
     /// The high-contrast palette is compiled into a class rather than loaded by resource URI,

@@ -8,10 +8,10 @@ semantic versioning once it reaches 1.0.
 
 ### Added
 
-- The AirPDF logo in the toolbar returns to the welcome screen. It closes the open document,
-  which saves the reading position first, so the effect is reversible: open the file again
-  and you are back where you were.
-
+- The welcome screen is now the first tab, named Home, so the tab strip exists from the
+  first document and returning home no longer closes what you are reading. The logo and
+  wordmark in the toolbar form one button back to it, and a document already open in another
+  tab is focused rather than opened twice when you click one of its bookmarks from Home.
 - Per-document bookmarks. `Ctrl+D` marks the current page and scroll offset, the sidebar
   gains a Bookmarks tab listing them with page numbers, clicking one jumps there and records
   a back step, and they are stored per file in the settings file next to the reading
@@ -101,7 +101,11 @@ explicit.
 
 ### Added
 
-- `packaging/signing/Set-SigningSecrets.ps1` validates a Windows or macOS
+- The welcome screen is now the first tab, named Home, so the tab strip exists from the
+  first document and returning home no longer closes what you are reading. The logo and
+  wordmark in the toolbar form one button back to it, and a document already open in another
+  tab is focused rather than opened twice when you click one of its bookmarks from Home.
+- The AirPDF logo in the toolbar returns to the welcome screen. It closes the open document,- `packaging/signing/Set-SigningSecrets.ps1` validates a Windows or macOS
   code-signing certificate (private key present, Code Signing extended key usage,
   not expired) and uploads it as the repository secrets the release workflow
   reads.
@@ -132,7 +136,11 @@ explicit.
 
 ### Added
 
-- Windows installer and portable package built with Velopack.
+- The welcome screen is now the first tab, named Home, so the tab strip exists from the
+  first document and returning home no longer closes what you are reading. The logo and
+  wordmark in the toolbar form one button back to it, and a document already open in another
+  tab is focused rather than opened twice when you click one of its bookmarks from Home.
+- The AirPDF logo in the toolbar returns to the welcome screen. It closes the open document,- Windows installer and portable package built with Velopack.
 - macOS `.pkg` and portable package built with optional Developer ID signing
   and Apple notarization.
 - In-app update checks, background downloads, and a restart-to-update action for
@@ -219,7 +227,11 @@ First public preview.
 
 ### Added
 
-- Cross-platform Avalonia desktop shell with a custom light and dark palette.
+- The welcome screen is now the first tab, named Home, so the tab strip exists from the
+  first document and returning home no longer closes what you are reading. The logo and
+  wordmark in the toolbar form one button back to it, and a document already open in another
+  tab is focused rather than opened twice when you click one of its bookmarks from Home.
+- The AirPDF logo in the toolbar returns to the welcome screen. It closes the open document,- Cross-platform Avalonia desktop shell with a custom light and dark palette.
 - PDFium page rendering with high-DPI sizing and a virtualized continuous page
   list.
 - Thumbnail rail, document outline, page navigation, and zoom controls.

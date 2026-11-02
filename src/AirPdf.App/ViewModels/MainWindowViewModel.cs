@@ -67,7 +67,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         PdfTextService textService,
         IUserDialogService dialogs,
         IWindowService windows,
-        ITabService? tabs = null)
+        ITabService? tabs = null,
+        bool isHomeTab = false)
     {
         _documentService = documentService;
         _searchService = searchService;
@@ -79,6 +80,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _theme = services.Theme;
         _windows = windows;
         _tabs = tabs;
+        IsHomeTab = isHomeTab;
         _services = services;
         _settings = services.Settings;
         _isSidebarVisible = _settings.SidebarVisible;
@@ -330,8 +332,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public bool IsWelcomeVisible => !IsDocumentOpen && !IsBusy;
 
+    /// <summary>True for the window's home tab, which shows the welcome screen.</summary>
+    public bool IsHomeTab { get; }
+
+    public bool IsNotHomeTab => !IsHomeTab;
+
     /// <summary>Label shown on the window's tab strip.</summary>
-    public string TabTitle => IsDocumentOpen && !string.IsNullOrWhiteSpace(FileName)
+    public string TabTitle => IsHomeTab
+        ? _localization.T("L.Home")
+        : IsDocumentOpen && !string.IsNullOrWhiteSpace(FileName)
         ? FileName
         : _localization.T("L.NewTab");
 
@@ -487,6 +496,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void GoHome()
     {
+        // Documents stay open: home is a tab, not the absence of a document.
+        if (_tabs is not null && !IsHomeTab)
+        {
+            _tabs.ShowHome();
+            return;
+        }
+
+        // Without a tab host (unit tests, headless hosts) fall back to closing.
         if (IsDocumentOpen)
         {
             CloseDocument();
@@ -729,6 +746,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         var position = new NavigationPoint(entry.Page, entry.PageOffset);
 
+        // A document already open in another tab wins over opening a duplicate of it.
+        if (!sameFile && _tabs is not null && _tabs.SelectTab(entry.FilePath) is { } openTab)
+        {
+            Dispatcher.UIThread.Post(
+                () => openTab.JumpToPosition(position),
+                DispatcherPriority.Loaded);
+            return;
+        }
+
         if (!sameFile)
         {
             // Hand the target to the open pass instead of scrolling afterwards: two competing
@@ -776,6 +802,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Moves a bookmark to a new index; used by drag and drop and the arrow commands.</summary>
+    /// <summary>Jumps to a position and records a back step; used when another tab asks.</summary>
+    public void JumpToPosition(NavigationPoint position)
+    {
+        if (!IsDocumentOpen)
+        {
+            return;
+        }
+
+        SetCurrentPage(position.Page);
+        ReturnToPositionRequested?.Invoke(this, position);
+    }
     public void MoveBookmarkTo(UserBookmarkViewModel? bookmark, int targetIndex)
     {
         if (bookmark is null || !IsDocumentOpen)
@@ -1114,6 +1151,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (string.IsNullOrWhiteSpace(filePath))
         {
+            return;
+        }
+
+        // Home is a place: opening from it must not turn the welcome screen into a document.
+        if (IsHomeTab && _tabs is not null)
+        {
+            _tabs.OpenInNewTab(filePath);
             return;
         }
 

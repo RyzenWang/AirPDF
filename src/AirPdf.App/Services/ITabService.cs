@@ -1,3 +1,5 @@
+using AirPdf.App.ViewModels;
+
 namespace AirPdf.App.Services;
 
 /// <summary>
@@ -7,4 +9,11 @@ namespace AirPdf.App.Services;
 public interface ITabService
 {
     void OpenInNewTab(string filePath);
+    /// <summary>Selects the window's home tab; open documents stay open.</summary>
+    void ShowHome();
+
+    /// <summary>
+    /// Selects the tab already showing this file, or returns null when no tab has it.
+    /// </summary>
+    MainWindowViewModel? SelectTab(string filePath);
 }

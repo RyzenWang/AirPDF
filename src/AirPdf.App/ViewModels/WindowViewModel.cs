@@ -12,25 +12,41 @@ namespace AirPdf.App.ViewModels;
 /// </summary>
 public sealed partial class WindowViewModel : ObservableObject, ITabService, IDisposable
 {
-    private readonly Func<MainWindowViewModel> _createTab;
+    private readonly Func<WindowViewModel, bool, MainWindowViewModel> _createTab;
     private readonly List<MainWindowViewModel> _owned = [];
 
-    public WindowViewModel(Func<MainWindowViewModel> createTab) => _createTab = createTab;
+    /// <summary>
+    /// Creates a tab. The host is passed in because the home tab is built during construction,
+    /// before the window field holding the host exists, and every tab needs a way back.
+    /// </summary>
+    public WindowViewModel(Func<WindowViewModel, bool, MainWindowViewModel> createTab)
+    {
+        _createTab = createTab;
+
+        HomeTab = createTab(this, true);
+        _owned.Add(HomeTab);
+        Tabs.Add(HomeTab);
+        SelectedTab = HomeTab;
+    }
+
+    /// <summary>The welcome screen as a place, so returning to it does not close documents.</summary>
+    public MainWindowViewModel HomeTab { get; }
 
     public ObservableCollection<MainWindowViewModel> Tabs { get; } = [];
 
     [ObservableProperty]
     private MainWindowViewModel? _selectedTab;
 
-    public bool HasMultipleTabs => Tabs.Count > 1;
+    /// <summary>The strip is visible from the first tab, home included.</summary>
+    public bool HasTabs => Tabs.Count > 0;
 
     public MainWindowViewModel AddTab(string? filePath = null)
     {
-        var tab = _createTab();
+        var tab = _createTab(this, false);
         _owned.Add(tab);
         Tabs.Add(tab);
         SelectedTab = tab;
-        OnPropertyChanged(nameof(HasMultipleTabs));
+        OnPropertyChanged(nameof(HasTabs));
 
         if (!string.IsNullOrWhiteSpace(filePath))
         {
@@ -51,9 +67,15 @@ public sealed partial class WindowViewModel : ObservableObject, ITabService, IDi
             return;
         }
 
+        if (ReferenceEquals(tab, HomeTab))
+        {
+            // Home is a place, not a document: there is nothing to close.
+            SelectedTab = HomeTab;
+            return;
+        }
+
         if (Tabs.Count <= 1)
         {
-            tab.CloseDocumentCommand.Execute(null);
             return;
         }
 
@@ -67,15 +89,31 @@ public sealed partial class WindowViewModel : ObservableObject, ITabService, IDi
 
         if (ReferenceEquals(SelectedTab, tab))
         {
-            SelectedTab = Tabs[Math.Clamp(index - 1, 0, Tabs.Count - 1)];
+            SelectedTab = HomeTab;
         }
 
-        OnPropertyChanged(nameof(HasMultipleTabs));
+        OnPropertyChanged(nameof(HasTabs));
         tab.Dispose();
     }
 
     /// <summary>Opens a document in a new tab of this window.</summary>
     public void OpenInNewTab(string filePath) => AddTab(filePath);
+
+    public void ShowHome() => SelectedTab = HomeTab;
+
+    public MainWindowViewModel? SelectTab(string filePath)
+    {
+        var tab = Tabs.FirstOrDefault(
+            candidate => !candidate.IsHomeTab
+                && string.Equals(candidate.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+
+        if (tab is not null)
+        {
+            SelectedTab = tab;
+        }
+
+        return tab;
+    }
 
     /// <summary>Cycles the selection, wrapping at both ends.</summary>
     public void SelectNext(int delta)

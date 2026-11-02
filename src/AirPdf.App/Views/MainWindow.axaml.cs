@@ -63,7 +63,10 @@ public partial class MainWindow : Window
         _tabs = new WindowViewModel(CreateTabViewModel);
         _tabs.PropertyChanged += OnTabsPropertyChanged;
         TabStrip.DataContext = _tabs;
-        _tabs.AddTab();
+
+        // The host selects its home tab during construction, before this window could
+        // subscribe, so point the content at it explicitly.
+        ShowTab(_tabs.SelectedTab);
 
         if (restoreWindowPosition)
         {
@@ -98,7 +101,7 @@ public partial class MainWindow : Window
         Closed += OnClosed;
     }
 
-    private MainWindowViewModel CreateTabViewModel()
+    private MainWindowViewModel CreateTabViewModel(WindowViewModel host, bool isHome)
     {
         var documents = new PdfDocumentService();
 
@@ -109,7 +112,8 @@ public partial class MainWindow : Window
             new PdfTextService(documents),
             new DialogService(() => this, _services.Localization),
             _windows,
-            _tabs);
+            host,
+            isHome);
     }
 
     private void OnTabsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -119,7 +123,7 @@ public partial class MainWindow : Window
             case nameof(WindowViewModel.SelectedTab):
                 ShowTab(_tabs.SelectedTab);
                 break;
-            case nameof(WindowViewModel.HasMultipleTabs):
+            case nameof(WindowViewModel.HasTabs):
                 UpdateTabStripVisibility();
                 break;
         }
@@ -127,7 +131,7 @@ public partial class MainWindow : Window
 
     private void UpdateTabStripVisibility()
     {
-        TabStrip.IsVisible = _tabs.HasMultipleTabs;
+        TabStrip.IsVisible = _tabs.HasTabs;
 
         // Selecting the tab the user clicked has to survive the ListBox re-binding.
         if (!ReferenceEquals(TabList.SelectedItem, _tabs.SelectedTab))

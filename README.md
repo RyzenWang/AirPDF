@@ -63,9 +63,10 @@ small .NET application with a hand-built Avalonia interface.
 - **Multiple windows** (`Ctrl+N`, or open the current file in a new window) sharing
   one settings store, theme, and language.
 - **Tabs** — `Ctrl+T` adds a document to the same window, and each tab keeps its own
+  zoom, scroll position, search results, and reading position. The first tab is **Home**,
+  so the strip exists from the start and going home never closes an open document.
 - **NativeAOT** — every release is compiled ahead of time, so the
   window appears in well under a second instead of several.
-  zoom, scroll position, search results, and reading position.
 - **Back navigation** with `Alt+Left` after any outline, thumbnail, search, or
   page jump.
 - **Right-click menu** for copy, select all, and showing the file in the folder.
@@ -274,8 +275,8 @@ docs/                   Screenshots and architecture notes
 - No annotations, form filling, printing, or PDF editing.
 - Only `http`, `https`, and `mailto` link targets are followed; `Launch` and
   remote-`GoTo` actions are ignored so a document cannot start a program.
-- One document per tab; `Ctrl+W` closes the tab (the last one closes its document and
-  leaves the window on the welcome screen).
+- One document per tab, plus a Home tab that is always there. `Ctrl+W` closes the tab and
+  returns to Home; the Home tab itself cannot be closed.
 - Release binaries are signed only when the maintainer signing secrets are
   configured. Unsigned Windows/macOS builds may show platform warnings.
 - Mobile and browser targets are out of scope for the desktop reader.

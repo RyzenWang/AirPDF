@@ -34,23 +34,62 @@ public sealed class WindowViewModelTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void AddTab_SelectsTheNewTabAndReportsMultipleTabs()
+    public void AddTab_AddsADocumentTabNextToHome()
     {
         var host = CreateHost();
 
-        var first = host.AddTab();
+        // The window opens on its home tab, so the strip is visible from the start.
         Assert.Single(host.Tabs);
+        Assert.Same(host.HomeTab, host.SelectedTab);
+        Assert.True(host.HomeTab.IsHomeTab);
+        Assert.True(host.HasTabs);
+
+        var first = host.AddTab();
+        Assert.Equal(2, host.Tabs.Count);
         Assert.Same(first, host.SelectedTab);
-        Assert.False(host.HasMultipleTabs);
+        Assert.False(first.IsHomeTab);
 
         var second = host.AddTab();
-        Assert.Equal(2, host.Tabs.Count);
+        Assert.Equal(3, host.Tabs.Count);
         Assert.Same(second, host.SelectedTab);
-        Assert.True(host.HasMultipleTabs);
     }
 
     [AvaloniaFact]
-    public async Task CloseTab_OnTheLastTab_ClosesItsDocumentAndKeepsTheTab()
+    public void CloseTab_OnTheHomeTab_KeepsIt()
+    {
+        var host = CreateHost();
+        var document = host.AddTab();
+
+        host.CloseTab(host.HomeTab);
+
+        Assert.Equal(2, host.Tabs.Count);
+        Assert.Contains(host.HomeTab, host.Tabs);
+        Assert.Contains(document, host.Tabs);
+    }
+
+    [AvaloniaFact]
+    public async Task OpeningFromHome_AddsADocumentTabAndLeavesHomeEmpty()
+    {
+        var host = CreateHost();
+
+        await host.HomeTab.OpenPathAsync(SamplePath);
+
+        Assert.Equal(2, host.Tabs.Count);
+        Assert.False(host.HomeTab.IsDocumentOpen);
+
+        var document = Assert.Single(host.Tabs.Where(tab => !tab.IsHomeTab));
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (!document.IsDocumentOpen && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(20);
+        }
+
+        Assert.True(document.IsDocumentOpen);
+        Assert.Same(document, host.SelectedTab);
+    }
+
+    [AvaloniaFact]
+    public async Task CloseTab_OnTheLastDocumentTab_RemovesItAndShowsHome()
     {
         var host = CreateHost();
         var tab = host.AddTab();
@@ -60,7 +99,22 @@ public sealed class WindowViewModelTests : IDisposable
         host.CloseTab(tab);
 
         Assert.Single(host.Tabs);
-        Assert.False(tab.IsDocumentOpen);
+        Assert.Same(host.HomeTab, host.SelectedTab);
+    }
+
+    [AvaloniaFact]
+    public async Task GoHome_KeepsTheDocumentOpenInItsTab()
+    {
+        var host = CreateHost();
+        var tab = host.AddTab();
+        await tab.OpenPathAsync(SamplePath);
+        Assert.Same(tab, host.SelectedTab);
+
+        tab.GoHomeCommand.Execute(null);
+
+        Assert.Same(host.HomeTab, host.SelectedTab);
+        Assert.True(tab.IsDocumentOpen);
+        Assert.Contains(tab, host.Tabs);
     }
 
     [AvaloniaFact]
@@ -72,9 +126,10 @@ public sealed class WindowViewModelTests : IDisposable
 
         host.CloseTab(second);
 
-        Assert.Single(host.Tabs);
-        Assert.Same(first, host.SelectedTab);
-        Assert.False(host.HasMultipleTabs);
+        Assert.Equal(2, host.Tabs.Count);
+        Assert.Contains(first, host.Tabs);
+        Assert.DoesNotContain(second, host.Tabs);
+        Assert.Same(host.HomeTab, host.SelectedTab);
     }
 
     [AvaloniaFact]
@@ -83,14 +138,17 @@ public sealed class WindowViewModelTests : IDisposable
         var host = CreateHost();
         var first = host.AddTab();
         var second = host.AddTab();
-        var third = host.AddTab();
-        Assert.Same(third, host.SelectedTab);
+        Assert.Same(second, host.SelectedTab);
+
+        // Home is the first tab, so cycling wraps through it.
+        host.SelectNext(1);
+        Assert.Same(host.HomeTab, host.SelectedTab);
 
         host.SelectNext(1);
         Assert.Same(first, host.SelectedTab);
 
         host.SelectNext(-1);
-        Assert.Same(third, host.SelectedTab);
+        Assert.Same(host.HomeTab, host.SelectedTab);
 
         host.SelectNext(-1);
         Assert.Same(second, host.SelectedTab);
@@ -135,56 +193,75 @@ public sealed class WindowViewModelTests : IDisposable
         var host = CreateHost();
         var first = host.AddTab();
         await first.OpenPathAsync(SamplePath);
-        Assert.Single(host.Tabs);
+        Assert.Equal(2, host.Tabs.Count);
 
         _dialog.NextFile = SamplePath;
         first.OpenCommand.Execute(null);
 
         var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (host.Tabs.Count < 3 && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(20);
+        }
+
+        Assert.Equal(3, host.Tabs.Count);
+        Assert.NotSame(first, host.SelectedTab);
+    }
+
+    [AvaloniaFact]
+    public async Task OpenCommand_OnHome_OpensADocumentTabInstead()
+    {
+        var host = CreateHost();
+
+        _dialog.NextFile = SamplePath;
+        host.HomeTab.OpenCommand.Execute(null);
+
+        var deadline = DateTime.UtcNow.AddSeconds(20);
         while (host.Tabs.Count < 2 && DateTime.UtcNow < deadline)
         {
             await Task.Delay(20);
         }
 
         Assert.Equal(2, host.Tabs.Count);
-        Assert.NotSame(first, host.SelectedTab);
-    }
+        Assert.False(host.HomeTab.IsDocumentOpen);
 
-    [AvaloniaFact]
-    public async Task OpenCommand_OnTheWelcomeScreen_UsesTheCurrentTab()
-    {
-        var host = CreateHost();
-        var first = host.AddTab();
-
-        _dialog.NextFile = SamplePath;
-        first.OpenCommand.Execute(null);
-
-        var deadline = DateTime.UtcNow.AddSeconds(20);
-        while (!first.IsDocumentOpen && DateTime.UtcNow < deadline)
+        var document = Assert.Single(host.Tabs.Where(tab => !tab.IsHomeTab));
+        while (!document.IsDocumentOpen && DateTime.UtcNow < deadline)
         {
             await Task.Delay(20);
         }
 
-        Assert.Single(host.Tabs);
-        Assert.True(first.IsDocumentOpen);
+        Assert.True(document.IsDocumentOpen);
+        Assert.Same(document, host.SelectedTab);
+    }
+    [AvaloniaFact]
+    public async Task SelectTab_FindsAnOpenDocumentAndIgnoresUnknownFiles()
+    {
+        var host = CreateHost();
+        var tab = host.AddTab();
+        await tab.OpenPathAsync(SamplePath);
+
+        Assert.Same(tab, host.SelectTab(SamplePath));
+        Assert.Null(host.SelectTab(Path.Combine(Path.GetTempPath(), "not-open.pdf")));
     }
     private WindowViewModel CreateHost()
     {
         _services ??= new AppServices(_settingsDirectory);
         var services = _services;
 
-        _host = new WindowViewModel(() =>
+        _host = new WindowViewModel((host, isHome) =>
         {
             var documents = new PdfDocumentService();
 
             return new MainWindowViewModel(
-            services,
-            documents,
-            new PdfSearchService(documents),
-            new PdfTextService(documents),
-            _dialog,
-            new StubWindowService(),
-            _host);
+                services,
+                documents,
+                new PdfSearchService(documents),
+                new PdfTextService(documents),
+                _dialog,
+                new StubWindowService(),
+                host,
+                isHome);
         });
 
         return _host;
