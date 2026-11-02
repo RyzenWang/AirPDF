@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 using AirPdf.Core.Models;
-using AirPdf.Core.Pdfium;
+using AirPdf.Core.Services;
 using SkiaSharp;
 using Xunit;
 
@@ -8,9 +8,15 @@ namespace AirPdf.Core.Tests;
 
 /// <summary>
 /// PDFium's text layer is the replacement for PdfPig's: characters arrive in reading order
-/// with boxes in unrotated page space, so rotated pages keep their text and the geometry is
-/// the only thing that needs mapping.
+/// with boxes in unrotated page space, so rotated pages keep their text and only the geometry
+/// needs mapping.
 /// </summary>
+/// <remarks>
+/// These tests go through <see cref="PdfDocumentService"/> rather than
+/// <see cref="Pdfium.PdfiumDocument"/> directly. PDFium is not thread-safe and the service
+/// serializes every call behind a process-wide gate; reaching for the low-level handle from a
+/// test class that xUnit runs in parallel with another one crashes the test host.
+/// </remarks>
 public sealed class PdfiumTextPageTests
 {
     private static readonly string SamplePath =
@@ -21,14 +27,15 @@ public sealed class PdfiumTextPageTests
     [InlineData(90)]
     [InlineData(180)]
     [InlineData(270)]
-    public void RotatedPages_KeepTheTextInReadingOrder(int rotation)
+    public async Task RotatedPages_KeepTheTextInReadingOrder(int rotation)
     {
         var path = WriteFixture(rotation);
         try
         {
-            using var document = PdfiumDocument.Open(path, password: null);
+            using var documents = new PdfDocumentService();
+            await documents.OpenAsync(path);
 
-            var page = document.GetTextPage(1);
+            var page = await documents.GetTextPageAsync(1);
 
             var text = string.Concat(page.Words.Select(word => word.Text));
             Assert.Equal(RotatedPdfFixture.Word, text);
@@ -48,28 +55,30 @@ public sealed class PdfiumTextPageTests
         var path = WriteFixture(rotation);
         try
         {
-            using var document = PdfiumDocument.Open(path, password: null);
-            var page = document.GetTextPage(1);
-            var word = Assert.Single(page.Words);
+            using var documents = new PdfDocumentService();
+            await documents.OpenAsync(path);
 
-            using var bitmap = document.RenderPage(1, 400);
+            var word = Assert.Single((await documents.GetTextPageAsync(1)).Words);
+
+            using var bitmap = await documents.RenderPageAsync(path, 1, 400);
 
             var ink = DarkFraction(bitmap, word.Bounds);
             Assert.True(ink > 0.05, $"quarter turns {rotation / 90}: word box covered {ink:P1} dark pixels");
         }
         finally
         {
-            await Task.CompletedTask;
+            File.Delete(path);
         }
     }
 
     [Fact]
-    public void UprightText_StillExtractsWords()
+    public async Task UprightText_StillExtractsWords()
     {
-        using var document = PdfiumDocument.Open(SamplePath, password: null);
+        using var documents = new PdfDocumentService();
+        await documents.OpenAsync(SamplePath);
 
         // Page 1 is the cover, whose letters are separated by real spaces; page 2 is body text.
-        var page = document.GetTextPage(2);
+        var page = await documents.GetTextPageAsync(2);
 
         Assert.NotEmpty(page.Words);
         var text = string.Join(" ", page.Words.Select(word => word.Text));
@@ -77,12 +86,13 @@ public sealed class PdfiumTextPageTests
     }
 
     [Fact]
-    public void ChineseText_KeepsItsCharactersWithoutInventingSpaces()
+    public async Task ChineseText_KeepsItsCharactersWithoutInventingSpaces()
     {
-        using var document = PdfiumDocument.Open(SamplePath, password: null);
+        using var documents = new PdfDocumentService();
+        await documents.OpenAsync(SamplePath);
 
         // Page 7 of the sample is the Simplified Chinese page.
-        var page = document.GetTextPage(7);
+        var page = await documents.GetTextPageAsync(7);
 
         Assert.NotEmpty(page.Words);
         var text = string.Concat(page.Words.Select(word => word.Text));
@@ -90,13 +100,14 @@ public sealed class PdfiumTextPageTests
     }
 
     [Fact]
-    public void WordBoxesStayInsideThePage()
+    public async Task WordBoxesStayInsideThePage()
     {
-        using var document = PdfiumDocument.Open(SamplePath, password: null);
+        using var documents = new PdfDocumentService();
+        await documents.OpenAsync(SamplePath);
 
         for (var pageNumber = 1; pageNumber <= 3; pageNumber++)
         {
-            foreach (var word in document.GetTextPage(pageNumber).Words)
+            foreach (var word in (await documents.GetTextPageAsync(pageNumber)).Words)
             {
                 Assert.InRange(word.Bounds.X, 0, 1);
                 Assert.InRange(word.Bounds.Y, 0, 1);

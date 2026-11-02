@@ -15,6 +15,12 @@ public readonly record struct PdfPageSize(double Width, double Height);
 /// other processes: reads go through a callback over a <see cref="FileShare.ReadWrite"/>
 /// stream rather than a native file lock.
 /// </summary>
+/// <remarks>
+/// <b>Not thread-safe.</b> PDFium serializes nothing internally, so every call must be made
+/// from one thread at a time; <see cref="Services.PdfDocumentService"/> holds the process-wide
+/// gate that guarantees it. Calling this class directly from more than one thread crashes the
+/// process, which is why tests go through the service.
+/// </remarks>
 public sealed class PdfiumDocument : IDisposable
 {
     private readonly FileStream _stream;
