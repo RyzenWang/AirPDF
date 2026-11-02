@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Platform;
 using Avalonia.Styling;
+using AirPdf.App.Styles;
 using AirPdf.Core.Services;
 
 namespace AirPdf.App.Services;
@@ -166,16 +167,11 @@ public sealed class ThemeService : IDisposable
 
         try
         {
-            var include = new ResourceInclude(new Uri("avares://AirPdf/"))
-            {
-                Source = new Uri("avares://AirPdf/Styles/HighContrast.axaml")
-            };
-
-            if (include.Loaded is { } palette)
-            {
-                application.Resources.MergedDictionaries.Add(palette);
-                _highContrastPalette = palette;
-            }
+            // Compiled dictionary rather than ResourceInclude(Uri): the URI form locates the
+            // XAML through the resource loader at runtime, which trimming cannot guarantee.
+            var palette = new HighContrastPalette();
+            application.Resources.MergedDictionaries.Add(palette);
+            _highContrastPalette = palette;
         }
         catch
         {

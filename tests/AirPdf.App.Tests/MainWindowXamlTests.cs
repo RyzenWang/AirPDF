@@ -2,6 +2,7 @@ using AirPdf.App.Controls;
 using AirPdf.App.Services;
 using AirPdf.App.ViewModels;
 using AirPdf.App.Views;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Xunit;
@@ -102,6 +103,61 @@ public sealed class MainWindowXamlTests : IDisposable
         var tabs = Assert.IsAssignableFrom<IEnumerable<MainWindowViewModel>>(list!.ItemsSource);
         Assert.Single(tabs);
         Assert.Same(tabs.First(), list.SelectedItem);
+    }
+    /// <summary>
+    /// The high-contrast palette is compiled into a class rather than loaded by resource URI,
+    /// because the URI form is annotated as requiring unreferenced code and a trimmed build
+    /// cannot guarantee it. Constructing it has to yield the full brush set: a missing key
+    /// falls through to the light/dark palette and produces unreadable combinations.
+    /// </summary>
+    [AvaloniaFact]
+    public void HighContrastPalette_IsCompiledWithEveryBrush()
+    {
+        var palette = new AirPdf.App.Styles.HighContrastPalette();
+
+        string[] required =
+        [
+            "AppBackgroundBrush", "ToolbarBackgroundBrush", "StatusBackgroundBrush",
+            "SidebarBackgroundBrush", "SurfaceBrush", "SurfaceAltBrush", "SurfaceHoverBrush",
+            "SurfacePressedBrush", "PagePlaceholderBrush", "BorderBrush", "BorderStrongBrush",
+            "TextPrimaryBrush", "TextSecondaryBrush", "TextTertiaryBrush", "InverseTextBrush",
+            "AccentBrush", "AccentHoverBrush", "AccentSoftBrush", "AccentTextBrush",
+            "TealBrush", "TealSoftBrush", "ShadowBrush", "PageShadowBrush", "OverlayScrimBrush",
+            "SearchHighlightBrush", "SearchActiveBrush", "DangerBrush", "DangerSoftBrush",
+            "SystemAccentColor", "SystemAccentColorBrush", "TextFillColorPrimaryBrush",
+            "TextFillColorSecondaryBrush", "TextFillColorTertiaryBrush",
+            "TextControlBackground", "TextControlBackgroundPointerOver",
+            "TextControlBackgroundFocused", "TextControlBorderBrush",
+            "TextControlBorderBrushPointerOver", "TextControlBorderBrushFocused",
+            "TextControlForeground"
+        ];
+
+        foreach (var key in required)
+        {
+            Assert.True(palette.TryGetResource(key, null, out var value), $"missing brush: {key}");
+            Assert.NotNull(value);
+        }
+
+        Assert.Equal(required.Length, palette.Count);
+    }
+
+    /// <summary>
+    /// Selecting high contrast merges the palette; leaving it removes the same instance.
+    /// </summary>
+    [AvaloniaFact]
+    public void HighContrastMode_MergesAndRemovesTheCompiledPalette()
+    {
+        var application = Application.Current!;
+        var services = new AppServices(_settingsDirectory);
+
+        services.Theme.Set(ThemeService.HighContrastMode, persist: false);
+
+        var merged = application.Resources.MergedDictionaries;
+        Assert.Contains(merged, dictionary => dictionary is AirPdf.App.Styles.HighContrastPalette);
+
+        services.Theme.Set(ThemeService.DarkMode, persist: false);
+
+        Assert.DoesNotContain(merged, dictionary => dictionary is AirPdf.App.Styles.HighContrastPalette);
     }
     private MainWindow CreateWindow()
     {

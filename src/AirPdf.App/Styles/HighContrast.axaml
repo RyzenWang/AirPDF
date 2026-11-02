@@ -1,8 +1,9 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    x:Class="AirPdf.App.Styles.HighContrastPalette">
   <!--
     High-contrast palette. Avalonia 11 has no built-in high-contrast theme variant, so
-    this dictionary is merged on top of Styles/Colors.axaml at runtime when the user
+    this dictionary is merged on top of Styles/Colors.axaml when the user
     picks the "High contrast" theme (see MainWindowViewModel.ApplyTheme).
 
     It must define every brush key that Colors.axaml defines, because merged
