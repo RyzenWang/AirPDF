@@ -39,6 +39,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly AppServices _services;
     private readonly AppSettings _settings;
     private readonly List<NavigationPoint> _history = [];
+    private NavigationPoint? _pendingOpenPosition;
     private CancellationTokenSource? _loadCancellation;
     private CancellationTokenSource? _searchCancellation;
     private PdfDocumentInfo? _document;
@@ -713,24 +714,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var sameFile = IsDocumentOpen
             && string.Equals(FilePath, entry.FilePath, StringComparison.OrdinalIgnoreCase);
 
+        var position = new NavigationPoint(entry.Page, entry.PageOffset);
+
         if (!sameFile)
         {
+            // Hand the target to the open pass instead of scrolling afterwards: two competing
+            // scrolls, one of them before the list has been measured, left the page blank.
+            _pendingOpenPosition = position;
             await OpenPathAsync(entry.FilePath);
             if (!string.Equals(FilePath, entry.FilePath, StringComparison.OrdinalIgnoreCase))
             {
+                _pendingOpenPosition = null;
                 return;
             }
-        }
-        else
-        {
-            PushHistory();
+
+            SetCurrentPage(entry.Page);
+            return;
         }
 
+        PushHistory();
         SetCurrentPage(entry.Page);
-
-        // Opening a document restores its saved reading position after this returns, so the
-        // jump is posted at the same priority and therefore lands after it.
-        var position = new NavigationPoint(entry.Page, entry.PageOffset);
         Dispatcher.UIThread.Post(
             () => ReturnToPositionRequested?.Invoke(this, position),
             DispatcherPriority.Loaded);
@@ -1266,6 +1269,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     public ReadingPositionEntry? TakePendingReadingPosition() => _reading.TakePending();
+
+    /// <summary>
+    /// A jump requested as part of opening a document, such as a bookmark clicked on the
+    /// welcome screen. The window applies it instead of the saved reading position, which
+    /// keeps it in the same restore pass rather than racing a second scroll against it.
+    /// </summary>
+    public NavigationPoint? TakePendingOpenPosition()
+    {
+        var pending = _pendingOpenPosition;
+        _pendingOpenPosition = null;
+        return pending;
+    }
 
     public void SaveReadingPositionNow() => _reading.SaveNow();
 

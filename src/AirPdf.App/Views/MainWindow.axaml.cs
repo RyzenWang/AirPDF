@@ -362,6 +362,7 @@ public partial class MainWindow : Window
     {
         // Posted work must not touch a tab the user has already switched away from.
         var viewModel = _viewModel;
+        var openPosition = viewModel.TakePendingOpenPosition();
         var readingPosition = viewModel.TakePendingReadingPosition();
 
         Dispatcher.UIThread.Post(() =>
@@ -376,7 +377,11 @@ public partial class MainWindow : Window
             _viewModel.ApplyInitialZoom();
             RebuildPageLayout();
 
-            if (readingPosition is not null)
+            if (openPosition is { } jumpTarget)
+            {
+                ScrollToReadingPosition(jumpTarget.Page, jumpTarget.PageOffset);
+            }
+            else if (readingPosition is not null)
             {
                 ScrollToReadingPosition(readingPosition.Page, readingPosition.PageOffset);
             }
@@ -564,6 +569,17 @@ public partial class MainWindow : Window
         var top = _pageLayout.GetTop(page.Number);
         var normalized = Math.Clamp(fraction, 0, 1);
         var target = top + (normalized * page.DisplayHeight);
+
+        // Scrolling past the current extent is silently clamped, and then the page never gets
+        // realised: that is the blank page seen after jumping from the welcome screen, where
+        // the list has not been measured yet.
+        if (viewer.Extent.Height < target + 1 && attempt < 4)
+        {
+            Dispatcher.UIThread.Post(
+                () => ScrollToReadingPosition(pageNumber, fraction, attempt + 1),
+                DispatcherPriority.Background);
+            return;
+        }
 
         ApplyScrollOffset(target, page.Number, normalized);
     }
