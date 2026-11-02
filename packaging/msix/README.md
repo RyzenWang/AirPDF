@@ -1,4 +1,4 @@
-﻿# MSIX packaging
+# MSIX packaging
 
 Proof of concept for shipping AirPDF through the Microsoft Store as an MSIX
 package. Nothing here is wired into `.github/workflows/release.yml`; the Velopack
@@ -64,10 +64,41 @@ The app must never write beside its executable. AirPDF keeps `settings.json` and
 
 ## Verified on a runner
 
-`Signing check` cannot install packages, so see `.github/workflows/msix-check.yml`:
-it builds the package, signs it with a throwaway certificate, trusts that
-certificate, installs the package, checks that Windows registered it, launches
-the app, and uninstalls.
+`.github/workflows/msix-check.yml` builds the package, signs it with a throwaway
+certificate, trusts that certificate, installs the package, checks what Windows
+registered, launches the app, opens a document the way the file association
+does, and uninstalls.
+
+The activation test launches the **installed** executable with a document path —
+exactly what the shell does for `windows.fileTypeAssociation` — using a name with
+a space and non-ASCII characters. Because the app records every opened document
+in its settings file, that file proves the document loaded rather than the
+argument being ignored.
+
+## Behaviour that differs from the Velopack build
+
+**%APPDATA% is redirected.** A packaged app's writes to `%APPDATA%` land in the
+package's own cache:
+
+```
+%LOCALAPPDATA%\Packages\AirPDF_<publisherhash>\LocalCache\Roaming\AirPdf\settings.json
+```
+
+Consequences worth deciding on before shipping to the Store:
+
+- Recent files, bookmarks, reading positions, theme, and language live in a
+  different file than the Velopack install uses, so the two channels do not share
+  state.
+- A user moving from the Velopack build to the Store build may or may not inherit
+  their old settings, depending on whether Windows falls back to the real file on
+  read. That needs a test on a physical machine; the CI check only asserts where
+  writes go.
+- Uninstalling the package removes that cache, so leaving the Store build loses
+  most preferences.
+
+If sharing one settings file matters, the fix is to read and write an explicit
+path under `%LOCALAPPDATA%` that is not redirected, or to copy the real
+`%APPDATA%\AirPdf\settings.json` into the package cache on first run.
 
 ## Not done yet
 
