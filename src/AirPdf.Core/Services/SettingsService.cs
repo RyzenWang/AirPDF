@@ -8,6 +8,9 @@ public sealed class AppSettings
 
     public List<ReadingPositionEntry> ReadingPositions { get; set; } = [];
 
+    /// <summary>Bookmarks the reader created, across all documents.</summary>
+    public List<BookmarkEntry> Bookmarks { get; set; } = [];
+
     public string Theme { get; set; } = "System";
 
     public string Language { get; set; } = "en";
@@ -62,11 +65,30 @@ public sealed class ReadingPositionEntry
 }
 
 /// <summary>
+/// A bookmark the reader created. This is separate from the PDF's own outline: the outline
+/// belongs to the document and is read-only, while these are per-machine notes about where
+/// the reader was, stored alongside the reading position for the same file.
+/// </summary>
+public sealed class BookmarkEntry
+{
+    public string FilePath { get; set; } = string.Empty;
+
+    public int Page { get; set; } = 1;
+
+    /// <summary>Offset within the page, normalized to 0..1.</summary>
+    public double PageOffset { get; set; }
+
+    public string Label { get; set; } = string.Empty;
+
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+/// <summary>
 /// Small JSON settings store in the platform's per-user application data folder.
 /// </summary>
 public sealed class SettingsService
 {
     private const int MaxRecentFiles = 10;
+    private const int MaxBookmarksPerDocument = 100;
     private readonly object _gate = new();
 
     public SettingsService(string? settingsDirectory = null)
@@ -151,6 +173,80 @@ public sealed class SettingsService
         }
     }
 
+    /// <summary>Bookmarks for one document, ordered by page and then by creation time.</summary>
+    public IReadOnlyList<BookmarkEntry> GetBookmarks(AppSettings settings, string filePath)
+    {
+        lock (_gate)
+        {
+            return settings.Bookmarks
+                .Where(entry => IsSameFile(entry.FilePath, filePath))
+                .OrderBy(entry => entry.Page)
+                .ThenBy(entry => entry.PageOffset)
+                .ThenBy(entry => entry.CreatedAt)
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Adds a bookmark, or returns the existing one when the reader already bookmarked this
+    /// spot: pressing the shortcut twice should not create two identical entries.
+    /// </summary>
+    public BookmarkEntry AddBookmark(
+        AppSettings settings,
+        string filePath,
+        int page,
+        double pageOffset,
+        string label)
+    {
+        lock (_gate)
+        {
+            var existing = settings.Bookmarks.FirstOrDefault(
+                entry => IsSameFile(entry.FilePath, filePath)
+                    && entry.Page == page
+                    && Math.Abs(entry.PageOffset - pageOffset) < 0.002);
+
+            if (existing is not null)
+            {
+                return existing;
+            }
+
+            var bookmark = new BookmarkEntry
+            {
+                FilePath = filePath,
+                Page = page,
+                PageOffset = pageOffset,
+                Label = label,
+                CreatedAt = DateTimeOffset.UtcNow
+            };
+
+            settings.Bookmarks.Add(bookmark);
+
+            // Keep the file from growing without bound if a reader bookmarks page by page.
+            var forThisFile = settings.Bookmarks.Where(entry => IsSameFile(entry.FilePath, filePath)).ToList();
+            if (forThisFile.Count > MaxBookmarksPerDocument)
+            {
+                foreach (var stale in forThisFile
+                             .OrderByDescending(entry => entry.CreatedAt)
+                             .Skip(MaxBookmarksPerDocument))
+                {
+                    settings.Bookmarks.Remove(stale);
+                }
+            }
+
+            return bookmark;
+        }
+    }
+
+    public bool RemoveBookmark(AppSettings settings, BookmarkEntry bookmark)
+    {
+        lock (_gate)
+        {
+            return settings.Bookmarks.Remove(bookmark);
+        }
+    }
+
+    private static bool IsSameFile(string left, string right) =>
+        string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
     private static string GetDefaultDirectory()
     {
         var root = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);

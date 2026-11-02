@@ -1,5 +1,6 @@
 using AirPdf.App.Services;
 using AirPdf.Core.Models;
+using AirPdf.Core.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AirPdf.App.ViewModels;
@@ -33,26 +34,50 @@ public sealed class SearchResultViewModel : ObservableObject
     public void RefreshLanguage() => OnPropertyChanged(nameof(PageLabel));
 }
 
-public sealed class BookmarkViewModel
+public sealed class OutlineItemViewModel
 {
-    public BookmarkViewModel(PdfBookmark bookmark)
+    public OutlineItemViewModel(PdfBookmark bookmark)
     {
         Title = bookmark.Title;
         PageNumber = bookmark.PageNumber;
-        Children = bookmark.Children.Select(child => new BookmarkViewModel(child)).ToList();
+        Children = bookmark.Children.Select(child => new OutlineItemViewModel(child)).ToList();
     }
 
     public string Title { get; }
 
     public int PageNumber { get; }
 
-    public IReadOnlyList<BookmarkViewModel> Children { get; }
+    public IReadOnlyList<OutlineItemViewModel> Children { get; }
 
     public bool HasChildren => Children.Count > 0;
 
     public string PageLabel => PageNumber.ToString();
 }
 
+/// <summary>
+/// A bookmark the reader created, as shown in the sidebar. Distinct from
+/// <see cref="OutlineItemViewModel"/>, which mirrors the PDF's own outline.
+/// </summary>
+public sealed class UserBookmarkViewModel
+{
+    public UserBookmarkViewModel(BookmarkEntry entry, Func<int, string> pageLabel)
+    {
+        Entry = entry;
+        PageLabel = pageLabel(entry.Page);
+    }
+
+    public BookmarkEntry Entry { get; }
+
+    public string Label => Entry.Label;
+
+    public int PageNumber => Entry.Page;
+
+    public double PageOffset => Entry.PageOffset;
+
+    public string PageLabel { get; }
+
+    public NavigationPoint Position => new(Entry.Page, Entry.PageOffset);
+}
 public sealed record MetadataRow(string Label, string Value);
 
 /// <summary>

@@ -55,6 +55,8 @@ small .NET application with a hand-built Avalonia interface.
 - **Password-protected PDFs** with a proper unlock prompt.
 - **Light, dark, and high-contrast themes**, following the system on first launch.
 - **Status bar** with the page position and a reading-progress percentage.
+- **Per-document bookmarks** — `Ctrl+D` marks the current spot, and the sidebar keeps
+  them per file, so they are still there next time you open it.
 - **Links** — internal destinations jump to their page, `http`/`https`/`mailto`
   links open in your browser or mail client, and the cursor turns into a hand.
 - **Multiple windows** (`Ctrl+N`, or open the current file in a new window) sharing
@@ -201,6 +203,7 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl+T` / `Cmd+T` | Open a new tab |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
 | `Ctrl+F` / `Cmd+F` | Find in document |
+| `Ctrl+D` / `Cmd+D` | Add a bookmark at the current position |
 | `F3` / `Shift+F3` | Next / previous search match |
 | `Alt+Left` | Return to the previous position |
 | Drag on text | Select words |
@@ -280,7 +283,7 @@ docs/                   Screenshots and architecture notes
 
 - [x] PDF hyperlinks and internal link navigation
 - [ ] Native printing and "Save a copy"
-- [ ] Per-document bookmarks
+- [x] Per-document bookmarks
 - [x] Rotated pages (links, search highlights, text selection)
 - [ ] Annotations (highlight, ink, notes)
 - [x] Multiple windows

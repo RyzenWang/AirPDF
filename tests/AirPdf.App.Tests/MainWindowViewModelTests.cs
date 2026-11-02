@@ -80,6 +80,74 @@ public sealed class MainWindowViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task AddBookmark_AppearsInTheSidebarAndInSettings()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        context.ViewModel.AddBookmarkCommand.Execute(null);
+
+        var bookmark = Assert.Single(context.ViewModel.Bookmarks);
+        Assert.True(context.ViewModel.HasBookmarks);
+        Assert.False(context.ViewModel.HasNoBookmarks);
+        Assert.Equal(1, bookmark.PageNumber);
+        Assert.Contains(
+            context.Services.Settings.Bookmarks,
+            entry => entry.Page == 1 && entry.FilePath == SamplePath);
+    }
+
+    [AvaloniaFact]
+    public async Task RemoveBookmark_ClearsTheSidebarAndTheStoredEntry()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        context.ViewModel.AddBookmarkCommand.Execute(null);
+        var bookmark = Assert.Single(context.ViewModel.Bookmarks);
+
+        context.ViewModel.RemoveBookmarkCommand.Execute(bookmark);
+
+        Assert.Empty(context.ViewModel.Bookmarks);
+        Assert.True(context.ViewModel.HasNoBookmarks);
+        Assert.Empty(context.Services.Settings.Bookmarks);
+    }
+
+    [AvaloniaFact]
+    public async Task GoToBookmark_JumpsAndLeavesABackStep()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 4, pageOffset: 0);
+        context.ViewModel.AddBookmarkCommand.Execute(null);
+        var bookmark = Assert.Single(context.ViewModel.Bookmarks);
+        Assert.Equal(4, bookmark.PageNumber);
+
+        // Jumping to a bookmark records where the reader was, so back returns to page 1.
+        context.ViewModel.NavigateToPage(1);
+        context.ViewModel.GoToBookmarkCommand.Execute(bookmark);
+        Assert.Equal(4, context.ViewModel.CurrentPage);
+
+        context.ViewModel.NavigateBackCommand.Execute(null);
+        Assert.Equal(1, context.ViewModel.CurrentPage);
+    }
+
+    [AvaloniaFact]
+    public async Task Bookmarks_AreReloadedWhenTheDocumentIsOpenedAgain()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 6, pageOffset: 0.2);
+        context.ViewModel.AddBookmarkCommand.Execute(null);
+
+        // A second window over the same settings sees the bookmark once it opens the file.
+        using var second = context.CreateSecondViewModel();
+        await second.OpenPathAsync(SamplePath);
+
+        var bookmark = Assert.Single(second.Bookmarks);
+        Assert.Equal(6, bookmark.PageNumber);
+        Assert.Equal(0.2, bookmark.PageOffset, 3);
+    }
+    [AvaloniaFact]
     public async Task Zoom_IsRememberedPerDocument()
     {
         using var context = new TestContext();

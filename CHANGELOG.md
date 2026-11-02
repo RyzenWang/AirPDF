@@ -6,6 +6,15 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+### Added
+
+- Per-document bookmarks. `Ctrl+D` marks the current page and scroll offset, the sidebar
+  gains a Bookmarks tab listing them with page numbers, clicking one jumps there and records
+  a back step, and they are stored per file in the settings file next to the reading
+  position, so they survive restarts. Pressing the shortcut twice on the same spot does not
+  duplicate the entry, and a document is capped at 100 bookmarks. This is separate from a
+  PDF's own outline, which still has its own tab.
+
 ## [0.3.2] - 2026-11-02
 
 Every platform is now compiled ahead of time.

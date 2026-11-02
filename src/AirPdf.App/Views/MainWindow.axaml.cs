@@ -633,12 +633,31 @@ public partial class MainWindow : Window
 
     private void OnOutlineSelectionChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (OutlineTree.SelectedItem is BookmarkViewModel bookmark)
+        if (OutlineTree.SelectedItem is OutlineItemViewModel outlineItem)
         {
-            _viewModel.NavigateToPage(bookmark.PageNumber);
+            _viewModel.NavigateToPage(outlineItem.PageNumber);
         }
     }
 
+    private void OnBookmarkListSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (BookmarkList.SelectedItem is UserBookmarkViewModel bookmark)
+        {
+            _viewModel.GoToBookmarkCommand.Execute(bookmark);
+
+            // Clear the selection so clicking the same bookmark again still navigates.
+            BookmarkList.SelectedItem = null;
+        }
+    }
+
+    private void OnRemoveBookmarkClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: UserBookmarkViewModel bookmark })
+        {
+            e.Handled = true;
+            _viewModel.RemoveBookmarkCommand.Execute(bookmark);
+        }
+    }
     private void OnPageNumberKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key == Key.Enter)
@@ -1005,6 +1024,13 @@ public partial class MainWindow : Window
         if (ctrl && e.Key == Key.Tab)
         {
             _tabs.SelectNext(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1);
+            e.Handled = true;
+            return;
+        }
+
+        if (ctrl && e.Key == Key.D)
+        {
+            _viewModel.AddBookmarkCommand.Execute(null);
             e.Handled = true;
             return;
         }

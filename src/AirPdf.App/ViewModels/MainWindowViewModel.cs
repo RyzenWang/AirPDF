@@ -129,7 +129,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private IReadOnlyList<ThumbnailViewModel> _thumbnails = [];
 
     [ObservableProperty]
-    private IReadOnlyList<BookmarkViewModel> _bookmarks = [];
+    private IReadOnlyList<OutlineItemViewModel> _outlineItems = [];
+
+    [ObservableProperty]
+    private IReadOnlyList<UserBookmarkViewModel> _bookmarks = [];
 
     [ObservableProperty]
     private IReadOnlyList<MetadataRow> _metadata = [];
@@ -175,6 +178,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isContentsTabSelected;
+
+    [ObservableProperty]
+    private bool _isBookmarksTabSelected;
 
     [ObservableProperty]
     private bool _isSearchOpen;
@@ -241,6 +247,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool HasRecentFiles => RecentFiles.Count > 0;
 
     public bool HasNoRecentFiles => !HasRecentFiles;
+
+    public bool HasOutlineItems => OutlineItems.Count > 0;
+
+    public bool HasNoOutlineItems => !HasOutlineItems;
 
     public bool HasBookmarks => Bookmarks.Count > 0;
 
@@ -590,6 +600,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         IsPagesTabSelected = true;
         IsContentsTabSelected = false;
+        IsBookmarksTabSelected = false;
     }
 
     [RelayCommand]
@@ -597,6 +608,73 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         IsPagesTabSelected = false;
         IsContentsTabSelected = true;
+        IsBookmarksTabSelected = false;
+    }
+
+    [RelayCommand]
+    private void ShowBookmarksTab()
+    {
+        IsPagesTabSelected = false;
+        IsContentsTabSelected = false;
+        IsBookmarksTabSelected = true;
+    }
+
+    /// <summary>Reads the bookmarks stored for a document into the sidebar list.</summary>
+    private void LoadBookmarks(string filePath)
+    {
+        var label = (Func<int, string>)(page => _localization.Format("L.BookmarkPageFormat", page));
+
+        Bookmarks = string.IsNullOrWhiteSpace(filePath)
+            ? []
+            : _settingsService
+                .GetBookmarks(_settings, filePath)
+                .Select(entry => new UserBookmarkViewModel(entry, label))
+                .ToList();
+    }
+
+    /// <summary>Bookmarks the current position, which is the page plus the scroll offset.</summary>
+    [RelayCommand]
+    private void AddBookmark()
+    {
+        if (!IsDocumentOpen || string.IsNullOrWhiteSpace(FilePath))
+        {
+            return;
+        }
+
+        var position = CurrentPosition;
+        var label = _localization.Format("L.BookmarkPageFormat", position.Page);
+
+        _settingsService.AddBookmark(_settings, FilePath, position.Page, position.PageOffset, label);
+        _settingsService.Save(_settings);
+        LoadBookmarks(FilePath);
+    }
+
+    [RelayCommand]
+    private void RemoveBookmark(UserBookmarkViewModel? bookmark)
+    {
+        if (bookmark is null || !IsDocumentOpen)
+        {
+            return;
+        }
+
+        if (_settingsService.RemoveBookmark(_settings, bookmark.Entry))
+        {
+            _settingsService.Save(_settings);
+            LoadBookmarks(FilePath);
+        }
+    }
+
+    [RelayCommand]
+    private void GoToBookmark(UserBookmarkViewModel? bookmark)
+    {
+        if (bookmark is null || !IsDocumentOpen)
+        {
+            return;
+        }
+
+        PushHistory();
+        SetCurrentPage(bookmark.PageNumber);
+        ReturnToPositionRequested?.Invoke(this, bookmark.Position);
     }
 
     [RelayCommand]
@@ -1202,7 +1280,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         Pages = info.Pages.Select(page => new PageViewModel(_pageRenderer, page, _localization)).ToList();
         Thumbnails = info.Pages.Select(page => new ThumbnailViewModel(_pageRenderer, page)).ToList();
-        Bookmarks = info.Bookmarks.Select(bookmark => new BookmarkViewModel(bookmark)).ToList();
+        OutlineItems = info.Bookmarks.Select(item => new OutlineItemViewModel(item)).ToList();
+        LoadBookmarks(info.FilePath);
         Metadata = BuildMetadata(info);
         TextLayerLoader? loader = null;
         loader = new TextLayerLoader(
@@ -1240,7 +1319,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SearchQuery = string.Empty;
         IsPagesTabSelected = true;
         IsContentsTabSelected = false;
+        IsBookmarksTabSelected = false;
 
+        OnPropertyChanged(nameof(HasOutlineItems));
         OnPropertyChanged(nameof(HasBookmarks));
         OnPropertyChanged(nameof(HasMetadata));
         OnPropertyChanged(nameof(PageStatusText));
@@ -1273,6 +1354,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         Pages = [];
         Thumbnails = [];
+        OutlineItems = [];
         Bookmarks = [];
         Metadata = [];
         SearchResults = [];
@@ -1293,6 +1375,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         DocumentSubtitle = _localization.T("L.Ready");
         WindowTitle = "AirPDF";
         ClearError();
+        OnPropertyChanged(nameof(HasOutlineItems));
         OnPropertyChanged(nameof(HasBookmarks));
         OnPropertyChanged(nameof(HasMetadata));
         OnPropertyChanged(nameof(PageStatusText));
@@ -1670,7 +1753,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         RefreshRecentFiles();
     }
 
-    partial void OnBookmarksChanged(IReadOnlyList<BookmarkViewModel> value) =>
+    partial void OnOutlineItemsChanged(IReadOnlyList<OutlineItemViewModel> value) =>
+        NotifyOutlineChanged();
+
+    partial void OnBookmarksChanged(IReadOnlyList<UserBookmarkViewModel> value) =>
         NotifyBookmarksChanged();
 
     partial void OnMetadataChanged(IReadOnlyList<MetadataRow> value) =>
@@ -1683,6 +1769,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         HasSearchResults = value.Count > 0;
         OnPropertyChanged(nameof(HasNoSearchResults));
+    }
+
+    private void NotifyOutlineChanged()
+    {
+        OnPropertyChanged(nameof(HasOutlineItems));
+        OnPropertyChanged(nameof(HasNoOutlineItems));
     }
 
     private void NotifyBookmarksChanged()

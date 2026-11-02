@@ -321,6 +321,10 @@
                         Classes.active="{Binding IsContentsTabSelected}"
                         Content="{DynamicResource L.Contents}"
                         Command="{Binding ShowContentsTabCommand}" />
+                <Button Classes="tab"
+                        Classes.active="{Binding IsBookmarksTabSelected}"
+                        Content="{DynamicResource L.Bookmarks}"
+                        Command="{Binding ShowBookmarksTabCommand}" />
               </StackPanel>
             </StackPanel>
             <Button Grid.Column="1"
@@ -350,12 +354,12 @@
             <Grid IsVisible="{Binding IsContentsTabSelected}">
               <TreeView x:Name="OutlineTree"
                         Classes="outlineTree"
-                        ItemsSource="{Binding Bookmarks}"
+                        ItemsSource="{Binding OutlineItems}"
                         Margin="8,2,8,16"
                         AutomationProperties.Name="{DynamicResource L.OutlineList}"
                         SelectionChanged="OnOutlineSelectionChanged">
                 <TreeView.ItemTemplate>
-                  <TreeDataTemplate x:DataType="vm:BookmarkViewModel" ItemsSource="{Binding Children}">
+                  <TreeDataTemplate x:DataType="vm:OutlineItemViewModel" ItemsSource="{Binding Children}">
                     <Grid ColumnDefinitions="*,Auto" Height="29" Margin="0,1">
                       <TextBlock Text="{Binding Title}"
                                  FontSize="12.5"
@@ -370,7 +374,7 @@
                   </TreeDataTemplate>
                 </TreeView.ItemTemplate>
               </TreeView>
-              <StackPanel IsVisible="{Binding HasNoBookmarks}"
+              <StackPanel IsVisible="{Binding HasNoOutlineItems}"
                           HorizontalAlignment="Center"
                           VerticalAlignment="Center"
                           Spacing="9"
@@ -379,6 +383,74 @@
                   <Path Classes="icon muted" Data="{StaticResource IconBook}" />
                 </Border>
                 <TextBlock Text="{DynamicResource L.NoOutline}"
+                           Classes="caption"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center" />
+              </StackPanel>
+            </Grid>
+
+            <!-- Bookmarks the reader created, as opposed to the document's own outline. -->
+            <Grid IsVisible="{Binding IsBookmarksTabSelected}" RowDefinitions="Auto,*">
+              <Button Grid.Row="0"
+                      Classes="soft"
+                      Margin="12,4,12,8"
+                      HorizontalAlignment="Stretch"
+                      HorizontalContentAlignment="Center"
+                      Command="{Binding AddBookmarkCommand}"
+                      ToolTip.Tip="{DynamicResource L.AddBookmark}"
+                      AutomationProperties.Name="{DynamicResource L.AddBookmark}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Path Classes="icon small" Data="{StaticResource IconPlus}" />
+                  <TextBlock Text="{DynamicResource L.AddBookmark}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+
+              <ListBox x:Name="BookmarkList"
+                       Grid.Row="1"
+                       Classes="thumbnailList"
+                       ItemsSource="{Binding Bookmarks}"
+                       Margin="6,0,6,12"
+                       AutomationProperties.Name="{DynamicResource L.BookmarksList}"
+                       SelectionChanged="OnBookmarkListSelectionChanged">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:UserBookmarkViewModel">
+                    <Grid ColumnDefinitions="*,Auto,Auto" Height="30">
+                      <TextBlock Text="{Binding Label}"
+                                 FontSize="12.5"
+                                 TextTrimming="CharacterEllipsis"
+                                 VerticalAlignment="Center" />
+                      <TextBlock Grid.Column="1"
+                                 Text="{Binding PageLabel}"
+                                 Classes="pageNumber"
+                                 VerticalAlignment="Center"
+                                 Margin="8,0" />
+                      <Button Grid.Column="2"
+                              Classes="icon"
+                              Width="20"
+                              Height="20"
+                              MinHeight="20"
+                              Padding="0"
+                              Click="OnRemoveBookmarkClick"
+                              Tag="{Binding}"
+                              ToolTip.Tip="{DynamicResource L.RemoveBookmark}"
+                              AutomationProperties.Name="{DynamicResource L.RemoveBookmark}">
+                        <Path Classes="icon small" Data="{StaticResource IconClose}" />
+                      </Button>
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
+              <StackPanel Grid.Row="1"
+                          IsVisible="{Binding HasNoBookmarks}"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Spacing="9"
+                          Margin="26">
+                <Border Width="42" Height="42" CornerRadius="11" Background="{DynamicResource SurfaceBrush}">
+                  <Path Classes="icon muted" Data="{StaticResource IconPlus}" />
+                </Border>
+                <TextBlock Text="{DynamicResource L.NoBookmarks}"
                            Classes="caption"
                            HorizontalAlignment="Center"
                            TextAlignment="Center" />
@@ -403,7 +475,10 @@
                         Command="{Binding CopySelectionCommand}"
                         IsEnabled="{Binding HasSelection}" />
               <MenuItem Header="{DynamicResource L.SelectAll}"
-                        Command="{Binding SelectAllTextCommand}" />
+                        Command="{Binding SelectAllTextCommand}" />              <Separator />
+              <MenuItem Header="{DynamicResource L.AddBookmark}"
+                        Command="{Binding AddBookmarkCommand}"
+                        IsEnabled="{Binding IsDocumentOpen}" />
               <Separator />
               <MenuItem Header="{DynamicResource L.OpenContainingFolder}"
                         Command="{Binding OpenContainingFolderCommand}"

@@ -159,6 +159,22 @@ public sealed class MainWindowXamlTests : IDisposable
 
         Assert.DoesNotContain(merged, dictionary => dictionary is AirPdf.App.Styles.HighContrastPalette);
     }
+    /// <summary>
+    /// The bookmark panel binds to the view model's own list and starts empty, which is what a
+    /// document without bookmarks shows. A wrong x:DataType would fail silently here.
+    /// </summary>
+    [AvaloniaFact]
+    public void BookmarksPanel_BindsToTheViewModelList()
+    {
+        var window = CreateWindow();
+        var viewModel = Assert.IsType<MainWindowViewModel>(window.DataContext);
+        var list = window.FindControl<ListBox>("BookmarkList");
+
+        Assert.NotNull(list);
+        Assert.Same(viewModel.Bookmarks, list!.ItemsSource);
+        Assert.True(viewModel.HasNoBookmarks);
+        Assert.False(viewModel.IsBookmarksTabSelected);
+    }
     private MainWindow CreateWindow()
     {
         var services = new AppServices(_settingsDirectory);
