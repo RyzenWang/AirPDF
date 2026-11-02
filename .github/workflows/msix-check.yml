@@ -136,19 +136,35 @@ jobs:
           $settings = Join-Path $env:APPDATA 'AirPdf/settings.json'
           if (Test-Path $settings) { Remove-Item $settings -Force }
 
+          # A packaged full-trust app has its %APPDATA% writes redirected into the
+          # package's local cache, so the settings file can appear in either place.
+          $family = (Get-AppxPackage -Name AirPDF).PackageFamilyName
+          $virtualSettings = Join-Path $env:LOCALAPPDATA "Packages/$family/LocalCache/Roaming/AirPdf/settings.json"
+          if (Test-Path $virtualSettings) { Remove-Item $virtualSettings -Force }
+
           $process = Start-Process -FilePath $exe -ArgumentList "`"$document`"" -PassThru
 
+          $candidates = @($settings, $virtualSettings)
           $opened = $false
+          $recordedAt = $null
+
           for ($attempt = 0; $attempt -lt 60 -and -not $opened; $attempt++) {
             Start-Sleep -Milliseconds 500
-            if (-not (Test-Path $settings)) { continue }
 
-            try {
-              $parsed = Get-Content $settings -Raw | ConvertFrom-Json
-              $opened = @($parsed.recentFiles | Where-Object { $_.filePath -eq $document }).Count -gt 0
-            }
-            catch {
-              # The app may be mid-write; the next attempt re-reads it.
+            foreach ($candidate in $candidates) {
+              if (-not (Test-Path $candidate)) { continue }
+
+              try {
+                $parsed = Get-Content $candidate -Raw | ConvertFrom-Json
+                if (@($parsed.recentFiles | Where-Object { $_.filePath -eq $document }).Count -gt 0) {
+                  $opened = $true
+                  $recordedAt = $candidate
+                  break
+                }
+              }
+              catch {
+                # The app may be mid-write; the next attempt re-reads it.
+              }
             }
           }
 
@@ -158,10 +174,14 @@ jobs:
           }
 
           if (-not $opened) {
-            throw "Launching with '$document' did not open it; settings.json never recorded the path."
+            throw "Launching with '$document' did not open it; no settings file recorded the path (looked in $($candidates -join ' and '))."
           }
 
           "opened '$document' through the association" >> $env:GITHUB_STEP_SUMMARY
+          if ($recordedAt -eq $virtualSettings) {
+            "note: the package redirected %APPDATA% into $virtualSettings" >> $env:GITHUB_STEP_SUMMARY
+          }
+
           $process | Stop-Process -Force
 
       - name: Uninstall
