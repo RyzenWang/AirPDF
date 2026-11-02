@@ -178,6 +178,7 @@ jobs:
           }
 
           "opened '$document' through the association" >> $env:GITHUB_STEP_SUMMARY
+          Write-Host "settings recorded at: $recordedAt"
           if ($recordedAt -eq $virtualSettings) {
             "note: the package redirected %APPDATA% into $virtualSettings" >> $env:GITHUB_STEP_SUMMARY
           }
