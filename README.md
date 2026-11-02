@@ -60,6 +60,8 @@ small .NET application with a hand-built Avalonia interface.
 - **Multiple windows** (`Ctrl+N`, or open the current file in a new window) sharing
   one settings store, theme, and language.
 - **Tabs** — `Ctrl+T` adds a document to the same window, and each tab keeps its own
+- **NativeAOT on Windows** — the released build is compiled ahead of time, so the
+  window appears in well under a second instead of several.
   zoom, scroll position, search results, and reading position.
 - **Back navigation** with `Alt+Left` after any outline, thumbnail, search, or
   page jump.
@@ -83,8 +85,9 @@ small .NET application with a hand-built Avalonia interface.
 | UI | Avalonia 11 | Native desktop windows from a single XAML codebase. |
 | Rendering | PDFium | The same open-source engine used by browsers; one document handle stays open while reading. |
 | Raster transport | SkiaSharp | Fast, predictable pixel handling. |
-| Text layer | PdfPig | Managed PDF text extraction, search, and match rectangles. |
+| Text layer | PDFium (`FPDFText_*`) | Characters arrive in reading order from the engine that renders the page, so search, selection, and rotated pages agree with what is drawn. PdfPig supplies metadata and the outline. |
 | MVVM | CommunityToolkit.Mvvm | Small, source-generated, no framework lock-in. |
+| Compilation | NativeAOT (Windows) | No JIT at startup: measured 0.7 s to first window against 5.0 s. |
 
 ## Requirements
 
@@ -92,10 +95,14 @@ small .NET application with a hand-built Avalonia interface.
 - Windows 10/11, macOS 13+, or a modern Linux desktop (X11 or Wayland).
 - On Linux, the usual Avalonia desktop dependencies (X11/Wayland, fontconfig,
   and OpenGL or a software renderer) must be installed. Rendering uses the
-  fontconfig-enabled SkiaSharp build, so system fonts are required — install a CJK
+  fontconfig-enabled SkiaSharp build, so system fonts are required. Install a CJK
   font such as `fonts-noto-cjk` to read Chinese or Japanese documents.
 
 The published builds are self-contained; end users do not need .NET installed.
+
+Building the NativeAOT release additionally needs a C++ toolchain: the MSVC build tools
+and the Windows SDK on Windows, Xcode on macOS, clang on Linux. A plain `dotnet build`
+does not.
 
 ## Run from source
 
@@ -140,6 +147,14 @@ dotnet publish src/AirPdf.App -c Release -r win-x64 \
   -p:PublishSingleFile=true \
   -p:IncludeNativeLibrariesForSelfExtract=true \
   -p:EnableCompressionInSingleFile=true
+```
+
+NativeAOT, which is what the Windows release ships:
+
+```bash
+dotnet publish src/AirPdf.App -c Release -r win-x64 `
+  -p:PublishAot=true `
+  -p:StripSymbols=true
 ```
 
 Supported runtime identifiers include `win-x64`, `win-arm64`, `linux-x64`,
@@ -269,6 +284,7 @@ docs/                   Screenshots and architecture notes
 - [x] Tabs
 - [ ] Additional UI languages (English and Simplified Chinese are available)
 - [ ] Configure production Windows signing and Apple notarization credentials
+- [x] NativeAOT (Windows; macOS and Linux still ship JIT builds)
 - [ ] UI/end-to-end coverage for zoom, search, language switching, and updates
 
 Contributions and issue reports are welcome. If you want to pick up a roadmap

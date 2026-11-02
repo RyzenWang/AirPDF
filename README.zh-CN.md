@@ -43,6 +43,7 @@ AirPDF 打开得快、渲染得稳，然后安静地退到页面后面。没有�
   主题和语言。
 - **标签页**：`Ctrl+T` 在同一窗口里再开一份文档，每个标签各自保留缩放、滚动位置、
   搜索结果和阅读位置。
+- **Windows 版使用 NativeAOT**：发布版提前编译，窗口出现时间从数秒降到一秒以内。
 - **返回上一个位置**：目录、缩略图、搜索或页码跳转后，`Alt+Left` 回到跳转前。
 - **右键菜单**：复制选中内容、全选、打开文件所在文件夹。
 - **无障碍**：工具栏按钮、输入框和列表都带有供屏幕阅读器识别的名称。
@@ -60,8 +61,9 @@ AirPDF 打开得快、渲染得稳，然后安静地退到页面后面。没有�
 | 界面 | Avalonia 11 | 一套 XAML 代码生成原生桌面窗口。 |
 | 渲染 | PDFium | 浏览器同款开源 PDF 引擎；阅读期间常驻一个文档句柄。 |
 | 位图传输 | SkiaSharp | 快速、可控的像素处理。 |
-| 文本层 | PdfPig | 纯托管文本提取、搜索与匹配坐标。 |
+| 文本层 | PDFium（`FPDFText_*`） | 由渲染同一引擎按阅读顺序给出字符，搜索、选择与旋转页和实际绘制一致；PdfPig 负责元数据与目录。 |
 | MVVM | CommunityToolkit.Mvvm | 小而克制的源生成 MVVM。 |
+| 编译方式 | NativeAOT（Windows） | 启动时无 JIT：实测首窗 0.7 秒，对比 5.0 秒。 |
 
 ## 从源码运行
 
@@ -88,6 +90,9 @@ dotnet build AirPdf.sln -c Release
 dotnet test AirPdf.sln -c Release
 ```
 
+发布 NativeAOT 版本还需要 C++ 工具链：Windows 上需要 MSVC 生成工具与 Windows SDK，
+macOS 上需要 Xcode，Linux 上需要 clang。普通的 `dotnet build` 不需要。
+
 测试使用 `tests/Assets/sample.pdf`，一份八页的示例文档，覆盖英文、中文、
 混合排版和搜索坐标。`AirPdf.App.Tests` 还包含 Headless Avalonia 测试，覆盖
 打开、搜索、选择、缩放、语言切换和阅读位置恢复。
@@ -100,6 +105,14 @@ dotnet publish src/AirPdf.App -c Release -r win-x64 \
   -p:PublishSingleFile=true \
   -p:IncludeNativeLibrariesForSelfExtract=true \
   -p:EnableCompressionInSingleFile=true
+```
+
+NativeAOT，也是 Windows 发布版使用的方式：
+
+```bash
+dotnet publish src/AirPdf.App -c Release -r win-x64 `
+  -p:PublishAot=true `
+  -p:StripSymbols=true
 ```
 
 支持 `win-x64`、`win-arm64`、`linux-x64`、`linux-arm64`、`osx-x64`、
@@ -197,6 +210,7 @@ docs/                   截图与架构说明
 - [x] 标签页
 - [ ] 更多界面语言（当前已有英文与简体中文）
 - [ ] 配置正式 Windows 签名与 Apple 公证凭据
+- [x] NativeAOT（Windows 已使用；macOS 与 Linux 仍为 JIT 构建）
 - [ ] 缩放、搜索、语言切换和更新的 UI / 端到端测试
 
 ## 参与贡献

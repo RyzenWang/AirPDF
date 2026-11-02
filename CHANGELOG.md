@@ -6,14 +6,28 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-02
+
+The Windows build is compiled ahead of time, and starts in well under a second.
+
 ### Changed
 
-- The Windows build is published with NativeAOT. Starting the reader no longer compiles
-  anything, which took the time to first window from about 5 s to 0.7 s; the download grows
-  from 33.4 MB to 35.0 MB because Velopack compresses the payload. The publish step and
-  every pull request fail on any AOT or trimming warning, since either can remove a
-  reflection path that only breaks at runtime.
+- The Windows build is published with NativeAOT. Milestone tracing put the previous 5.0 s
+  to first window almost entirely in JIT compilation, spread evenly across Avalonia
+  initialisation, XAML loading and first layout rather than in one slow call, so no cheaper
+  change recovers the bulk of it. Nothing is compiled at startup now: 0.7 s to first window.
+  The download grows only from 33.4 MB to 35.0 MB because Velopack compresses the payload,
+  even though the uncompressed output is 60 MB against 28 MB.
 
+  The publish step and every pull request now fail on any AOT or trimming warning, since
+  either can remove a reflection path that only breaks at runtime. Velopack is no longer
+  rooted for trimming: rooting it made the AOT compiler compile a COM shortcut class whose
+  IL cannot be compiled, which warned that it would always throw. The app never reaches that
+  code, so leaving it trimmable removes the warning and 1.1 MB.
+
+  The update path was verified on the AOT build rather than assumed: installed from the
+  Setup package, it reports IsInstalled, reads the real release feed, and against a local
+  feed advertising a newer package it downloads and unpacks it.
 ## [0.3.0] - 2026-11-02
 
 Rotated pages work end to end, and the Windows download halves.
