@@ -44,6 +44,21 @@ Sign with a certificate whose subject matches the manifest `Publisher`:
 
 Use `-SkipPublish` to repack an existing `artifacts/msix/app` folder.
 
+For a Store submission, pass the identity Partner Center assigned and add
+`-ForStore`. That mode refuses the placeholder identity, refuses a signing
+certificate, checks the identity against the manifest schema, verifies the packed
+manifest, and emits a `.msixupload` next to the `.msix`:
+
+```powershell
+./packaging/msix/Build-Msix.ps1 -Version 1.0.0.0 -ForStore `
+  -IdentityName '<Package/Identity/Name>' `
+  -Publisher 'CN=<Package/Identity/Publisher>'
+```
+
+The rest of the process — account setup, listing material, certification
+expectations, and the pre-submission smoke test — is in
+[docs/STORE_SUBMISSION.md](../../docs/STORE_SUBMISSION.md).
+
 ## What the manifest declares
 
 - `rescap:runFullTrust` 鈥?a PDF reader needs unconstrained file system access to

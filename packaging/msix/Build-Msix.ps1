@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Builds a sideloadable MSIX package for AirPDF from a folder publish.
 
@@ -42,7 +42,8 @@ param(
     [string] $OutputDirectory = 'artifacts/msix',
     [string] $CertificatePath,
     [string] $CertificatePassword,
-    [switch] $SkipPublish
+    [switch] $SkipPublish,
+    [switch] $ForStore
 )
 
 $ErrorActionPreference = 'Stop'
@@ -64,9 +65,64 @@ if ($Version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
     throw "-Version must have four numeric parts, for example 0.3.3.0 (got '$Version')."
 }
 
+$versionParts = $Version.Split('.') | ForEach-Object { [int] $_ }
+if ($versionParts | Where-Object { $_ -gt 65535 }) {
+    throw "-Version parts must each be 65535 or less (got '$Version')."
+}
+
+if ($ForStore -and $versionParts[0] -lt 1) {
+    throw "-Version must start at 1.0.0.0 or higher for a Store submission (got '$Version')."
+}
+
 if (-not $Version.EndsWith('.0')) {
     Write-Warning 'The fourth version part is reserved for the Store and must be 0 for submissions.'
 }
+
+# Identity rules come from the package manifest schema. Checking them here turns a
+# Partner Center upload failure into a local error with a readable message.
+function Assert-PackageIdentity {
+    if ($IdentityName -notmatch '^[A-Za-z0-9][A-Za-z0-9.-]*$') {
+        throw "-IdentityName may only contain letters, digits, periods, and dashes, and must start with a letter or digit (got '$IdentityName')."
+    }
+
+    if ($IdentityName.Length -lt 3 -or $IdentityName.Length -gt 50) {
+        throw "-IdentityName must be 3 to 50 characters long (got $($IdentityName.Length))."
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Publisher) -or -not $Publisher.StartsWith('CN=')) {
+        throw "-Publisher must be a distinguished name starting with 'CN=', for example 'CN=1A2B3C4D-0000-0000-0000-000000000000' (got '$Publisher')."
+    }
+
+    if ($Publisher -match '[\r\n]') {
+        throw '-Publisher must be a single line.'
+    }
+
+    if ([string]::IsNullOrWhiteSpace($PublisherDisplayName)) {
+        throw '-PublisherDisplayName is required.'
+    }
+}
+
+$defaultIdentityName = 'AirPDF'
+$defaultPublisher = 'CN=AirPDF Test Signing (not for release)'
+
+if ($ForStore) {
+    if ($CertificatePath) {
+        throw '-ForStore publishes without a signature: the Store re-signs the package. Omit -CertificatePath.'
+    }
+
+    # A submission with the placeholder identity is rejected, so refuse to build one
+    # rather than produce a package that cannot be uploaded.
+    if ($IdentityName -eq $defaultIdentityName -and $Publisher -eq $defaultPublisher) {
+        throw @'
+-ForStore needs the identity values Partner Center assigned to the product:
+  -IdentityName <name from Product identity>
+  -Publisher    "CN=<publisher id from Product identity>"
+Open Partner Center > your app > Product management > Product identity.
+'@
+    }
+}
+
+Assert-PackageIdentity
 
 function Resolve-BuildTools {
     param([string] $ToolName)
@@ -253,6 +309,30 @@ if ($CertificatePath) {
     if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE." }
 }
 
+if ($ForStore) {
+    # Partner Center expects a .msixupload for packaged submissions: a zip holding the
+    # .msix and, optionally, the public symbols used for its crash reports.
+    Write-Step 'Building the .msixupload for Partner Center'
+    $uploadName = "AirPDF-$Version-x64.msixupload"
+    $uploadPath = Join-Path $outputDirectory $uploadName
+    if (Test-Path $uploadPath) { Remove-Item $uploadPath -Force }
+
+    $uploadDirectory = Join-Path $outputDirectory 'upload'
+    if (Test-Path $uploadDirectory) { Remove-Item $uploadDirectory -Recurse -Force }
+    New-Item -ItemType Directory -Path $uploadDirectory -Force | Out-Null
+
+    Copy-Item $packagePath (Join-Path $uploadDirectory $packageName)
+
+    # Compress-Archive only accepts a .zip destination, so the archive is written by
+    # the zip API directly under the extension Partner Center expects.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::CreateFromDirectory(
+        $uploadDirectory, $uploadPath,
+        [System.IO.Compression.CompressionLevel]::Optimal, $false)
+
+    Write-Host "  $uploadName" -ForegroundColor Green
+}
+
 Write-Step 'Verifying the package'
 $verifyDirectory = Join-Path $outputDirectory 'verify'
 if (Test-Path $verifyDirectory) { Remove-Item $verifyDirectory -Recurse -Force }
@@ -271,6 +351,7 @@ $checks = @()
 $identity = $generatedManifest.SelectSingleNode('/f:Package/f:Identity', $ns)
 $checks += @{ Name = 'identity version'; Ok = ($identity.Version -eq $Version); Detail = $identity.Version }
 $checks += @{ Name = 'identity name'; Ok = ($identity.Name -eq $IdentityName); Detail = $identity.Name }
+$checks += @{ Name = 'identity publisher'; Ok = ($identity.Publisher -eq $Publisher); Detail = $identity.Publisher }
 $checks += @{ Name = 'architecture'; Ok = ($identity.ProcessorArchitecture -eq 'x64'); Detail = $identity.ProcessorArchitecture }
 
 $executable = $generatedManifest.SelectSingleNode('//f:Application/@Executable', $ns).Value
@@ -290,6 +371,13 @@ foreach ($image in @('Square44x44Logo.png', 'Square150x150Logo.png', 'StoreLogo.
     }
 }
 
+if ($ForStore) {
+    # Certification rejects a package that still carries a signature other than the
+    # Store's own, so an unsigned submission package is the expected shape.
+    $signature = Join-Path $verifyDirectory 'AppxSignature.p7x'
+    $checks += @{ Name = 'unsigned for submission'; Ok = (-not (Test-Path $signature)); Detail = 'no signature' }
+}
+
 $failed = 0
 foreach ($check in $checks) {
     if ($check.Ok) {
@@ -307,6 +395,7 @@ $payloadSize = [math]::Round((Get-ChildItem $layoutDirectory -Recurse -File | Me
 Write-Host ''
 Write-Host "Package: $packagePath" -ForegroundColor Green
 Write-Host "  version   $Version"
+Write-Host "  identity  $IdentityName"
 Write-Host "  publisher $Publisher"
 Write-Host "  packaged  $packageSize MB from $payloadSize MB of payload"
 Write-Host "  signed    $(if ($CertificatePath) { 'yes' } else { 'no' })"
@@ -316,7 +405,14 @@ if ($failed -gt 0) {
 }
 
 Write-Host ''
-Write-Host 'Sideload with: Add-AppxPackage -Path <package>' -ForegroundColor Yellow
-Write-Host 'A sideloaded package must be signed with a certificate the machine trusts.' -ForegroundColor Yellow
+if ($ForStore) {
+    Write-Host "Upload to Partner Center: $uploadPath" -ForegroundColor Yellow
+    Write-Host 'The Store re-signs the package, so it is uploaded unsigned.' -ForegroundColor Yellow
+    Write-Host 'See docs/STORE_SUBMISSION.md for the rest of the checklist.' -ForegroundColor Yellow
+}
+else {
+    Write-Host 'Sideload with: Add-AppxPackage -Path <package>' -ForegroundColor Yellow
+    Write-Host 'A sideloaded package must be signed with a certificate the machine trusts.' -ForegroundColor Yellow
+}
 
 
