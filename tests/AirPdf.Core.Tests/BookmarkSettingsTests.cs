@@ -24,7 +24,7 @@ public sealed class BookmarkSettingsTests
     }
 
     [Fact]
-    public void GetBookmarks_OrdersByPageThenOffset()
+    public void GetBookmarks_KeepsTheOrderTheyWereAdded()
     {
         var service = new SettingsService(Path.Combine(Path.GetTempPath(), $"airpdf-bm-{Guid.NewGuid():N}"));
         var settings = new AppSettings();
@@ -35,7 +35,73 @@ public sealed class BookmarkSettingsTests
 
         var pages = service.GetBookmarks(settings, Document).Select(entry => (entry.Page, entry.PageOffset));
 
-        Assert.Equal([(3, 0.1), (3, 0.8), (40, 0.0)], pages);
+        // The reader can drag bookmarks around, so the stored order wins over page order.
+        Assert.Equal([(40, 0.0), (3, 0.8), (3, 0.1)], pages);
+    }
+
+    [Fact]
+    public void MoveBookmark_ReordersAndPersistsTheNewOrder()
+    {
+        var service = new SettingsService(Path.Combine(Path.GetTempPath(), $"airpdf-bm-{Guid.NewGuid():N}"));
+        var settings = new AppSettings();
+
+        var first = service.AddBookmark(settings, Document, 1, 0, "Page 1");
+        var second = service.AddBookmark(settings, Document, 2, 0, "Page 2");
+        var third = service.AddBookmark(settings, Document, 3, 0, "Page 3");
+
+        Assert.True(service.MoveBookmark(settings, Document, third, 0));
+
+        Assert.Equal(
+            [third, first, second],
+            service.GetBookmarks(settings, Document));
+        Assert.Equal([0, 1, 2], service.GetBookmarks(settings, Document).Select(entry => entry.Order));
+    }
+
+    [Fact]
+    public void MoveBookmark_OutOfRange_ClampsToTheEnds()
+    {
+        var service = new SettingsService(Path.Combine(Path.GetTempPath(), $"airpdf-bm-{Guid.NewGuid():N}"));
+        var settings = new AppSettings();
+
+        var first = service.AddBookmark(settings, Document, 1, 0, "Page 1");
+        var second = service.AddBookmark(settings, Document, 2, 0, "Page 2");
+
+        service.MoveBookmark(settings, Document, first, 99);
+        Assert.Equal([second, first], service.GetBookmarks(settings, Document));
+
+        service.MoveBookmark(settings, Document, first, -5);
+        Assert.Equal([first, second], service.GetBookmarks(settings, Document));
+    }
+
+    [Fact]
+    public void RenameBookmark_ChangesTheLabelOfThatEntryOnly()
+    {
+        var service = new SettingsService(Path.Combine(Path.GetTempPath(), $"airpdf-bm-{Guid.NewGuid():N}"));
+        var settings = new AppSettings();
+
+        var one = service.AddBookmark(settings, Document, 1, 0, "Page 1");
+        var two = service.AddBookmark(settings, Document, 2, 0, "Page 2");
+
+        Assert.True(service.RenameBookmark(settings, two, "Chapter 2 summary"));
+
+        Assert.Equal("Page 1", one.Label);
+        Assert.Equal("Chapter 2 summary", two.Label);
+    }
+
+    [Fact]
+    public void GetAllBookmarks_SpansDocumentsGroupedByFile()
+    {
+        var service = new SettingsService(Path.Combine(Path.GetTempPath(), $"airpdf-bm-{Guid.NewGuid():N}"));
+        var settings = new AppSettings();
+
+        service.AddBookmark(settings, @"C:\docs\b.pdf", 2, 0, "B2");
+        service.AddBookmark(settings, @"C:\docs\a.pdf", 9, 0, "A9");
+        service.AddBookmark(settings, @"C:\docs\b.pdf", 1, 0, "B1");
+
+        var all = service.GetAllBookmarks(settings);
+
+        Assert.Equal(3, all.Count);
+        Assert.Equal(["A9", "B2", "B1"], all.Select(entry => entry.Label));
     }
 
     [Fact]

@@ -410,11 +410,37 @@
                        Classes="thumbnailList"
                        ItemsSource="{Binding Bookmarks}"
                        Margin="6,0,6,12"
+                       DragDrop.AllowDrop="True"
+                       DragDrop.DragOver="OnBookmarkDragOver"
+                       DragDrop.Drop="OnBookmarkDrop"
                        AutomationProperties.Name="{DynamicResource L.BookmarksList}"
                        SelectionChanged="OnBookmarkListSelectionChanged">
                 <ListBox.ItemTemplate>
                   <DataTemplate x:DataType="vm:UserBookmarkViewModel">
-                    <Grid ColumnDefinitions="*,Auto,Auto" Height="30">
+                    <Grid ColumnDefinitions="*,Auto,Auto"
+                          Height="30"
+                          Background="Transparent"
+                          PointerPressed="OnBookmarkPointerPressed"
+                          PointerMoved="OnBookmarkPointerMoved"
+                          DoubleTapped="OnRenameBookmarkClick"
+                          ToolTip.Tip="{DynamicResource L.RenameBookmark}">
+                      <Grid.ContextMenu>
+                        <ContextMenu>
+                          <MenuItem Header="{DynamicResource L.RenameBookmark}"
+                                    Click="OnRenameBookmarkClick"
+                                    Tag="{Binding}" />
+                          <MenuItem Header="{DynamicResource L.MoveBookmarkUp}"
+                                    Click="OnMoveBookmarkUpClick"
+                                    Tag="{Binding}" />
+                          <MenuItem Header="{DynamicResource L.MoveBookmarkDown}"
+                                    Click="OnMoveBookmarkDownClick"
+                                    Tag="{Binding}" />
+                          <Separator />
+                          <MenuItem Header="{DynamicResource L.RemoveBookmark}"
+                                    Click="OnRemoveBookmarkClick"
+                                    Tag="{Binding}" />
+                        </ContextMenu>
+                      </Grid.ContextMenu>
                       <TextBlock Text="{Binding Label}"
                                  FontSize="12.5"
                                  TextTrimming="CharacterEllipsis"
@@ -603,6 +629,44 @@
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>
                 </ItemsControl>
+                </ScrollViewer>
+              </StackPanel>
+
+              <StackPanel IsVisible="{Binding HasAllBookmarks}" Margin="0,26,0,0" Spacing="9">
+                <TextBlock Text="{DynamicResource L.AllBookmarks}" Classes="eyebrow" />
+                <ScrollViewer MaxHeight="220"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              AutomationProperties.Name="{DynamicResource L.AllBookmarks}">
+                  <ItemsControl ItemsSource="{Binding AllBookmarks}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:BookmarkOverviewViewModel">
+                        <Button Classes="recent"
+                                Click="OnOpenOverviewBookmarkClick"
+                                Tag="{Binding}">
+                          <Grid ColumnDefinitions="Auto,*" Margin="0,1">
+                            <Border Width="32" Height="32"
+                                    CornerRadius="7"
+                                    Background="{DynamicResource SurfaceAltBrush}"
+                                    BorderBrush="{DynamicResource BorderBrush}"
+                                    BorderThickness="1"
+                                    VerticalAlignment="Center">
+                              <Path Classes="icon small muted" Data="{StaticResource IconBook}" />
+                            </Border>
+                            <StackPanel Grid.Column="1" Margin="10,0" Spacing="2" VerticalAlignment="Center">
+                              <TextBlock Text="{Binding Title}"
+                                         FontSize="12.5"
+                                         FontWeight="SemiBold"
+                                         TextTrimming="CharacterEllipsis" />
+                              <TextBlock Text="{Binding Subtitle}"
+                                         Classes="caption"
+                                         TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                          </Grid>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
                 </ScrollViewer>
               </StackPanel>
             </StackPanel>

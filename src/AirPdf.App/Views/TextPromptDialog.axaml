@@ -1,0 +1,38 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="AirPdf.App.Views.TextPromptDialog"
+        x:CompileBindings="False"
+        Width="440"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource SurfaceBrush}">
+  <Grid Margin="28,24,28,24" RowDefinitions="Auto,Auto,*,Auto">
+    <Border Width="38" Height="38" CornerRadius="10" Background="{DynamicResource AccentSoftBrush}" HorizontalAlignment="Left">
+      <Path Classes="icon accent"
+            Data="{StaticResource IconBook}"
+            Width="19"
+            Height="19" />
+    </Border>
+
+    <TextBlock x:Name="HeadingText" Grid.Row="1" Margin="0,15,0,0" Classes="h2" />
+
+    <StackPanel Grid.Row="2" Margin="0,16,0,0" Spacing="7">
+      <TextBlock x:Name="FieldLabel" Classes="caption" />
+      <TextBox x:Name="ValueBox"
+               MinHeight="38"
+               FontSize="13"
+               KeyDown="OnValueKeyDown" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="3"
+                Margin="0,22,0,0"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8">
+      <Button Content="{DynamicResource L.Cancel}" MinWidth="82" Click="OnCancelClick" />
+      <Button Content="{DynamicResource L.Save}" Classes="primary" MinWidth="92" Click="OnSaveClick" IsDefault="True" />
+    </StackPanel>
+  </Grid>
+</Window>

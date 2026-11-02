@@ -53,6 +53,21 @@ public sealed class DialogService : IUserDialogService
         return await dialog.ShowDialog<string?>(owner);
     }
 
+    public async Task<string?> PromptTextAsync(
+        string title,
+        string heading,
+        string fieldLabel,
+        string initialValue)
+    {
+        var owner = _ownerProvider();
+        if (owner is null)
+        {
+            return null;
+        }
+
+        var dialog = new TextPromptDialog(title, heading, fieldLabel, initialValue, _localization);
+        return await dialog.ShowDialog<string?>(owner);
+    }
     public async Task ShowErrorAsync(string title, string message)
     {
         var owner = _ownerProvider();

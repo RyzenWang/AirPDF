@@ -30,6 +30,10 @@ public partial class MainWindow : Window
     private bool _linkCursorActive;
     private PixelPoint? _pendingPosition;
     private PageLayout _pageLayout = PageLayout.Empty;
+    private const string BookmarkDragFormat = "airpdf/bookmark";
+    private UserBookmarkViewModel? _draggedBookmark;
+    private Point _bookmarkDragStart;
+    private bool _bookmarkDragArmed;
 
     public MainWindow()
         : this(new AppServices(), NullWindowService.Instance, null, restoreWindowPosition: true)
@@ -650,6 +654,145 @@ public partial class MainWindow : Window
         }
     }
 
+    private void OnRenameBookmarkClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { DataContext: UserBookmarkViewModel bookmark })
+        {
+            e.Handled = true;
+            _viewModel.RenameBookmarkCommand.Execute(bookmark);
+        }
+        else if (sender is Control { Tag: UserBookmarkViewModel tagged })
+        {
+            e.Handled = true;
+            _viewModel.RenameBookmarkCommand.Execute(tagged);
+        }
+    }
+
+    private void OnMoveBookmarkUpClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: UserBookmarkViewModel bookmark })
+        {
+            e.Handled = true;
+            _viewModel.MoveBookmarkUpCommand.Execute(bookmark);
+        }
+    }
+
+    private void OnMoveBookmarkDownClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: UserBookmarkViewModel bookmark })
+        {
+            e.Handled = true;
+            _viewModel.MoveBookmarkDownCommand.Execute(bookmark);
+        }
+    }
+
+    private void OnOpenOverviewBookmarkClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: BookmarkOverviewViewModel bookmark })
+        {
+            e.Handled = true;
+            _viewModel.OpenBookmarkCommand.Execute(bookmark);
+        }
+    }
+
+    private void OnBookmarkPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control { DataContext: UserBookmarkViewModel bookmark })
+        {
+            return;
+        }
+
+        _draggedBookmark = bookmark;
+        _bookmarkDragStart = e.GetPosition(BookmarkList);
+        _bookmarkDragArmed = true;
+    }
+
+    private async void OnBookmarkPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (!_bookmarkDragArmed || _draggedBookmark is null)
+        {
+            return;
+        }
+
+        if (!e.GetCurrentPoint(BookmarkList).Properties.IsLeftButtonPressed)
+        {
+            _bookmarkDragArmed = false;
+            return;
+        }
+
+        var position = e.GetPosition(BookmarkList);
+        if (Math.Abs(position.Y - _bookmarkDragStart.Y) < 6 && Math.Abs(position.X - _bookmarkDragStart.X) < 6)
+        {
+            return;
+        }
+
+        _bookmarkDragArmed = false;
+
+        var data = new DataObject();
+        data.Set(BookmarkDragFormat, _draggedBookmark);
+        try
+        {
+            await DragDrop.DoDragDrop(e, data, DragDropEffects.Move);
+        }
+        finally
+        {
+            _draggedBookmark = null;
+        }
+    }
+
+    private void OnBookmarkDragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = e.Data.Contains(BookmarkDragFormat) ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnBookmarkDrop(object? sender, DragEventArgs e)
+    {
+        if (!e.Data.Contains(BookmarkDragFormat)
+            || e.Data.Get(BookmarkDragFormat) is not UserBookmarkViewModel dragged)
+        {
+            return;
+        }
+
+        var target = FindBookmark(e.Source);
+        if (target is not null)
+        {
+            var index = -1;
+            for (var i = 0; i < _viewModel.Bookmarks.Count; i++)
+            {
+                if (ReferenceEquals(_viewModel.Bookmarks[i].Entry, target.Entry))
+                {
+                    index = i;
+                    break;
+                }
+            }
+
+            if (index >= 0)
+            {
+                _viewModel.MoveBookmarkTo(dragged, index);
+            }
+        }
+
+        _draggedBookmark = null;
+        e.Handled = true;
+    }
+
+    /// <summary>Walks up from whatever the pointer landed on to the bookmark it belongs to.</summary>
+    private static UserBookmarkViewModel? FindBookmark(object? source)
+    {
+        var visual = source as Visual;
+        while (visual is not null)
+        {
+            if (visual is ListBoxItem { DataContext: UserBookmarkViewModel bookmark })
+            {
+                return bookmark;
+            }
+
+            visual = visual.GetVisualParent();
+        }
+
+        return null;
+    }
     private void OnRemoveBookmarkClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Control { Tag: UserBookmarkViewModel bookmark })

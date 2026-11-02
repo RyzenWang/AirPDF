@@ -55,6 +55,29 @@ public sealed class OutlineItemViewModel
 }
 
 /// <summary>
+/// One bookmark in the cross-document overview: the label plus which file and page it points
+/// at, since several documents' bookmarks are listed together there.
+/// </summary>
+public sealed class BookmarkOverviewViewModel
+{
+    public BookmarkOverviewViewModel(BookmarkEntry entry, Func<string, int, string> describe)
+    {
+        Entry = entry;
+        Title = entry.Label;
+        Subtitle = describe(Path.GetFileName(entry.FilePath), entry.Page);
+    }
+
+    public BookmarkEntry Entry { get; }
+
+    public string Title { get; }
+
+    public string Subtitle { get; }
+
+    public string FilePath => Entry.FilePath;
+
+    public NavigationPoint Position => new(Entry.Page, Entry.PageOffset);
+}
+/// <summary>
 /// A bookmark the reader created, as shown in the sidebar. Distinct from
 /// <see cref="OutlineItemViewModel"/>, which mirrors the PDF's own outline.
 /// </summary>

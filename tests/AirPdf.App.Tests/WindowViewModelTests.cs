@@ -201,6 +201,9 @@ public sealed class WindowViewModelTests : IDisposable
             Task.FromResult<string?>(null);
 
         public Task ShowErrorAsync(string title, string message) => Task.CompletedTask;
+
+        public Task<string?> PromptTextAsync(string title, string heading, string fieldLabel, string initialValue) =>
+            Task.FromResult<string?>(null);
     }
 
     private sealed class StubWindowService : IWindowService

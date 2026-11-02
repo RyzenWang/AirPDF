@@ -132,6 +132,95 @@ public sealed class MainWindowViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task RenameBookmark_UsesTheNameFromThePrompt()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        context.ViewModel.AddBookmarkCommand.Execute(null);
+        var bookmark = Assert.Single(context.ViewModel.Bookmarks);
+
+        context.Dialog.NextText = "Chapter 1";
+        await context.ViewModel.RenameBookmarkCommand.ExecuteAsync(bookmark);
+
+        Assert.Equal("Chapter 1", Assert.Single(context.ViewModel.Bookmarks).Label);
+        Assert.Equal("Chapter 1", Assert.Single(context.Services.Settings.Bookmarks).Label);
+    }
+
+    [AvaloniaFact]
+    public async Task RenameBookmark_CancelledPrompt_KeepsTheOldName()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        context.ViewModel.AddBookmarkCommand.Execute(null);
+        var bookmark = Assert.Single(context.ViewModel.Bookmarks);
+        var before = bookmark.Label;
+
+        context.Dialog.NextText = null;
+        await context.ViewModel.RenameBookmarkCommand.ExecuteAsync(bookmark);
+
+        Assert.Equal(before, Assert.Single(context.ViewModel.Bookmarks).Label);
+    }
+
+    [AvaloniaFact]
+    public async Task MoveBookmarkTo_ReordersTheSidebarAndTheStoredOrder()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 2, pageOffset: 0);
+        context.ViewModel.AddBookmarkCommand.Execute(null);
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 5, pageOffset: 0);
+        context.ViewModel.AddBookmarkCommand.Execute(null);
+
+        var second = context.ViewModel.Bookmarks[1];
+        context.ViewModel.MoveBookmarkTo(second, 0);
+
+        // The list is rebuilt after a move, so compare pages rather than instances.
+        Assert.Equal([5, 2], context.ViewModel.Bookmarks.Select(bookmark => bookmark.PageNumber));
+
+        var stored = context.Services.Settings.Bookmarks.OrderBy(entry => entry.Order).ToList();
+        Assert.Equal([5, 2], stored.Select(entry => entry.Page));
+        Assert.Equal([0, 1], stored.Select(entry => entry.Order));
+    }
+
+    [AvaloniaFact]
+    public async Task MoveBookmarkUpAndDown_StepOneSlotEach()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 2, pageOffset: 0);
+        context.ViewModel.AddBookmarkCommand.Execute(null);
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 5, pageOffset: 0);
+        context.ViewModel.AddBookmarkCommand.Execute(null);
+
+        var first = context.ViewModel.Bookmarks[0];
+
+        context.ViewModel.MoveBookmarkDownCommand.Execute(first);
+        Assert.Equal([5, 2], context.ViewModel.Bookmarks.Select(bookmark => bookmark.PageNumber));
+
+        context.ViewModel.MoveBookmarkUpCommand.Execute(context.ViewModel.Bookmarks[1]);
+        Assert.Equal([2, 5], context.ViewModel.Bookmarks.Select(bookmark => bookmark.PageNumber));
+    }
+
+    [AvaloniaFact]
+    public async Task AllBookmarks_ListsEveryDocumentAndOpensOne()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 3, pageOffset: 0);
+        context.ViewModel.AddBookmarkCommand.Execute(null);
+
+        Assert.True(context.ViewModel.HasAllBookmarks);
+        var overview = Assert.Single(context.ViewModel.AllBookmarks);
+        Assert.Contains(Path.GetFileName(SamplePath), overview.Subtitle, StringComparison.Ordinal);
+
+        context.ViewModel.NavigateToPage(1);
+        context.ViewModel.OpenBookmarkCommand.Execute(overview);
+
+        Assert.Equal(3, context.ViewModel.CurrentPage);
+    }
+    [AvaloniaFact]
     public async Task Bookmarks_AreReloadedWhenTheDocumentIsOpenedAgain()
     {
         using var context = new TestContext();
@@ -411,6 +500,8 @@ public sealed class MainWindowViewModelTests
             }
         }
 
+        /// <summary>The dialog stub in use, so tests can script what a prompt returns.</summary>
+        public StubDialogService Dialog { get; } = new();
         private MainWindowViewModel CreateViewModel()
         {
             var documents = new PdfDocumentService();
@@ -419,7 +510,7 @@ public sealed class MainWindowViewModelTests
                 documents,
                 new PdfSearchService(documents),
                 new PdfTextService(documents),
-                new StubDialogService(),
+                Dialog,
                 Windows);
 
             _viewModels.Add(viewModel);
@@ -446,5 +537,11 @@ public sealed class MainWindowViewModelTests
             Task.FromResult<string?>(null);
 
         public Task ShowErrorAsync(string title, string message) => Task.CompletedTask;
+
+        /// <summary>Text the next prompt returns; null simulates the reader cancelling.</summary>
+        public string? NextText { get; set; }
+
+        public Task<string?> PromptTextAsync(string title, string heading, string fieldLabel, string initialValue) =>
+            Task.FromResult(NextText);
     }
 }

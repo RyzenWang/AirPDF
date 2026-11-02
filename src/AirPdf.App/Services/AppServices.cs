@@ -37,6 +37,11 @@ public sealed class AppServices : IDisposable
 
     public void NotifyRecentFilesChanged() => RecentFilesChanged?.Invoke(this, EventArgs.Empty);
 
+    /// <summary>Raised when any window adds, renames, moves, or removes a bookmark.</summary>
+    public event EventHandler? BookmarksChanged;
+
+    public void NotifyBookmarksChanged() => BookmarksChanged?.Invoke(this, EventArgs.Empty);
+
     public void Dispose()
     {
         Theme.Dispose();

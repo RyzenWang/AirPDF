@@ -96,8 +96,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _theme.Changed += OnThemeChanged;
         _services.RecentFilesChanged += OnSharedRecentFilesChanged;
+        _services.BookmarksChanged += OnSharedBookmarksChanged;
         _localization.LanguageChanged += OnLanguageChanged;
         RefreshRecentFiles();
+        RefreshAllBookmarks();
 
         // Only the first window in the process checks the update feed.
         if (UpdateService.TryBeginStartupCheck())
@@ -133,6 +135,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private IReadOnlyList<UserBookmarkViewModel> _bookmarks = [];
+
+    /// <summary>Bookmarks from every document, for the overview on the welcome screen.</summary>
+    [ObservableProperty]
+    private IReadOnlyList<BookmarkOverviewViewModel> _allBookmarks = [];
 
     [ObservableProperty]
     private IReadOnlyList<MetadataRow> _metadata = [];
@@ -255,6 +261,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool HasBookmarks => Bookmarks.Count > 0;
 
     public bool HasNoBookmarks => !HasBookmarks;
+
+    public bool HasAllBookmarks => AllBookmarks.Count > 0;
+
+    public bool HasNoAllBookmarks => !HasAllBookmarks;
 
     public bool HasMetadata => Metadata.Count > 0;
 
@@ -645,8 +655,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         var label = _localization.Format("L.BookmarkPageFormat", position.Page);
 
         _settingsService.AddBookmark(_settings, FilePath, position.Page, position.PageOffset, label);
-        _settingsService.Save(_settings);
-        LoadBookmarks(FilePath);
+        PersistBookmarkChange();
     }
 
     [RelayCommand]
@@ -659,8 +668,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         if (_settingsService.RemoveBookmark(_settings, bookmark.Entry))
         {
-            _settingsService.Save(_settings);
-            LoadBookmarks(FilePath);
+            PersistBookmarkChange();
         }
     }
 
@@ -675,6 +683,133 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         PushHistory();
         SetCurrentPage(bookmark.PageNumber);
         ReturnToPositionRequested?.Invoke(this, bookmark.Position);
+    }
+
+    /// <summary>Rebuilds the cross-document overview from the settings file.</summary>
+    private void RefreshAllBookmarks()
+    {
+        var describe = (Func<string, int, string>)((fileName, page) =>
+            _localization.Format("L.BookmarkInFile", fileName, page));
+
+        AllBookmarks = _settingsService
+            .GetAllBookmarks(_settings)
+            .Select(entry => new BookmarkOverviewViewModel(entry, describe))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Opens a bookmark from the overview: same file jumps straight there, another file is
+    /// opened first and then scrolled.
+    /// </summary>
+    [RelayCommand]
+    private async Task OpenBookmarkAsync(BookmarkOverviewViewModel? bookmark)
+    {
+        if (bookmark is null)
+        {
+            return;
+        }
+
+        var entry = bookmark.Entry;
+        var sameFile = IsDocumentOpen
+            && string.Equals(FilePath, entry.FilePath, StringComparison.OrdinalIgnoreCase);
+
+        if (!sameFile)
+        {
+            await OpenPathAsync(entry.FilePath);
+            if (!string.Equals(FilePath, entry.FilePath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+        }
+        else
+        {
+            PushHistory();
+        }
+
+        SetCurrentPage(entry.Page);
+
+        // Opening a document restores its saved reading position after this returns, so the
+        // jump is posted at the same priority and therefore lands after it.
+        var position = new NavigationPoint(entry.Page, entry.PageOffset);
+        Dispatcher.UIThread.Post(
+            () => ReturnToPositionRequested?.Invoke(this, position),
+            DispatcherPriority.Loaded);
+    }
+
+    [RelayCommand]
+    private async Task RenameBookmarkAsync(UserBookmarkViewModel? bookmark)
+    {
+        if (bookmark is null || !IsDocumentOpen)
+        {
+            return;
+        }
+
+        var title = _localization.T("L.RenameBookmark");
+        var label = await _dialogs.PromptTextAsync(
+            title,
+            title,
+            _localization.T("L.BookmarkNameLabel"),
+            bookmark.Label);
+
+        if (label is null || !_settingsService.RenameBookmark(_settings, bookmark.Entry, label))
+        {
+            return;
+        }
+
+        PersistBookmarkChange();
+    }
+
+    /// <summary>Moves a bookmark to a new index; used by drag and drop and the arrow commands.</summary>
+    public void MoveBookmarkTo(UserBookmarkViewModel? bookmark, int targetIndex)
+    {
+        if (bookmark is null || !IsDocumentOpen)
+        {
+            return;
+        }
+
+        if (_settingsService.MoveBookmark(_settings, FilePath, bookmark.Entry, targetIndex))
+        {
+            PersistBookmarkChange();
+        }
+    }
+
+    [RelayCommand]
+    private void MoveBookmarkUp(UserBookmarkViewModel? bookmark) => MoveBookmarkBy(bookmark, -1);
+
+    [RelayCommand]
+    private void MoveBookmarkDown(UserBookmarkViewModel? bookmark) => MoveBookmarkBy(bookmark, 1);
+
+    private void MoveBookmarkBy(UserBookmarkViewModel? bookmark, int delta)
+    {
+        if (bookmark is null)
+        {
+            return;
+        }
+
+        // Compare the stored entry, not the view model: reloading the list after a move
+        // builds new view models around the same entries.
+        var index = -1;
+        for (var i = 0; i < Bookmarks.Count; i++)
+        {
+            if (ReferenceEquals(Bookmarks[i].Entry, bookmark.Entry))
+            {
+                index = i;
+                break;
+            }
+        }
+        if (index >= 0)
+        {
+            MoveBookmarkTo(bookmark, index + delta);
+        }
+    }
+
+    /// <summary>Saves, reloads, and tells the other windows that bookmarks changed.</summary>
+    private void PersistBookmarkChange()
+    {
+        _settingsService.Save(_settings);
+        LoadBookmarks(FilePath);
+        RefreshAllBookmarks();
+        _services.NotifyBookmarksChanged();
     }
 
     [RelayCommand]
@@ -1677,6 +1812,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// change made in one window notifies all of them.
     /// </summary>
     private void OnSharedRecentFilesChanged(object? sender, EventArgs e) => RefreshRecentFiles();
+
+    private void OnSharedBookmarksChanged(object? sender, EventArgs e)
+    {
+        LoadBookmarks(FilePath);
+        RefreshAllBookmarks();
+    }
     private void OnThemeChanged(object? sender, EventArgs e)
     {
         OnPropertyChanged(nameof(IsDarkTheme));
@@ -1758,6 +1899,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnBookmarksChanged(IReadOnlyList<UserBookmarkViewModel> value) =>
         NotifyBookmarksChanged();
+
+    partial void OnAllBookmarksChanged(IReadOnlyList<BookmarkOverviewViewModel> value)
+    {
+        OnPropertyChanged(nameof(HasAllBookmarks));
+        OnPropertyChanged(nameof(HasNoAllBookmarks));
+    }
 
     partial void OnMetadataChanged(IReadOnlyList<MetadataRow> value) =>
         OnPropertyChanged(nameof(HasMetadata));
@@ -1847,6 +1994,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _localization.LanguageChanged -= OnLanguageChanged;
         _theme.Changed -= OnThemeChanged;
         _services.RecentFilesChanged -= OnSharedRecentFilesChanged;
+        _services.BookmarksChanged -= OnSharedBookmarksChanged;
 
         CancelSafely(_loadCancellation);
         CancelSafely(_searchCancellation);

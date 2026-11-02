@@ -80,6 +80,13 @@ public sealed class BookmarkEntry
 
     public string Label { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Position in the sidebar list. The reader can drag bookmarks around, so the stored
+    /// order wins over page order; entries written before this existed default to 0 and
+    /// fall back to creation order, which for normal reading is page order anyway.
+    /// </summary>
+    public int Order { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 /// <summary>
@@ -180,8 +187,7 @@ public sealed class SettingsService
         {
             return settings.Bookmarks
                 .Where(entry => IsSameFile(entry.FilePath, filePath))
-                .OrderBy(entry => entry.Page)
-                .ThenBy(entry => entry.PageOffset)
+                .OrderBy(entry => entry.Order)
                 .ThenBy(entry => entry.CreatedAt)
                 .ToList();
         }
@@ -210,9 +216,16 @@ public sealed class SettingsService
                 return existing;
             }
 
+            var nextOrder = settings.Bookmarks
+                .Where(entry => IsSameFile(entry.FilePath, filePath))
+                .Select(entry => entry.Order)
+                .DefaultIfEmpty(-1)
+                .Max() + 1;
+
             var bookmark = new BookmarkEntry
             {
                 FilePath = filePath,
+                Order = nextOrder,
                 Page = page,
                 PageOffset = pageOffset,
                 Label = label,
@@ -245,6 +258,71 @@ public sealed class SettingsService
         }
     }
 
+    /// <summary>Renames a bookmark; the caller trims and decides what an empty label means.</summary>
+    public bool RenameBookmark(AppSettings settings, BookmarkEntry bookmark, string label)
+    {
+        lock (_gate)
+        {
+            if (!settings.Bookmarks.Contains(bookmark))
+            {
+                return false;
+            }
+
+            bookmark.Label = label;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Moves a bookmark within its document and reassigns the stored order, so dragging
+    /// survives a restart.
+    /// </summary>
+    public bool MoveBookmark(AppSettings settings, string filePath, BookmarkEntry bookmark, int targetIndex)
+    {
+        lock (_gate)
+        {
+            var ordered = settings.Bookmarks
+                .Where(entry => IsSameFile(entry.FilePath, filePath))
+                .OrderBy(entry => entry.Order)
+                .ThenBy(entry => entry.CreatedAt)
+                .ToList();
+
+            var from = ordered.IndexOf(bookmark);
+            if (from < 0)
+            {
+                return false;
+            }
+
+            var to = Math.Clamp(targetIndex, 0, ordered.Count - 1);
+            if (to == from)
+            {
+                return false;
+            }
+
+            ordered.RemoveAt(from);
+            ordered.Insert(to, bookmark);
+
+            for (var index = 0; index < ordered.Count; index++)
+            {
+                ordered[index].Order = index;
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>Every bookmark in the settings file, ordered by file and then by list order.</summary>
+    public IReadOnlyList<BookmarkEntry> GetAllBookmarks(AppSettings settings)
+    {
+        lock (_gate)
+        {
+            return settings.Bookmarks
+                .OrderBy(entry => entry.FilePath, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(entry => entry.Order)
+                .ThenBy(entry => entry.CreatedAt)
+                .ToList();
+        }
+    }
     private static bool IsSameFile(string left, string right) =>
         string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
     private static string GetDefaultDirectory()

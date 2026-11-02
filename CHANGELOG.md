@@ -14,6 +14,11 @@ semantic versioning once it reaches 1.0.
   position, so they survive restarts. Pressing the shortcut twice on the same spot does not
   duplicate the entry, and a document is capped at 100 bookmarks. This is separate from a
   PDF's own outline, which still has its own tab.
+- Bookmarks can be renamed (double-click, or the right-click menu) and reordered by dragging
+  them, with the order stored so it survives a restart. The sidebar menu also offers move up
+  and move down for keyboard and screen-reader use.
+- The welcome screen lists bookmarks from every document, showing the file name and page, and
+  clicking one opens that file at the bookmark.
 
 ## [0.3.2] - 2026-11-02
 
