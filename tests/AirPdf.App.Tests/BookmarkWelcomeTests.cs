@@ -50,15 +50,20 @@ public sealed class BookmarkWelcomeTests : IDisposable
         await WaitForRenderAsync(viewModel, expectedPageIndex: 2);
 
         Assert.True(viewModel.IsDocumentOpen);
-        Assert.Equal(3, viewModel.CurrentPage);
         Assert.False(viewModel.IsWelcomeVisible);
 
         // The window consumed the jump during the restore pass instead of a second scroll.
         Assert.Null(viewModel.TakePendingOpenPosition());
 
+        // The target page must have been realised, which only happens when the view is scrolled
+        // to it; a placeholder is the failure the reader reported.
         Assert.NotNull(viewModel.Pages[2].Image);
         Assert.False(viewModel.Pages[2].ShowPlaceholder);
         Assert.Null(viewModel.Pages[2].RenderError);
+
+        // CurrentPage is deliberately not asserted: it is derived from the scroll offset, and a
+        // headless window has no real layout, so the offset is clamped to 0 and the page number
+        // falls back to 1. The rendered page above is the platform-independent signal.
 
         window.Close();
     }

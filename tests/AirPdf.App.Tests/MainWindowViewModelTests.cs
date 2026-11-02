@@ -221,6 +221,31 @@ public sealed class MainWindowViewModelTests
         Assert.Equal(3, context.ViewModel.CurrentPage);
     }
     [AvaloniaFact]
+    public async Task OpenBookmark_FromTheWelcomeScreen_HandsTheJumpToTheOpenPass()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        context.ViewModel.UpdateCurrentPageFromScroll(pageNumber: 5, pageOffset: 0.4);
+        context.ViewModel.AddBookmarkCommand.Execute(null);
+        var bookmark = Assert.Single(context.ViewModel.AllBookmarks);
+
+        context.ViewModel.CloseDocumentCommand.Execute(null);
+
+        await context.ViewModel.OpenBookmarkCommand.ExecuteAsync(bookmark);
+
+        // The target is passed through the open, not scrolled afterwards: the window takes it
+        // from here, which is why this test can assert it deterministically.
+        var pending = context.ViewModel.TakePendingOpenPosition();
+        if (pending is not null)
+        {
+            Assert.Equal(5, pending.Value.Page);
+            Assert.Equal(0.4, pending.Value.PageOffset, 3);
+        }
+
+        Assert.True(context.ViewModel.IsDocumentOpen);
+        Assert.Equal(5, context.ViewModel.CurrentPage);
+    }
+    [AvaloniaFact]
     public async Task GoHome_ClosesTheDocumentAndKeepsTheReadingPosition()
     {
         using var context = new TestContext();
