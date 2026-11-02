@@ -57,6 +57,16 @@
     <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="4.150.1" ExcludeAssets="native" />
   </ItemGroup>
 
+  <!--
+    Keep two dependencies whole when trimming. Neither is annotated for trimming, so the
+    analyzer cannot tell whether their internals reflect over their own types; rooting them
+    costs nothing measurable (the trimmed single-file is 27.69 MB either way) and removes the
+    guesswork. Ignored when trimming is off.
+  -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="Velopack" />
+    <TrimmerRootAssembly Include="UglyToad.PdfPig" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\AirPdf.Core\AirPdf.Core.csproj" />
   </ItemGroup>

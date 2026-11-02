@@ -8,6 +8,10 @@ semantic versioning once it reaches 1.0.
 
 ### Changed
 
+- The Windows build is trimmed, taking the download from 53 MB to 28 MB. The release
+  step fails on any IL warning rather than shipping a build whose reflection paths were
+  removed; the same check runs on every pull request. macOS and Linux are unchanged for
+  now.
 - The text layer is read through PDFium's text API instead of PdfPig, using the
   document handle pages are already rendered from. PdfPig applies `/Rotate` to its
   letters before grouping them, so rotated pages came back as single letters or

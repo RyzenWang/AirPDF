@@ -38,3 +38,39 @@ jobs:
 
       - name: Test
         run: dotnet test AirPdf.sln -c Release --no-build --logger "console;verbosity=normal"
+
+      # The Windows release ships a trimmed build, and trimming fails silently: it once
+      # stopped the app writing settings because a reflection-based serializer lost its
+      # metadata. Checking here means a regression surfaces on the pull request instead of
+      # on the tag that publishes a broken download.
+      - name: Check trimming (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $output = dotnet publish src/AirPdf.App/AirPdf.App.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:PublishTrimmed=true `
+            -o publish/trim-check 2>&1
+          $code = $LASTEXITCODE
+          $output | Write-Output
+          if ($code -ne 0) { throw "Trimmed publish failed with exit code $code." }
+
+          $warnings = @($output | Select-String -Pattern 'warning IL\d{4}')
+          if ($warnings.Count -gt 0) {
+            $warnings | ForEach-Object { Write-Output $_.Line }
+            throw "Trimming produced $($warnings.Count) IL warning(s): a reflection path came back."
+          }
+
+          $exe = 'publish/trim-check/AirPdf.exe'
+          if (-not (Test-Path $exe)) { throw 'The trimmed publish output has no AirPdf.exe.' }
+          $mb = (Get-Item $exe).Length / 1MB
+          if ($mb -gt 45) {
+            throw ('Trimmed build is {0:N1} MB; trimming is probably not applied (untrimmed is ~53 MB).' -f $mb)
+          }
+
+          ('Trimmed Windows build: {0:N1} MB, no IL warnings.' -f $mb) >> $env:GITHUB_STEP_SUMMARY

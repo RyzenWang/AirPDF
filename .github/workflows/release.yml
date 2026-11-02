@@ -78,18 +78,40 @@ jobs:
             Write-Warning 'Publishing an unsigned Windows installer. SmartScreen will warn until the file builds reputation.'
           }
 
+      # Trimming roughly halves the download (53 MB -> 28 MB). It is gated: any IL warning
+      # means a reflection path came back, which is how a trimmed build silently stopped
+      # writing settings once. See docs/ARCHITECTURE.md.
       - name: Publish
         shell: pwsh
-        run: >
-          dotnet publish src/AirPdf.App/AirPdf.App.csproj
-          -c Release
-          -r win-x64
-          --self-contained true
-          -p:PublishSingleFile=true
-          -p:IncludeNativeLibrariesForSelfExtract=true
-          -p:EnableCompressionInSingleFile=true
-          -p:Version=${{ steps.version.outputs.value }}
-          -o publish/win-x64
+        run: |
+          $output = dotnet publish src/AirPdf.App/AirPdf.App.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:PublishTrimmed=true `
+            -p:Version=${{ steps.version.outputs.value }} `
+            -o publish/win-x64 2>&1
+          $code = $LASTEXITCODE
+          $output | Write-Output
+          if ($code -ne 0) { throw "Publish failed with exit code $code." }
+
+          $warnings = @($output | Select-String -Pattern 'warning IL\d{4}')
+          if ($warnings.Count -gt 0) {
+            $warnings | ForEach-Object { Write-Output $_.Line }
+            throw "Trimming produced $($warnings.Count) IL warning(s); fix them before releasing."
+          }
+
+          $exe = 'publish/win-x64/AirPdf.exe'
+          if (-not (Test-Path $exe)) { throw 'The publish output has no AirPdf.exe.' }
+          $mb = (Get-Item $exe).Length / 1MB
+          if ($mb -gt 45) {
+            throw ('Trimmed build is {0:N1} MB; trimming is probably not applied (untrimmed is ~53 MB).' -f $mb)
+          }
+
+          ('Windows: trimmed single-file is {0:N1} MB with no IL warnings.' -f $mb) >> $env:GITHUB_STEP_SUMMARY
 
       - name: Install Velopack CLI
         shell: pwsh
