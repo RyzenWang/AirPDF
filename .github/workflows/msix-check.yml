@@ -185,6 +185,116 @@ jobs:
 
           $process | Stop-Process -Force
 
+      # Decides how a packaged build should treat the settings file the unpackaged
+      # build left behind. Microsoft documents three relevant rules: new files under
+      # AppData are redirected into the package cache, reads fall back to the real
+      # AppData when the private copy is missing, and a file opened from the real
+      # location is not virtualised for the rest of its life.
+      #
+      # The experiment seeds the real file with a language marker that only a read
+      # could preserve, opens a document (which forces a save), then reports which
+      # copy holds the marker and which copy holds the new document.
+      - name: Reuse settings from the unpackaged build
+        if: inputs.install
+        shell: pwsh
+        run: |
+          $app = Get-AppxPackage -Name AirPDF
+          $exe = Join-Path $app.InstallLocation 'AirPdf.exe'
+          $family = $app.PackageFamilyName
+
+          $realDirectory = Join-Path $env:APPDATA 'AirPdf'
+          $realSettings = Join-Path $realDirectory 'settings.json'
+          $virtualSettings = Join-Path $env:LOCALAPPDATA "Packages/$family/LocalCache/Roaming/AirPdf/settings.json"
+
+          # Start from nothing so the result cannot be a leftover.
+          foreach ($file in @($realSettings, $virtualSettings)) {
+            if (Test-Path $file) { Remove-Item $file -Force }
+          }
+          New-Item -ItemType Directory -Path $realDirectory -Force | Out-Null
+
+          $seed = [ordered]@{
+            recentFiles   = @()
+            readingPositions = @()
+            theme         = 'Light'
+            language      = 'zh-CN'
+            sidebarVisible = $true
+            windowWidth   = 1240
+            windowHeight  = 860
+            windowMaximized = $false
+          }
+          $seed | ConvertTo-Json -Depth 5 | Set-Content $realSettings -Encoding utf8
+
+          $document = Join-Path $env:RUNNER_TEMP 'activation/sample 文档.pdf'
+
+          $process = Start-Process -FilePath $exe -ArgumentList "`"$document`"" -PassThru
+
+          $saved = $false
+          for ($attempt = 0; $attempt -lt 60 -and -not $saved; $attempt++) {
+            Start-Sleep -Milliseconds 500
+            foreach ($file in @($realSettings, $virtualSettings)) {
+              if (-not (Test-Path $file)) { continue }
+              try {
+                $parsed = Get-Content $file -Raw | ConvertFrom-Json
+                if (@($parsed.recentFiles | Where-Object { $_.filePath -eq $document }).Count -gt 0) {
+                  $saved = $true
+                  break
+                }
+              }
+              catch { }
+            }
+          }
+
+          $process.Refresh()
+          $alive = -not $process.HasExited
+          if ($alive) { $process | Stop-Process -Force }
+
+          function Get-State([string] $Path) {
+            if (-not (Test-Path $Path)) { return 'absent' }
+            try {
+              $parsed = Get-Content $Path -Raw | ConvertFrom-Json
+              $hasMarker = ($parsed.language -eq 'zh-CN')
+              $hasDocument = (@($parsed.recentFiles | Where-Object { $_.filePath -eq $document }).Count -gt 0)
+              return "language=$($parsed.language) marker=$hasMarker document=$hasDocument"
+            }
+            catch {
+              return 'unreadable'
+            }
+          }
+
+          if (-not $saved) { throw 'The app never saved settings; the experiment is inconclusive.' }
+
+          $realState = Get-State $realSettings
+          $virtualState = Get-State $virtualSettings
+
+          Write-Host "real    : $realState"
+          Write-Host "virtual : $virtualState"
+
+          "| copy | state |" >> $env:GITHUB_STEP_SUMMARY
+          "| --- | --- |" >> $env:GITHUB_STEP_SUMMARY
+          "| real AppData | $realState |" >> $env:GITHUB_STEP_SUMMARY
+          "| package cache | $virtualState |" >> $env:GITHUB_STEP_SUMMARY
+
+          $realHasMarker = $realState -match 'marker=True'
+          $realHasDocument = $realState -match 'document=True'
+          $virtualHasMarker = $virtualState -match 'marker=True'
+          $virtualHasDocument = $virtualState -match 'document=True'
+
+          $verdict = if ($realHasDocument -and -not $virtualHasDocument) {
+            'IN PLACE: the packaged app read and updated the real settings file. No migration needed.'
+          }
+          elseif ($virtualHasMarker -and $virtualHasDocument) {
+            'READ-THROUGH, WRITE REDIRECTED: the app saw the old settings but saved into the package cache. The save strategy is the problem, not the channel.'
+          }
+          elseif ($virtualHasDocument -and -not $virtualHasMarker) {
+            'ISOLATED: the packaged app never saw the old settings. An explicit migration is required.'
+          }
+          else {
+            'UNEXPECTED: inspect both files.'
+          }
+
+          Write-Host "verdict: $verdict"
+          "**Verdict:** $verdict" >> $env:GITHUB_STEP_SUMMARY
+
       - name: Uninstall
         if: always() && inputs.install
         shell: pwsh
