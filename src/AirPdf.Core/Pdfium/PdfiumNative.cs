@@ -13,7 +13,7 @@ namespace AirPdf.Core.Pdfium;
 /// musl x86/x64/arm64) and <c>libpdfium.dylib</c> (osx-x64/arm64). The P/Invoke
 /// declarations below are plain C ABI with no platform-specific code.
 /// </remarks>
-internal static class PdfiumNative
+internal static partial class PdfiumNative
 {
     internal const string Library = "pdfium";
 

@@ -1,0 +1,159 @@
+using AirPdf.Core.Models;
+using AirPdf.Core.Services;
+using SkiaSharp;
+using Xunit;
+
+namespace AirPdf.Core.Tests;
+
+/// <summary>
+/// Highlights and the copy that carries them. Both are edits to a PDF, which this application
+/// could not do at all before, so the tests check the parts that are easy to get wrong: the
+/// annotation really exists, it really draws, and the original file is never touched.
+/// </summary>
+[Collection(PdfiumCollection.Name)]
+public sealed class AnnotationTests : IDisposable
+{
+    private static readonly string SamplePath =
+        Path.Combine(AppContext.BaseDirectory, "Assets", "sample.pdf");
+
+    private readonly string _directory =
+        Path.Combine(Path.GetTempPath(), $"airpdf-annot-{Guid.NewGuid():N}");
+
+    public AnnotationTests() => Directory.CreateDirectory(_directory);
+
+    public void Dispose()
+    {
+        try
+        {
+            Directory.Delete(_directory, recursive: true);
+        }
+        catch
+        {
+            // A leftover temp directory must not fail a test run.
+        }
+    }
+
+    [Fact]
+    public async Task AddHighlight_AddsOneAnnotationOfTheHighlightSubtype()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var page = info.Pages[0];
+
+        var before = await service.GetAnnotationCountAsync(SamplePath, 1);
+        await service.AddHighlightAsync(SamplePath, 1, [Band(page, 0.6)]);
+
+        Assert.Equal(before + 1, await service.GetAnnotationCountAsync(SamplePath, 1));
+
+        // Subtype 9 is HIGHLIGHT in the PDFium API; a different value would mean the rectangle
+        // landed as some other markup.
+        Assert.Equal(9, await service.GetAnnotationSubtypeAsync(SamplePath, 1, before));
+    }
+
+    [Fact]
+    public async Task AddHighlight_PaintsTheWholeAreaItCovers()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var page = info.Pages[0];
+
+        // Cover the whole page: the point is that annotation rendering reaches every part of the
+        // quad, and a page-wide rectangle cannot miss the way a band over blank margins might.
+        var whole = new PdfQuad(0, page.Height, page.Width, 0);
+
+        var before = await service.RenderPageAsync(SamplePath, 1, 600);
+        var samplesX = new[] { 0.1, 0.5, 0.9 };
+        var samplesY = new[] { 0.1, 0.5, 0.9 };
+        var beforePixels = (from fx in samplesX from fy in samplesY select Pixel(before, fx, fy)).ToList();
+
+        await service.AddHighlightAsync(SamplePath, 1, [whole]);
+        var after = await service.RenderPageAsync(SamplePath, 1, 600);
+        var afterPixels = (from fx in samplesX from fy in samplesY select Pixel(after, fx, fy)).ToList();
+
+        before.Dispose();
+        after.Dispose();
+
+        // Every sampled point has to move: a highlight that only painted its border, or only the
+        // first quad, would leave the middle of the page untouched.
+        for (var index = 0; index < beforePixels.Count; index++)
+        {
+            Assert.True(
+                beforePixels[index] != afterPixels[index],
+                $"sample {index} did not change: {beforePixels[index]} -> {afterPixels[index]}");
+        }
+    }
+    [Fact]
+    public async Task SaveCopy_WritesTheAnnotationAndLeavesTheOriginalUntouched()
+    {
+        var originalHash = HashOf(SamplePath);
+        var originalLength = new FileInfo(SamplePath).Length;
+
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var before = await service.GetAnnotationCountAsync(SamplePath, 1);
+        await service.AddHighlightAsync(SamplePath, 1, [Band(info.Pages[0], 0.6)]);
+
+        var destination = Path.Combine(_directory, "annotated.pdf");
+        await service.SaveCopyAsync(SamplePath, destination);
+
+        // The copy carries the annotation...
+        Assert.True(File.Exists(destination));
+        Assert.True(new FileInfo(destination).Length > 0);
+
+        using var reopened = new PdfDocumentService();
+        await reopened.OpenAsync(destination);
+        Assert.Equal(before + 1, await reopened.GetAnnotationCountAsync(destination, 1));
+
+        // ...and the file the reader opened was not modified, not even its timestamp.
+        Assert.Equal(originalHash, HashOf(SamplePath));
+        Assert.Equal(originalLength, new FileInfo(SamplePath).Length);
+    }
+
+    [Fact]
+    public async Task AddHighlight_WithNoRectangles_ChangesNothing()
+    {
+        using var service = new PdfDocumentService();
+        await service.OpenAsync(SamplePath);
+        var before = await service.GetAnnotationCountAsync(SamplePath, 1);
+
+        await service.AddHighlightAsync(SamplePath, 1, []);
+
+        Assert.Equal(before, await service.GetAnnotationCountAsync(SamplePath, 1));
+    }
+
+    [Fact]
+    public async Task EditingAfterTheDocumentIsClosed_FailsLoudly()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        service.CloseDocument();
+
+        await Assert.ThrowsAsync<PdfDocumentException>(
+            () => service.AddHighlightAsync(SamplePath, 1, [Band(info.Pages[0], 0.6)]));
+    }
+
+    /// <summary>
+    /// A horizontal band across the page, in page space. <paramref name="fraction"/> is measured
+    /// from the top, which keeps the numbers readable in the assertions.
+    /// </summary>
+    private static PdfQuad Band(PdfPageInfo page, double fraction)
+    {
+        var top = page.Height * (1 - fraction);
+        var bottom = top - (page.Height * 0.05);
+
+        return new PdfQuad(page.Width * 0.1, top, page.Width * 0.9, bottom);
+    }
+
+    /// <summary>Reads the pixel at a fraction of the rendered page, 0..1 from the top-left.</summary>
+    private static SKColor Pixel(SKBitmap bitmap, double x, double y)
+    {
+        var px = Math.Clamp((int)(x * bitmap.Width), 0, bitmap.Width - 1);
+        var py = Math.Clamp((int)(y * bitmap.Height), 0, bitmap.Height - 1);
+        return bitmap.GetPixel(px, py);
+    }
+    private static string HashOf(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
+    }
+}

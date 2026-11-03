@@ -21,7 +21,7 @@ public readonly record struct PdfPageSize(double Width, double Height);
 /// gate that guarantees it. Calling this class directly from more than one thread crashes the
 /// process, which is why tests go through the service.
 /// </remarks>
-public sealed class PdfiumDocument : IDisposable
+public sealed partial class PdfiumDocument : IDisposable
 {
     private readonly FileStream _stream;
 

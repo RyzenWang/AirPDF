@@ -116,6 +116,145 @@ public sealed class PdfDocumentService : IDisposable
             cancellationToken);
     }
 
+    /// <summary>
+    /// Adds a highlight to the resident document.
+    /// </summary>
+    /// <remarks>
+    /// Unlike rendering, this cannot fall back to a throwaway handle: a change applied to a copy
+    /// that is then discarded would look like it worked and silently do nothing.
+    /// </remarks>
+    public Task AddHighlightAsync(
+        string filePath,
+        int pageNumber,
+        IReadOnlyList<PdfQuad> quads,
+        byte red = 255,
+        byte green = 221,
+        byte blue = 71,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ArgumentNullException.ThrowIfNull(quads);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    ResidentSession(fullPath).AddHighlight(pageNumber, quads, red, green, blue);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
+    /// <summary>Annotation count of one page in the resident document.</summary>
+    public Task<int> GetAnnotationCountAsync(
+        string filePath,
+        int pageNumber,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return ResidentSession(fullPath).GetAnnotationCount(pageNumber);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
+    /// <summary>Subtype of one annotation, 9 for a highlight, for verification.</summary>
+    public Task<int> GetAnnotationSubtypeAsync(
+        string filePath,
+        int pageNumber,
+        int index,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ArgumentOutOfRangeException.ThrowIfNegative(index);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return ResidentSession(fullPath).GetAnnotationSubtype(pageNumber, index);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+    /// <summary>
+    /// Writes the resident document, annotations included, to <paramref name="destination"/>.
+    /// The file that was opened is never written to.
+    /// </summary>
+    public Task SaveCopyAsync(
+        string filePath,
+        string destination,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(destination);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    ResidentSession(fullPath).SaveCopy(destination);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
+    private PdfiumDocument ResidentSession(string fullPath)
+    {
+        var session = _session;
+        if (session is null || !string.Equals(_sessionPath, fullPath, PathComparison))
+        {
+            throw new PdfDocumentException(
+                PdfFailure.Unknown,
+                "The document is no longer open, so it cannot be edited.");
+        }
+
+        return session;
+    }
     /// <summary>Page count of the open document, or 0 when nothing is open.</summary>
     public int OpenPageCount => _session?.PageCount ?? 0;
 
