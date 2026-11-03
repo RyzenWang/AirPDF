@@ -149,6 +149,7 @@ public sealed class LocalizationService : IDisposable
             ["L.MetaPdfVersion"] = ("PDF version", "PDF 版本"),
             ["L.MetaFileSize"] = ("File size", "文件大小"),
             ["L.MetaKeywords"] = ("Keywords", "关键词"),
+            ["L.ErrorSaveDenied"] = ("The file could not be written. It may be read-only, or open in another program.", "无法写入文件：它可能是只读的，或正被其他程序打开。"),
             ["L.ErrorEditFailed"] = ("The change could not be applied.", "无法应用该修改。"),
             ["L.ErrorSaveFailed"] = ("The copy could not be written. Check the location and try again.", "无法写入副本，请检查保存位置后重试。"),
             ["L.ErrorNotFound"] = ("The file does not exist.", "文件不存在。"),

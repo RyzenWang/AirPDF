@@ -70,6 +70,7 @@ public partial class MainWindow : Window
         // The host selects its home tab during construction, before this window could
         // subscribe, so point the content at it explicitly.
         ShowTab(_tabs.SelectedTab);
+        StartRenderProbe();
 
         if (restoreWindowPosition)
         {

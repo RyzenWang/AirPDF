@@ -914,7 +914,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         catch (PdfDocumentException failure)
         {
-            SetError(_localization.GetPdfFailureMessage(failure.Failure));
+            SetError(failure.Failure == PdfFailure.AccessDenied
+                ? _localization.T("L.ErrorSaveDenied")
+                : _localization.GetPdfFailureMessage(failure.Failure));
         }
         catch (IOException)
         {
@@ -1109,7 +1111,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         catch (PdfDocumentException failure)
         {
-            SetError(_localization.GetPdfFailureMessage(failure.Failure));
+            SetError(failure.Failure == PdfFailure.AccessDenied
+                ? _localization.T("L.ErrorSaveDenied")
+                : _localization.GetPdfFailureMessage(failure.Failure));
         }
         catch (IOException)
         {

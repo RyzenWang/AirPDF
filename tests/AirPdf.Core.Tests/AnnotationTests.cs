@@ -286,6 +286,39 @@ public sealed class AnnotationTests : IDisposable
         Assert.True(dark > 50, $"the rendered page is blank: {dark} non-white samples");
     }
     [Fact]
+    public async Task SaveInPlace_OnAReadOnlyFile_FailsCleanlyAndKeepsTheDocumentUsable()
+    {
+        var target = Path.Combine(_directory, "read-only.pdf");
+        File.Copy(SamplePath, target);
+
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(target);
+        var band = Band(info.Pages[0], 0.5);
+        await service.AddHighlightAsync(target, 1, [band]);
+
+        var attributes = File.GetAttributes(target);
+        File.SetAttributes(target, attributes | FileAttributes.ReadOnly);
+
+        try
+        {
+            var failure = await Assert.ThrowsAsync<PdfDocumentException>(
+                () => service.SaveInPlaceAsync(target));
+            Assert.Equal(PdfFailure.AccessDenied, failure.Failure);
+
+            // The important part: the reader can still draw the page and still edit, because the
+            // session was checked before it was closed rather than after.
+            var bitmap = await service.RenderPageAsync(target, 1, 300);
+            Assert.NotNull(bitmap);
+            bitmap.Dispose();
+
+            await service.AddHighlightAsync(target, 1, [Band(info.Pages[0], 0.7)]);
+        }
+        finally
+        {
+            File.SetAttributes(target, attributes);
+        }
+    }
+    [Fact]
     public async Task AddHighlight_WithNoRectangles_ChangesNothing()
     {
         using var service = new PdfDocumentService();

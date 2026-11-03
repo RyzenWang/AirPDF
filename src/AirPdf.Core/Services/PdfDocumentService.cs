@@ -303,11 +303,16 @@ public sealed class PdfDocumentService : IDisposable
                     cancellationToken.ThrowIfCancellationRequested();
 
                     var session = ResidentSession(fullPath);
+                    var password = _sessionPassword;
                     var temporary = fullPath + ".airpdf-save";
+
+                    // Check that the target can be written *before* giving up the session: a save
+                    // that is going to fail anyway must not leave the document unusable.
+                    AssertWritable(fullPath);
+
                     try
                     {
                         session.SaveCopy(temporary);
-                        var password = _sessionPassword;
 
                         _session = null;
                         _sessionPath = null;
@@ -320,11 +325,37 @@ public sealed class PdfDocumentService : IDisposable
                         _sessionPath = fullPath;
                         _sessionPassword = password;
                     }
+                    catch
+                    {
+                        // Put the document back so the reader can keep working, then report.
+                        if (_session is null && File.Exists(fullPath))
+                        {
+                            try
+                            {
+                                _session = PdfiumDocument.Open(fullPath, password);
+                                _sessionPath = fullPath;
+                                _sessionPassword = password;
+                            }
+                            catch
+                            {
+                                // Left with no session: rendering degrades to transient handles.
+                            }
+                        }
+
+                        throw;
+                    }
                     finally
                     {
                         if (File.Exists(temporary))
                         {
-                            File.Delete(temporary);
+                            try
+                            {
+                                File.Delete(temporary);
+                            }
+                            catch
+                            {
+                                // A leftover temporary file must not mask the real failure.
+                            }
                         }
                     }
                 }
@@ -431,6 +462,35 @@ public sealed class PdfDocumentService : IDisposable
             cancellationToken);
     }
 
+    /// <summary>
+    /// Fails early when the file cannot be written, so a doomed save does not first throw away
+    /// the open document. Opening for write does not modify the file; it only asks the sharing
+    /// rules of whoever else has it open.
+    /// </summary>
+    private static void AssertWritable(string fullPath)
+    {
+        try
+        {
+            if (File.GetAttributes(fullPath).HasFlag(FileAttributes.ReadOnly))
+            {
+                throw new PdfDocumentException(PdfFailure.AccessDenied, "The file is read-only.");
+            }
+
+            using var probe = new FileStream(fullPath, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
+        }
+        catch (PdfDocumentException)
+        {
+            throw;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            throw new PdfDocumentException(PdfFailure.AccessDenied, "The file cannot be written.");
+        }
+        catch (IOException)
+        {
+            throw new PdfDocumentException(PdfFailure.AccessDenied, "The file is in use by another program.");
+        }
+    }
     private PdfiumDocument ResidentSession(string fullPath)
     {
         var session = _session;
