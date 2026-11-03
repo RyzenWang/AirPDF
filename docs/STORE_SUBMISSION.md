@@ -105,6 +105,30 @@ second signature only creates room for confusion.
 Version rules for every later submission: four parts, each ≤ 65535, major ≥ 1, and
 the fourth part must stay `0`. Versions must strictly increase between submissions.
 
+Two optional switches matter for a submission:
+
+| Switch | Effect |
+| --- | --- |
+| `-Symbols` | Publishes with debug symbols and packs them into `AirPDF-<version>-x64.appxsym` inside the `.msixupload`. Partner Center then resolves addresses in crash reports. The app ships without symbols otherwise, so this is opt-in. |
+| `-Architecture arm64` | Builds the ARM64 package. Upload it to the **same** submission as the x64 one; Partner Center serves the matching architecture and no bundle is needed. |
+
+### Building it on a tag
+
+The `MSIX check` workflow runs on every `v*` tag. It always verifies the packaging path by
+building, installing, launching, and uninstalling a test-signed copy, and it builds the Store
+package when these repository secrets exist:
+
+| Secret | Value |
+| --- | --- |
+| `MSIX_IDENTITY_NAME` | `Package/Identity/Name` from Partner Center |
+| `MSIX_PUBLISHER` | `Package/Identity/Publisher`, including `CN=` |
+| `MSIX_PUBLISHER_DISPLAY_NAME` | The publisher name customers see |
+| `MSIX_VERSION` | Optional; defaults to the tag without the `v`, plus `.0` |
+
+Without the secrets the Store step is skipped with a notice, so tagging a release still works
+before the account exists. The resulting `.msixupload` is attached to the run as the
+`AirPDF-store` artifact.
+
 ## 3. Listing material
 
 Everything below is written and ready to paste; only the account-specific URLs

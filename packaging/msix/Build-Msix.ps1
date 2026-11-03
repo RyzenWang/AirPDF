@@ -60,7 +60,10 @@ param(
     [string] $CertificatePassword,
     [switch] $SkipPublish,
     [switch] $ForStore,
-    [switch] $NoAot
+    [switch] $NoAot,
+    [ValidateSet('x64', 'arm64')]
+    [string] $Architecture = 'x64',
+    [switch] $Symbols
 )
 
 $ErrorActionPreference = 'Stop'
@@ -75,8 +78,8 @@ if (-not (Test-Path (Join-Path $root 'AirPdf.sln'))) {
 }
 
 $outputDirectory = Join-Path $root $OutputDirectory
-$publishDirectory = Join-Path $outputDirectory 'app'
-$layoutDirectory = Join-Path $outputDirectory 'layout'
+$publishDirectory = Join-Path $outputDirectory "app-$Architecture"
+$layoutDirectory = Join-Path $outputDirectory "layout-$Architecture"
 
 if ($Version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
     throw "-Version must have four numeric parts, for example 0.3.3.0 (got '$Version')."
@@ -210,13 +213,21 @@ if (-not $SkipPublish) {
         $aotArguments = @('-p:PublishAot=true', '-p:StripSymbols=true')
     }
 
+    # The application ships without debug symbols, so the symbol package used for the
+    # Store crash reports has to ask for them explicitly.
+    $symbolArguments = @()
+    if ($Symbols) {
+        $symbolArguments = @('-p:DebugType=portable', '-p:DebugSymbols=true', '-p:CopyOutputSymbolsToPublishDirectory=true')
+    }
+
     & dotnet publish (Join-Path $root 'src/AirPdf.App/AirPdf.App.csproj') `
         -c $Configuration `
-        -r win-x64 `
+        -r "win-$Architecture" `
         --self-contained true `
         -p:PublishSingleFile=false `
         -p:Version=$Version `
         @aotArguments `
+        @symbolArguments `
         -o $publishDirectory
 
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE." }
@@ -229,6 +240,8 @@ if (-not (Test-Path (Join-Path $publishDirectory 'AirPdf.exe'))) {
 Write-Step 'Building the package layout'
 if (Test-Path $layoutDirectory) { Remove-Item $layoutDirectory -Recurse -Force }
 New-Item -ItemType Directory -Path $layoutDirectory -Force | Out-Null
+
+$symbolFiles = @(Get-ChildItem $publishDirectory -Recurse -Filter *.pdb -ErrorAction SilentlyContinue)
 
 Get-ChildItem $publishDirectory -Force | Copy-Item -Destination $layoutDirectory -Recurse -Force
 
@@ -316,10 +329,11 @@ $manifest = $manifest.Replace('{{IDENTITY_NAME}}', $IdentityName)
 $manifest = $manifest.Replace('{{PUBLISHER_DISPLAY_NAME}}', $PublisherDisplayName)
 $manifest = $manifest.Replace('{{PUBLISHER}}', $Publisher)
 $manifest = $manifest.Replace('{{VERSION}}', $Version)
+$manifest = $manifest.Replace('{{ARCH}}', $Architecture)
 Set-Content -Path (Join-Path $layoutDirectory 'AppxManifest.xml') -Value $manifest -Encoding utf8
 
 Write-Step 'Packing'
-$packageName = "AirPDF-$Version-x64.msix"
+$packageName = "AirPDF-$Version-$Architecture.msix"
 $packagePath = Join-Path $outputDirectory $packageName
 if (Test-Path $packagePath) { Remove-Item $packagePath -Force }
 
@@ -337,11 +351,35 @@ if ($CertificatePath) {
     if ($LASTEXITCODE -ne 0) { throw "signtool failed with exit code $LASTEXITCODE." }
 }
 
+$symbolPath = $null
+if ($symbolFiles.Count -gt 0) {
+    Write-Step 'Building the symbol package'
+    $symbolPath = Join-Path $outputDirectory "$([System.IO.Path]::GetFileNameWithoutExtension($packageName)).appxsym"
+    if (Test-Path $symbolPath) { Remove-Item $symbolPath -Force }
+
+    $symbolDirectory = Join-Path $outputDirectory "symbols-$Architecture"
+    if (Test-Path $symbolDirectory) { Remove-Item $symbolDirectory -Recurse -Force }
+    New-Item -ItemType Directory -Path $symbolDirectory -Force | Out-Null
+    foreach ($symbol in $symbolFiles) {
+        Copy-Item $symbol.FullName (Join-Path $symbolDirectory $symbol.Name) -Force
+    }
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [System.IO.Compression.ZipFile]::CreateFromDirectory(
+        $symbolDirectory, $symbolPath,
+        [System.IO.Compression.CompressionLevel]::Optimal, $false)
+
+    Write-Host ("  {0} ({1} files)" -f (Split-Path $symbolPath -Leaf), $symbolFiles.Count) -ForegroundColor Green
+}
+elseif ($Symbols) {
+    throw '-Symbols was requested but the publish produced no .pdb files.'
+}
+
 if ($ForStore) {
     # Partner Center expects a .msixupload for packaged submissions: a zip holding the
     # .msix and, optionally, the public symbols used for its crash reports.
     Write-Step 'Building the .msixupload for Partner Center'
-    $uploadName = "AirPDF-$Version-x64.msixupload"
+    $uploadName = "AirPDF-$Version-$Architecture.msixupload"
     $uploadPath = Join-Path $outputDirectory $uploadName
     if (Test-Path $uploadPath) { Remove-Item $uploadPath -Force }
 
@@ -350,6 +388,9 @@ if ($ForStore) {
     New-Item -ItemType Directory -Path $uploadDirectory -Force | Out-Null
 
     Copy-Item $packagePath (Join-Path $uploadDirectory $packageName)
+    if ($symbolPath) {
+        Copy-Item $symbolPath (Join-Path $uploadDirectory (Split-Path $symbolPath -Leaf))
+    }
 
     # Compress-Archive only accepts a .zip destination, so the archive is written by
     # the zip API directly under the extension Partner Center expects.
@@ -380,7 +421,7 @@ $identity = $generatedManifest.SelectSingleNode('/f:Package/f:Identity', $ns)
 $checks += @{ Name = 'identity version'; Ok = ($identity.Version -eq $Version); Detail = $identity.Version }
 $checks += @{ Name = 'identity name'; Ok = ($identity.Name -eq $IdentityName); Detail = $identity.Name }
 $checks += @{ Name = 'identity publisher'; Ok = ($identity.Publisher -eq $Publisher); Detail = $identity.Publisher }
-$checks += @{ Name = 'architecture'; Ok = ($identity.ProcessorArchitecture -eq 'x64'); Detail = $identity.ProcessorArchitecture }
+$checks += @{ Name = 'architecture'; Ok = ($identity.ProcessorArchitecture -eq $Architecture); Detail = $identity.ProcessorArchitecture }
 
 $executable = $generatedManifest.SelectSingleNode('//f:Application/@Executable', $ns).Value
 $checks += @{ Name = 'entry executable present'; Ok = (Test-Path (Join-Path $verifyDirectory $executable)); Detail = $executable }
@@ -396,6 +437,14 @@ foreach ($image in @('Square44x44Logo.png', 'Square150x150Logo.png', 'StoreLogo.
         Name   = "asset $image"
         Ok     = (Test-Path (Join-Path $verifyDirectory "Assets/$image"))
         Detail = $image
+    }
+}
+
+if ($Symbols) {
+    $checks += @{
+        Name   = 'symbol package'
+        Ok     = ($null -ne $symbolPath -and (Test-Path $symbolPath))
+        Detail = if ($symbolPath) { Split-Path $symbolPath -Leaf } else { 'missing' }
     }
 }
 
@@ -425,7 +474,9 @@ Write-Host "Package: $packagePath" -ForegroundColor Green
 Write-Host "  version   $Version"
 Write-Host "  identity  $IdentityName"
 Write-Host "  publisher $Publisher"
+Write-Host "  architecture $Architecture"
 Write-Host "  packaged  $packageSize MB from $payloadSize MB of payload"
+Write-Host "  symbols   $(if ($symbolPath) { 'yes' } else { 'no' })"
 Write-Host "  signed    $(if ($CertificatePath) { 'yes' } else { 'no' })"
 
 if ($failed -gt 0) {

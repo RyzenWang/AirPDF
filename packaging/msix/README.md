@@ -47,7 +47,18 @@ package comes out at 25.2 MB against 51.9 MB for the JIT build, and the first wi
 under a second instead of several. AOT needs the C++ toolchain (`clang` and the MSVC linker) on
 the build machine; pass `-NoAot` to publish the JIT build when it is not available.
 
-Use `-SkipPublish` to repack an existing `artifacts/msix/app` folder.
+Use `-SkipPublish` to repack an existing publish folder.
+
+Two switches shape the package:
+
+- `-Architecture arm64` builds the ARM64 package instead of x64. Upload both to the same
+  Partner Center submission; a bundle is not needed, since the Store serves the right one.
+- `-Symbols` publishes with debug symbols and packs them into `AirPDF-<version>-<arch>.appxsym`
+  next to the package. Inside the `.msixupload` it gives Partner Center stack traces for crash
+  reports; the application itself ships without symbols, so this asks for them explicitly.
+
+The publish folder is per architecture (`artifacts/msix/app-<arch>`), so both can be built in a
+row without clobbering each other.
 
 For a Store submission, pass the identity Partner Center assigned and add
 `-ForStore`. That mode refuses the placeholder identity, refuses a signing

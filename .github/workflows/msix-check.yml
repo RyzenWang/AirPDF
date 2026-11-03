@@ -6,13 +6,29 @@ name: MSIX check
 #
 # This exists because sideloading requires the signing certificate to be trusted
 # machine-wide, which needs elevation; local development usually cannot do it.
+#
+# On a v* tag it also builds the package meant for the Store, with the identity
+# from the MSIX_IDENTITY_NAME / MSIX_PUBLISHER / MSIX_PUBLISHER_DISPLAY_NAME
+# secrets, and uploads it as an artifact. Those secrets are empty by default, so a
+# tag build without them still verifies packaging and simply skips the upload.
 on:
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       install:
         description: Install the package and launch the app
         type: boolean
         default: true
+      store:
+        description: Build the package for the Store
+        type: boolean
+        default: false
+      arm64:
+        description: Also build for ARM64 (needs the ARM64 C++ toolchain)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -311,3 +327,113 @@ jobs:
         with:
           name: AirPDF-msix
           path: artifacts/msix/*.msix
+
+  arm64:
+    name: Build the ARM64 package
+    runs-on: windows-latest
+    if: ${{ inputs.arm64 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # No secrets and no install: an x64 runner cannot launch an ARM64 package, so this
+      # job answers the only question it can - does the ARM64 toolchain produce a package
+      # that passes the same checks as x64.
+      - name: Build the ARM64 package
+        shell: pwsh
+        run: |
+          ./packaging/msix/Build-Msix.ps1 `
+            -Version 0.0.1.0 `
+            -Architecture arm64 `
+            -Publisher 'CN=AirPDF Test Signing (not for release)'
+
+      - name: Upload the ARM64 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: AirPDF-msix-arm64
+          path: artifacts/msix/*.msix
+  store:
+    name: Build the Store package
+    needs: msix
+    runs-on: windows-latest
+    if: ${{ github.event_name == 'push' || inputs.store }}
+
+    env:
+      MSIX_IDENTITY_NAME: ${{ secrets.MSIX_IDENTITY_NAME }}
+      MSIX_PUBLISHER: ${{ secrets.MSIX_PUBLISHER }}
+      MSIX_PUBLISHER_DISPLAY_NAME: ${{ secrets.MSIX_PUBLISHER_DISPLAY_NAME }}
+      MSIX_VERSION: ${{ secrets.MSIX_VERSION }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The identity is assigned by Partner Center, so it cannot live in the repository.
+      # Without the secrets the store step is skipped rather than red: the tag build still
+      # proves the packaging path, which is the part CI can check on its own.
+      - name: Read the identity
+        id: identity
+        shell: pwsh
+        run: |
+          if (-not $env:MSIX_IDENTITY_NAME -or -not $env:MSIX_PUBLISHER -or -not $env:MSIX_PUBLISHER_DISPLAY_NAME) {
+            Write-Host '::notice::MSIX_IDENTITY_NAME / MSIX_PUBLISHER / MSIX_PUBLISHER_DISPLAY_NAME are not set; skipping the Store package.'
+            "ready=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+
+          $version = $env:MSIX_VERSION
+          if (-not $version) {
+            $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '1.0.0.0' }
+          }
+          if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') { $version = "$version.0" }
+
+          "ready=true" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Packaging version $version"
+
+      - name: Build the x64 package for the Store
+        if: steps.identity.outputs.ready == 'true'
+        shell: pwsh
+        run: |
+          ./packaging/msix/Build-Msix.ps1 `
+            -Version ${{ steps.identity.outputs.version }} `
+            -ForStore `
+            -Symbols `
+            -IdentityName $env:MSIX_IDENTITY_NAME `
+            -Publisher $env:MSIX_PUBLISHER `
+            -PublisherDisplayName $env:MSIX_PUBLISHER_DISPLAY_NAME
+
+      # Partner Center accepts several packages in one submission, so ARM64 is a second
+      # upload rather than a bundle. It needs the ARM64 C++ tools on the runner.
+      - name: Build the ARM64 package for the Store
+        if: steps.identity.outputs.ready == 'true' && inputs.arm64
+        shell: pwsh
+        run: |
+          ./packaging/msix/Build-Msix.ps1 `
+            -Version ${{ steps.identity.outputs.version }} `
+            -ForStore `
+            -Symbols `
+            -Architecture arm64 `
+            -IdentityName $env:MSIX_IDENTITY_NAME `
+            -Publisher $env:MSIX_PUBLISHER `
+            -PublisherDisplayName $env:MSIX_PUBLISHER_DISPLAY_NAME
+
+      - name: Upload the Store packages
+        if: steps.identity.outputs.ready == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: AirPDF-store
+          path: |
+            artifacts/msix/*.msixupload
+            artifacts/msix/*.appxsym
