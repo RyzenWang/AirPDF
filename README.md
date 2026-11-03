@@ -55,6 +55,8 @@ small .NET application with a hand-built Avalonia interface.
 - **Password-protected PDFs** with a proper unlock prompt.
 - **Light, dark, and high-contrast themes**, following the system on first launch.
 - **Status bar** with the page position and a reading-progress percentage.
+- **Highlights** — select text and press `Ctrl+Shift+H`; right-click a highlight to remove it.
+  They are written into a copy with `Ctrl+S`, never into the file you opened.
 - **Per-document bookmarks** — `Ctrl+D` marks the current spot and the sidebar keeps them
   per file. Double-click one to rename it, drag them into the order you want, and the
   welcome screen lists bookmarks from every document so you can jump straight back in.

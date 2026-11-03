@@ -42,6 +42,10 @@ public sealed class LocalizationService : IDisposable
             ["L.NoOutline"] = ("No outline in this PDF", "此 PDF 没有目录"),
             ["L.Bookmarks"] = ("Bookmarks", "书签"),
             ["L.HighlightSelection"] = ("Highlight selection", "高亮所选"),
+            ["L.RemoveHighlight"] = ("Remove highlight", "移除高亮"),
+            ["L.HighlightRemoved"] = ("Highlight removed.", "已移除高亮。"),
+            ["L.NoHighlightHere"] = ("No highlight under the pointer.", "该位置没有高亮。"),
+
             ["L.HighlightAdded"] = ("Highlight added. Save a copy to keep it.", "已添加高亮。保存副本才能保留。"),
             ["L.SaveCopy"] = ("Save a copy…", "保存副本…"),
             ["L.CopySaved"] = ("Saved a copy as {0}", "已保存副本：{0}"),

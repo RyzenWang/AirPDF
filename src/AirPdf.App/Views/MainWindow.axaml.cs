@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private bool _handlingScrollChanged;
     private bool _isSelectingText;
     private bool _selectionPressInProgress;
+    private (int Page, double X, double Y)? _contextPoint;
     private bool _selectionMoved;
     private bool _restoringDocument;
     private bool _linkCursorActive;
@@ -914,7 +915,20 @@ public partial class MainWindow : Window
 
     private async void OnSelectionPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (!_viewModel.IsDocumentOpen || _isSelectingText || _selectionPressInProgress ||
+        if (!_viewModel.IsDocumentOpen)
+        {
+            return;
+        }
+
+        // A right click records where the context menu was opened, so "Remove highlight" knows
+        // which highlight the reader meant. The menu itself opens as usual.
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+        {
+            RememberContextPoint(e);
+            return;
+        }
+
+        if (_isSelectingText || _selectionPressInProgress ||
             !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             return;
@@ -1148,6 +1162,38 @@ public partial class MainWindow : Window
         }
     }
 
+    private void RememberContextPoint(PointerPressedEventArgs e)
+    {
+        var pageView = FindPageView(e.Source) ?? FindPageViewAt(e.GetPosition(this));
+        if (pageView?.DataContext is not PageViewModel page)
+        {
+            _contextPoint = null;
+            return;
+        }
+
+        var point = e.GetPosition(pageView);
+        if (!new Rect(pageView.Bounds.Size).Contains(point))
+        {
+            _contextPoint = null;
+            return;
+        }
+
+        _contextPoint = (
+            page.Number,
+            point.X / Math.Max(1, pageView.Bounds.Width),
+            point.Y / Math.Max(1, pageView.Bounds.Height));
+    }
+
+    private async void OnRemoveHighlightClick(object? sender, RoutedEventArgs e)
+    {
+        if (_contextPoint is not { } point)
+        {
+            return;
+        }
+
+        await _viewModel.RemoveHighlightsAtAsync(point.Page, point.X, point.Y);
+        _contextPoint = null;
+    }
     private void OnPagesPointerWheel(object? sender, PointerWheelEventArgs e)
     {
         if ((e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) == 0)

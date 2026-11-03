@@ -73,6 +73,101 @@ public sealed partial class PdfiumDocument
         }
     }
 
+    /// <summary>Bounds of one annotation, in page space.</summary>
+    public PdfQuad GetAnnotationBounds(int pageNumber, int index)
+    {
+        ThrowIfDisposed();
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            var annot = PdfiumNative.PageGetAnnot(page, index);
+            if (annot == IntPtr.Zero)
+            {
+                throw new PdfDocumentException(PdfFailure.Unknown, $"Annotation {index} is missing.");
+            }
+
+            try
+            {
+                if (PdfiumNative.AnnotGetRect(annot, out var rect) == 0)
+                {
+                    return default;
+                }
+
+                return new PdfQuad(rect.Left, rect.Top, rect.Right, rect.Bottom);
+            }
+            finally
+            {
+                PdfiumNative.PageCloseAnnot(annot);
+            }
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
+    /// <summary>
+    /// Removes every highlight on the page whose bounds contain <paramref name="point"/>.
+    /// </summary>
+    /// <returns>How many annotations were removed.</returns>
+    /// <remarks>
+    /// Only highlights are considered, so a page's form fields and links are never touched by a
+    /// click meant for markup. Indices are walked downwards because removing one shifts the rest.
+    /// </remarks>
+    public int RemoveHighlightsAt(int pageNumber, PdfQuad point)
+    {
+        ThrowIfDisposed();
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            var removed = 0;
+            for (var index = PdfiumNative.PageGetAnnotCount(page) - 1; index >= 0; index--)
+            {
+                var annot = PdfiumNative.PageGetAnnot(page, index);
+                if (annot == IntPtr.Zero)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (PdfiumNative.AnnotGetSubtype(annot) != PdfiumNative.AnnotHighlight)
+                    {
+                        continue;
+                    }
+
+                    if (PdfiumNative.AnnotGetRect(annot, out var rect) == 0)
+                    {
+                        continue;
+                    }
+
+                    var contains = point.Left >= rect.Left && point.Left <= rect.Right &&
+                                   point.Top >= rect.Bottom && point.Top <= rect.Top;
+                    if (!contains)
+                    {
+                        continue;
+                    }
+
+                    if (PdfiumNative.PageRemoveAnnot(page, index) != 0)
+                    {
+                        removed++;
+                    }
+                }
+                finally
+                {
+                    PdfiumNative.PageCloseAnnot(annot);
+                }
+            }
+
+            return removed;
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
     /// <summary>
     /// Adds one highlight covering the given page-space rectangles. All rectangles go into a
     /// single annotation, which is what a reader expects: selecting three lines and highlighting

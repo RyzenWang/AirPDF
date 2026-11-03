@@ -514,6 +514,9 @@
                         Command="{Binding SelectAllTextCommand}" />
               <MenuItem Header="{DynamicResource L.HighlightSelection}"
                         Command="{Binding HighlightSelectionCommand}" />
+              <MenuItem Header="{DynamicResource L.RemoveHighlight}"
+                        Click="OnRemoveHighlightClick"
+                        IsEnabled="{Binding IsDocumentOpen}" />
               <Separator />
               <MenuItem Header="{DynamicResource L.AddBookmark}"
                         Command="{Binding AddBookmarkCommand}"

@@ -893,6 +893,55 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Removes the highlights under a point, given in normalized display coordinates as the
+    /// pointer reports them.
+    /// </summary>
+    /// <remarks>
+    /// The point goes through the same inverse mapping as a selection, so a highlight on a
+    /// rotated page is removed by clicking where it is drawn rather than where it would have
+    /// been without rotation.
+    /// </remarks>
+    public async Task<bool> RemoveHighlightsAtAsync(int pageNumber, double normalizedX, double normalizedY)
+    {
+        if (!IsDocumentOpen)
+        {
+            return false;
+        }
+
+        var page = Pages.FirstOrDefault(candidate => candidate.Number == pageNumber);
+        if (page is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var rotation = await _documentService.GetPageRotationAsync(FilePath, pageNumber);
+            var point = PageGeometry.ToPageQuad(
+                new PdfSearchRect(normalizedX, normalizedY, 0, 0),
+                page.WidthPoints,
+                page.HeightPoints,
+                rotation);
+
+            var removed = await _documentService.RemoveHighlightsAtAsync(FilePath, pageNumber, point);
+            if (removed == 0)
+            {
+                ShowStatus(_localization.T("L.NoHighlightHere"));
+                return false;
+            }
+
+            page.RequestRender();
+            HasUnsavedAnnotations = true;
+            ShowStatus(_localization.T("L.HighlightRemoved"));
+            return true;
+        }
+        catch (PdfDocumentException failure)
+        {
+            SetError(_localization.GetPdfFailureMessage(failure.Failure));
+            return false;
+        }
+    }
     private bool CanSaveCopy() => IsDocumentOpen;
 
     private void ShowStatus(string message)

@@ -155,6 +155,27 @@ public sealed class EndToEndTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task HighlightShortcut_RendersTheHighlightWithoutSavingACopy()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages[0].Image is not null && document.Pages[0].HasTextLayer);
+
+        _window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Control);
+        await WaitAsync(() => document.HasSelection);
+
+        var page = document.Pages[0];
+        var before = page.Image;
+
+        _window.KeyPressQwerty(PhysicalKey.H, RawInputModifiers.Control | RawInputModifiers.Shift);
+        await WaitAsync(() => document.HasUnsavedAnnotations);
+
+        // The page already had a bitmap at this width, and a render that skips that case leaves
+        // the highlight invisible until the reader saves a copy and reopens it - which is exactly
+        // what was reported.
+        await WaitAsync(() => !ReferenceEquals(page.Image, before));
+        Assert.NotSame(before, page.Image);
+    }
+    [AvaloniaFact]
     public async Task UpdateCheck_OnABuildThatIsNotInstalled_ShowsNoBanner()
     {
         // The test build is a folder build, so Velopack reports it as not installed and the

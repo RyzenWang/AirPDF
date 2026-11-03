@@ -308,6 +308,25 @@ public sealed class MainWindowViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task RemoveHighlightsAtAsync_RemovesTheHighlightUnderThePoint()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        await context.ViewModel.SelectAllTextCommand.ExecuteAsync(null);
+        await WaitForAsync(() => context.ViewModel.HasSelection);
+        await context.ViewModel.HighlightSelectionCommand.ExecuteAsync(null);
+
+        var page = context.ViewModel.Pages[0];
+        var rect = page.SelectionRects[0];
+        var x = rect.X + (rect.Width / 2);
+        var y = rect.Y + (rect.Height / 2);
+
+        Assert.True(await context.ViewModel.RemoveHighlightsAtAsync(page.Number, x, y));
+
+        // Nothing left under that point the second time.
+        Assert.False(await context.ViewModel.RemoveHighlightsAtAsync(page.Number, x, y));
+    }
+    [AvaloniaFact]
     public async Task SaveCopy_WhenThePickerIsCancelled_KeepsTheUnsavedMark()
     {
         using var context = new TestContext();

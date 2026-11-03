@@ -110,6 +110,69 @@ public sealed class AnnotationTests : IDisposable
     }
 
     [Fact]
+    public async Task RemoveHighlightsAt_RemovesTheHighlightUnderThePoint()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var page = info.Pages[0];
+        var band = Band(page, 0.5);
+
+        var before = await service.GetAnnotationCountAsync(SamplePath, 1);
+        await service.AddHighlightAsync(SamplePath, 1, [band]);
+        Assert.Equal(before + 1, await service.GetAnnotationCountAsync(SamplePath, 1));
+
+        var removed = await service.RemoveHighlightsAtAsync(
+            SamplePath,
+            1,
+            new PdfQuad(band.Left + 1, band.Top - 1, band.Left + 1, band.Top - 1));
+
+        Assert.Equal(1, removed);
+        Assert.Equal(before, await service.GetAnnotationCountAsync(SamplePath, 1));
+    }
+
+    [Fact]
+    public async Task RemoveHighlightsAt_IgnoresAPointOutsideEveryHighlight()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var page = info.Pages[0];
+
+        await service.AddHighlightAsync(SamplePath, 1, [Band(page, 0.5)]);
+        var after = await service.GetAnnotationCountAsync(SamplePath, 1);
+
+        // Well below the band: nothing there, so nothing may be removed.
+        var removed = await service.RemoveHighlightsAtAsync(
+            SamplePath,
+            1,
+            new PdfQuad(page.Width / 2, 1, page.Width / 2, 1));
+
+        Assert.Equal(0, removed);
+        Assert.Equal(after, await service.GetAnnotationCountAsync(SamplePath, 1));
+    }
+
+    [Fact]
+    public async Task RemovedHighlights_AreGoneFromTheSavedCopyToo()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var page = info.Pages[0];
+        var before = await service.GetAnnotationCountAsync(SamplePath, 1);
+
+        var band = Band(page, 0.5);
+        await service.AddHighlightAsync(SamplePath, 1, [band]);
+        await service.RemoveHighlightsAtAsync(
+            SamplePath,
+            1,
+            new PdfQuad(band.Left + 1, band.Top - 1, band.Left + 1, band.Top - 1));
+
+        var destination = Path.Combine(_directory, "cleaned.pdf");
+        await service.SaveCopyAsync(SamplePath, destination);
+
+        using var reopened = new PdfDocumentService();
+        await reopened.OpenAsync(destination);
+        Assert.Equal(before, await reopened.GetAnnotationCountAsync(destination, 1));
+    }
+    [Fact]
     public async Task AddHighlight_WithNoRectangles_ChangesNothing()
     {
         using var service = new PdfDocumentService();

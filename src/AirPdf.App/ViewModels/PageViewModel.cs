@@ -22,6 +22,7 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     private int _renderGeneration;
     private int _renderedWidth;
     private bool _isActive;
+    private bool _forceRender;
     private double _displayWidth;
     private double _displayHeight;
     private WriteableBitmap? _image;
@@ -271,8 +272,15 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         IsRendering = false;
     }
 
-    /// <summary>Re-renders the page, for example after an annotation was added to it.</summary>
-    public void RequestRender() => QueueRender();
+    /// <summary>
+    /// Re-renders the page even though it already has a bitmap, for example after an annotation
+    /// was added to it.
+    /// </summary>
+    public void RequestRender()
+    {
+        _forceRender = true;
+        QueueRender();
+    }
 
     public void SetHighlights(IReadOnlyList<PdfSearchRect> rects, IReadOnlyList<PdfSearchRect> activeRects)
     {
@@ -352,10 +360,15 @@ public sealed class PageViewModel : ObservableObject, IDisposable
             var areaWidth = (int)Math.Sqrt(MaxRenderPixels * (WidthPoints / Math.Max(1, HeightPoints)));
             var targetWidth = Math.Clamp(Math.Min(scaleWidth, areaWidth), MinRenderWidth, MaxRenderWidth);
 
-            if (Image is not null && targetWidth <= _renderedWidth + 8)
+            // A page that already has a bitmap at this width skips the render, which is right
+            // for scrolling and wrong after an annotation was added: the change would stay
+            // invisible until the copy was reopened.
+            if (!_forceRender && Image is not null && targetWidth <= _renderedWidth + 8)
             {
                 return;
             }
+
+            _forceRender = false;
 
             IsRendering = true;
             RenderError = null;

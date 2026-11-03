@@ -246,6 +246,34 @@ public sealed class PdfDocumentService : IDisposable
             },
             cancellationToken);
     }
+    /// <summary>Removes the highlights under a page-space point.</summary>
+    public Task<int> RemoveHighlightsAtAsync(
+        string filePath,
+        int pageNumber,
+        PdfQuad point,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return ResidentSession(fullPath).RemoveHighlightsAt(pageNumber, point);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
     /// <summary>
     /// Writes the resident document, annotations included, to <paramref name="destination"/>.
     /// The file that was opened is never written to.

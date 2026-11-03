@@ -8,6 +8,9 @@ semantic versioning once it reaches 1.0.
 
 ### Added
 
+- Highlights can be removed again: right-click a highlight and choose **Remove highlight**. Only
+  highlights are considered, so form fields and links on the page are never touched, and the
+  removal is written by the same **Save a copy** as the highlight itself.
 - Highlight annotations. Select text, press `Ctrl+Shift+H` (or use the page menu) and the
   selection becomes a highlight in the document, drawn immediately. Highlights are written into
   the file only by **Save a copy** (`Ctrl+S`), which asks where to write and never touches the
@@ -49,6 +52,11 @@ semantic versioning once it reaches 1.0.
   the installers return once a signing certificate is configured.
 ### Fixed
 
+- A highlight was invisible until the document was saved and reopened. Adding the annotation
+  asked the page to re-render, but the page already had a bitmap at the same width and the render
+  returned early, so nothing changed on screen. The page now re-renders when it is asked to,
+  whatever it already holds. Caught by a test that fails on the old behaviour: the bitmap was the
+  same instance before and after highlighting.
 - Settings are now overwritten in place instead of being re-created through a temporary
   file, so an installed package and the portable build share one `settings.json`. A
   packaged (MSIX) build redirects *new* files under `%APPDATA%` into its private cache but
@@ -78,6 +86,11 @@ Every platform is now compiled ahead of time.
   the installers return once a signing certificate is configured.
 ### Fixed
 
+- A highlight was invisible until the document was saved and reopened. Adding the annotation
+  asked the page to re-render, but the page already had a bitmap at the same width and the render
+  returned early, so nothing changed on screen. The page now re-renders when it is asked to,
+  whatever it already holds. Caught by a test that fails on the old behaviour: the bitmap was the
+  same instance before and after highlighting.
 - Switching tabs no longer leaves the previous document's pages active. The page item
   container is reused when the list switches documents, and nothing detached the old page, so
   it stayed active: its bitmap was never trimmed and it kept re-rendering. Memory crept up as
@@ -136,6 +149,11 @@ Rotated pages work end to end, and the Windows download halves.
   the installers return once a signing certificate is configured.
 ### Fixed
 
+- A highlight was invisible until the document was saved and reopened. Adding the annotation
+  asked the page to re-render, but the page already had a bitmap at the same width and the render
+  returned early, so nothing changed on screen. The page now re-renders when it is asked to,
+  whatever it already holds. Caught by a test that fails on the old behaviour: the bitmap was the
+  same instance before and after highlighting.
 - Switching tabs no longer leaves the previous document's pages active. The page item
   container is reused when the list switches documents, and nothing detached the old page, so
   it stayed active: its bitmap was never trimmed and it kept re-rendering. Memory crept up as
@@ -154,6 +172,9 @@ explicit.
 
 ### Added
 
+- Highlights can be removed again: right-click a highlight and choose **Remove highlight**. Only
+  highlights are considered, so form fields and links on the page are never touched, and the
+  removal is written by the same **Save a copy** as the highlight itself.
 - Highlight annotations. Select text, press `Ctrl+Shift+H` (or use the page menu) and the
   selection becomes a highlight in the document, drawn immediately. Highlights are written into
   the file only by **Save a copy** (`Ctrl+S`), which asks where to write and never touches the
@@ -206,6 +227,9 @@ explicit.
 
 ### Added
 
+- Highlights can be removed again: right-click a highlight and choose **Remove highlight**. Only
+  highlights are considered, so form fields and links on the page are never touched, and the
+  removal is written by the same **Save a copy** as the highlight itself.
 - Highlight annotations. Select text, press `Ctrl+Shift+H` (or use the page menu) and the
   selection becomes a highlight in the document, drawn immediately. Highlights are written into
   the file only by **Save a copy** (`Ctrl+S`), which asks where to write and never touches the
@@ -298,6 +322,11 @@ explicit.
   the installers return once a signing certificate is configured.
 ### Fixed
 
+- A highlight was invisible until the document was saved and reopened. Adding the annotation
+  asked the page to re-render, but the page already had a bitmap at the same width and the render
+  returned early, so nothing changed on screen. The page now re-renders when it is asked to,
+  whatever it already holds. Caught by a test that fails on the old behaviour: the bitmap was the
+  same instance before and after highlighting.
 - Switching tabs no longer leaves the previous document's pages active. The page item
   container is reused when the list switches documents, and nothing detached the old page, so
   it stayed active: its bitmap was never trimmed and it kept re-rendering. Memory crept up as
@@ -324,6 +353,9 @@ First public preview.
 
 ### Added
 
+- Highlights can be removed again: right-click a highlight and choose **Remove highlight**. Only
+  highlights are considered, so form fields and links on the page are never touched, and the
+  removal is written by the same **Save a copy** as the highlight itself.
 - Highlight annotations. Select text, press `Ctrl+Shift+H` (or use the page menu) and the
   selection becomes a highlight in the document, drawn immediately. Highlights are written into
   the file only by **Save a copy** (`Ctrl+S`), which asks where to write and never touches the
@@ -369,6 +401,11 @@ First public preview.
   the installers return once a signing certificate is configured.
 ### Fixed
 
+- A highlight was invisible until the document was saved and reopened. Adding the annotation
+  asked the page to re-render, but the page already had a bitmap at the same width and the render
+  returned early, so nothing changed on screen. The page now re-renders when it is asked to,
+  whatever it already holds. Caught by a test that fails on the old behaviour: the bitmap was the
+  same instance before and after highlighting.
 - Switching tabs no longer leaves the previous document's pages active. The page item
   container is reused when the list switches documents, and nothing detached the old page, so
   it stayed active: its bitmap was never trimmed and it kept re-rendering. Memory crept up as

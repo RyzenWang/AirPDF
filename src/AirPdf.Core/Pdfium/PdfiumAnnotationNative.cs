@@ -82,6 +82,11 @@ internal static partial class PdfiumNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFPage_CloseAnnot")]
     internal static extern int PageCloseAnnot(IntPtr annot);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_GetRect")]
+    internal static extern int AnnotGetRect(IntPtr annot, out FsRectF rect);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFPage_RemoveAnnot")]
+    internal static extern int PageRemoveAnnot(IntPtr page, int index);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_GetSubtype")]
     internal static extern int AnnotGetSubtype(IntPtr annot);
 
