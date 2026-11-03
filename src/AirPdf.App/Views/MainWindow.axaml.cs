@@ -762,6 +762,11 @@ public partial class MainWindow : Window
         }
     }
 
+    // Avalonia 11.3 marks the synchronous drag API obsolete in favour of IAsyncDataTransfer and
+    // DataFormat<T>. That is a redesign rather than a rename: the payload becomes async and the
+    // format is typed. Drag and drop cannot be exercised in a headless test, so the migration
+    // waits until it can be checked by hand; until then these four handlers opt out, deliberately.
+#pragma warning disable CS0618
     private void OnBookmarkPointerPressed(object? sender, PointerPressedEventArgs e)
     {
         if (sender is not Control { DataContext: UserBookmarkViewModel bookmark })
@@ -843,6 +848,8 @@ public partial class MainWindow : Window
         _draggedBookmark = null;
         e.Handled = true;
     }
+
+#pragma warning restore CS0618
 
     /// <summary>Walks up from whatever the pointer landed on to the bookmark it belongs to.</summary>
     private static UserBookmarkViewModel? FindBookmark(object? source)

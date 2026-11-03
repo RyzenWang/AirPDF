@@ -40,7 +40,7 @@ public sealed class BookmarkWelcomeTests : IDisposable
 
         await home.OpenPathAsync(SamplePath);
 
-        var document = Assert.Single(Tabs(window).Where(tab => !tab.IsHomeTab));
+        var document = Assert.Single(Tabs(window), tab => !tab.IsHomeTab);
         await WaitUntilAsync(() => document.IsDocumentOpen);
         Assert.True(document.IsDocumentOpen);
 
@@ -58,7 +58,7 @@ public sealed class BookmarkWelcomeTests : IDisposable
         await WaitUntilAsync(() => document.Pages.Count > 2 && document.Pages[2].Image is not null);
 
         // The existing tab was focused instead of a duplicate being opened for the same file.
-        Assert.Single(Tabs(window).Where(tab => !tab.IsHomeTab));
+        Assert.Single(Tabs(window), tab => !tab.IsHomeTab);
         Assert.Same(document, window.DataContext);
 
         // The target page was realised and rendered: a placeholder is what the reader saw.

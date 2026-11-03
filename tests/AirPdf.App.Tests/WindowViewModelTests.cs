@@ -77,7 +77,7 @@ public sealed class WindowViewModelTests : IDisposable
         Assert.Equal(2, host.Tabs.Count);
         Assert.False(host.HomeTab.IsDocumentOpen);
 
-        var document = Assert.Single(host.Tabs.Where(tab => !tab.IsHomeTab));
+        var document = Assert.Single(host.Tabs, tab => !tab.IsHomeTab);
         var deadline = DateTime.UtcNow.AddSeconds(20);
         while (!document.IsDocumentOpen && DateTime.UtcNow < deadline)
         {
@@ -225,7 +225,7 @@ public sealed class WindowViewModelTests : IDisposable
         Assert.Equal(2, host.Tabs.Count);
         Assert.False(host.HomeTab.IsDocumentOpen);
 
-        var document = Assert.Single(host.Tabs.Where(tab => !tab.IsHomeTab));
+        var document = Assert.Single(host.Tabs, tab => !tab.IsHomeTab);
         while (!document.IsDocumentOpen && DateTime.UtcNow < deadline)
         {
             await Task.Delay(20);
