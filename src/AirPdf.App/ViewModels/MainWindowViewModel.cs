@@ -51,6 +51,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private sealed record AnnotationUndoStep(bool WasAddition, IReadOnlyList<PdfHighlight> Highlights);
 
     private readonly Stack<AnnotationUndoStep> _annotationUndo = new();
+    private readonly Stack<AnnotationUndoStep> _annotationRedo = new();
     private NavigationPoint? _pendingOpenPosition;
     private CancellationTokenSource? _loadCancellation;
     private CancellationTokenSource? _searchCancellation;
@@ -880,6 +881,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             SetError(_localization.GetPdfFailureMessage(failure.Failure));
         }
+        catch (Exception unexpected)
+        {
+            CrashLog.Write("HighlightSelection", unexpected);
+            SetError(_localization.T("L.ErrorEditFailed"));
+        }
     }
 
     private bool CanHighlightSelection() => IsDocumentOpen && HasSelection && !IsBusy;
@@ -904,7 +910,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             await _documentService.SaveCopyAsync(FilePath, destination);
             HasUnsavedAnnotations = false;
-            ShowStatus(_localization.Format("L.CopySaved", Path.GetFileName(destination)));
+            ShowStatus(_localization.Format("L.SavedAs", Path.GetFileName(destination)));
         }
         catch (PdfDocumentException failure)
         {
@@ -913,6 +919,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         catch (IOException)
         {
             SetError(_localization.T("L.ErrorSaveFailed"));
+        }
+        catch (Exception unexpected)
+        {
+            CrashLog.Write("SaveDocument", unexpected);
+            SetError(_localization.T("L.ErrorEditFailed"));
         }
     }
 
@@ -970,6 +981,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>True when there is an annotation edit to take back.</summary>
     public bool CanUndoAnnotation => _annotationUndo.Count > 0;
 
+    /// <summary>True when there is a taken-back edit that can be applied again.</summary>
+    public bool CanRedoAnnotation => _annotationRedo.Count > 0;
+
     /// <summary>
     /// Takes back the last annotation edit, whether it added a highlight or removed one.
     /// </summary>
@@ -982,17 +996,40 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         var step = _annotationUndo.Pop();
+        _annotationRedo.Push(step);
         NotifyUndoChanged();
+
+        await ApplyAnnotationStepAsync(step, invert: true);
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRedoAnnotation))]
+    private async Task RedoAnnotationAsync()
+    {
+        if (!IsDocumentOpen || _annotationRedo.Count == 0)
+        {
+            return;
+        }
+
+        var step = _annotationRedo.Pop();
+        _annotationUndo.Push(step);
+        NotifyUndoChanged();
+
+        await ApplyAnnotationStepAsync(step, invert: false);
+    }
+
+    /// <summary>
+    /// Applies a recorded step in either direction. A step describes what the reader did, so
+    /// undoing an addition removes it and undoing a removal puts it back.
+    /// </summary>
+    private async Task ApplyAnnotationStepAsync(AnnotationUndoStep step, bool invert)
+    {
+        var adding = step.WasAddition != invert;
 
         try
         {
             foreach (var highlight in step.Highlights)
             {
-                if (step.WasAddition)
-                {
-                    await _documentService.RemoveHighlightMatchingAsync(FilePath, highlight.PageNumber, highlight.Quads);
-                }
-                else
+                if (adding)
                 {
                     await _documentService.AddHighlightAsync(
                         FilePath,
@@ -1002,18 +1039,30 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                         highlight.Green,
                         highlight.Blue);
                 }
+                else
+                {
+                    await _documentService.RemoveHighlightMatchingAsync(
+                        FilePath,
+                        highlight.PageNumber,
+                        highlight.Quads);
+                }
 
-                Pages.FirstOrDefault(candidate => candidate.Number == highlight.PageNumber)?.RequestRender();
+                Pages.FirstOrDefault(page => page.Number == highlight.PageNumber)?.RequestRender();
             }
+
             HasUnsavedAnnotations = true;
-            ShowStatus(_localization.T("L.Undone"));
+            ShowStatus(_localization.T(invert ? "L.Undone" : "L.Redone"));
         }
         catch (PdfDocumentException failure)
         {
             SetError(_localization.GetPdfFailureMessage(failure.Failure));
         }
+        catch (Exception unexpected)
+        {
+            CrashLog.Write("ApplyAnnotationStep", unexpected);
+            SetError(_localization.T("L.ErrorEditFailed"));
+        }
     }
-
     private void PushUndo(bool wasAddition, IReadOnlyList<PdfHighlight> highlights)
     {
         if (highlights.Count == 0)
@@ -1022,16 +1071,56 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         _annotationUndo.Push(new AnnotationUndoStep(wasAddition, highlights));
+
+        // A new edit makes the redo trail meaningless, as everywhere else.
+        _annotationRedo.Clear();
         NotifyUndoChanged();
     }
 
     private void ClearUndo()
     {
         _annotationUndo.Clear();
+        _annotationRedo.Clear();
         NotifyUndoChanged();
     }
 
-    private void NotifyUndoChanged() => UndoAnnotationCommand.NotifyCanExecuteChanged();
+    private void NotifyUndoChanged()
+    {
+        UndoAnnotationCommand.NotifyCanExecuteChanged();
+        RedoAnnotationCommand.NotifyCanExecuteChanged();
+    }
+
+    /// <summary>
+    /// Writes the document back over the file it came from.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanSaveCopy))]
+    private async Task SaveDocumentAsync()
+    {
+        if (!IsDocumentOpen)
+        {
+            return;
+        }
+
+        try
+        {
+            await _documentService.SaveInPlaceAsync(FilePath);
+            HasUnsavedAnnotations = false;
+            ShowStatus(_localization.T("L.Saved"));
+        }
+        catch (PdfDocumentException failure)
+        {
+            SetError(_localization.GetPdfFailureMessage(failure.Failure));
+        }
+        catch (IOException)
+        {
+            SetError(_localization.T("L.ErrorSaveFailed"));
+        }
+        catch (Exception unexpected)
+        {
+            CrashLog.Write("SaveCopy", unexpected);
+            SetError(_localization.T("L.ErrorEditFailed"));
+        }
+    }
 
     private bool CanSaveCopy() => IsDocumentOpen;
 

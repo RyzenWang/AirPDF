@@ -63,7 +63,7 @@ public sealed class DialogService : IUserDialogService
 
         var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
-            Title = _localization.T("L.SaveCopy"),
+            Title = _localization.T("L.SaveAs"),
             SuggestedFileName = suggestedName,
             DefaultExtension = "pdf",
             FileTypeChoices =

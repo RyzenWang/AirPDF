@@ -8,6 +8,11 @@ semantic versioning once it reaches 1.0.
 
 ### Added
 
+- Redo (`Ctrl+Y`), and undo and redo buttons in the toolbar next to the zoom group, so the pair
+  is visible without opening a menu. A new edit drops the redo trail, as elsewhere.
+- Saving into the document itself (`Ctrl+S`, **Save**). It is written beside the original and
+  moved over it, then reopened, because PDFium reads through an open stream that has to be closed
+  before the file can be replaced. The copy path is now **Save as…** (`Ctrl+Shift+S`).
 - Undo for highlight changes (`Ctrl+Z`, or the page menu). One reader action is one step, so a
   highlight spanning eight pages comes back in one press rather than eight. Adding is undone by
   removing exactly that geometry and colour; removing is undone by putting the highlight back
@@ -176,6 +181,11 @@ explicit.
 
 ### Added
 
+- Redo (`Ctrl+Y`), and undo and redo buttons in the toolbar next to the zoom group, so the pair
+  is visible without opening a menu. A new edit drops the redo trail, as elsewhere.
+- Saving into the document itself (`Ctrl+S`, **Save**). It is written beside the original and
+  moved over it, then reopened, because PDFium reads through an open stream that has to be closed
+  before the file can be replaced. The copy path is now **Save as…** (`Ctrl+Shift+S`).
 - Undo for highlight changes (`Ctrl+Z`, or the page menu). One reader action is one step, so a
   highlight spanning eight pages comes back in one press rather than eight. Adding is undone by
   removing exactly that geometry and colour; removing is undone by putting the highlight back
@@ -235,6 +245,11 @@ explicit.
 
 ### Added
 
+- Redo (`Ctrl+Y`), and undo and redo buttons in the toolbar next to the zoom group, so the pair
+  is visible without opening a menu. A new edit drops the redo trail, as elsewhere.
+- Saving into the document itself (`Ctrl+S`, **Save**). It is written beside the original and
+  moved over it, then reopened, because PDFium reads through an open stream that has to be closed
+  before the file can be replaced. The copy path is now **Save as…** (`Ctrl+Shift+S`).
 - Undo for highlight changes (`Ctrl+Z`, or the page menu). One reader action is one step, so a
   highlight spanning eight pages comes back in one press rather than eight. Adding is undone by
   removing exactly that geometry and colour; removing is undone by putting the highlight back
@@ -365,6 +380,11 @@ First public preview.
 
 ### Added
 
+- Redo (`Ctrl+Y`), and undo and redo buttons in the toolbar next to the zoom group, so the pair
+  is visible without opening a menu. A new edit drops the redo trail, as elsewhere.
+- Saving into the document itself (`Ctrl+S`, **Save**). It is written beside the original and
+  moved over it, then reopened, because PDFium reads through an open stream that has to be closed
+  before the file can be replaced. The copy path is now **Save as…** (`Ctrl+Shift+S`).
 - Undo for highlight changes (`Ctrl+Z`, or the page menu). One reader action is one step, so a
   highlight spanning eight pages comes back in one press rather than eight. Adding is undone by
   removing exactly that geometry and colour; removing is undone by putting the highlight back

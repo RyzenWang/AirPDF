@@ -272,6 +272,11 @@ PDFium call, but unlike rendering they refuse to fall back to a throwaway handle
 reopen the file for one page; an edit cannot, because a change written to a copy that is then
 discarded would look like it succeeded and silently do nothing.
 
+Saving in place cannot simply overwrite the file: PDFium reads it through an open stream, and a
+replacement needs that handle closed first. The order is write a temporary file beside the
+original, close the session, move the temporary over the original, reopen it. Reopening also
+means the annotation geometry stays live for undo, which would otherwise point at a document that
+no longer exists.
 Undo works on snapshots rather than on indices. Removing a highlight captures its quads and
 colour first, so the undo entry is a complete description of what to put back; adding pushes the
 same shape, and undoing it removes the annotation whose geometry matches. An annotation index

@@ -208,7 +208,21 @@
               </MenuFlyout>
             </Button.Flyout>
           </Button>
-          <Button Classes="zoom"
+          <Button Classes="icon"
+                  Command="{Binding UndoAnnotationCommand}"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{DynamicResource L.Undo}"
+                  ToolTip.Tip="{DynamicResource L.Undo}">
+            <Path Classes="icon" Data="{StaticResource IconUndo}" />
+          </Button>
+          <Button Classes="icon"
+                  Command="{Binding RedoAnnotationCommand}"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{DynamicResource L.Redo}"
+                  ToolTip.Tip="{DynamicResource L.Redo}">
+            <Path Classes="icon" Data="{StaticResource IconRedo}" />
+          </Button>
+          <Border Width="1" Height="18" Background="{DynamicResource BorderBrush}" Margin="3,0" IsVisible="{Binding IsDocumentOpen}" />          <Button Classes="zoom"
                   Command="{Binding ZoomInCommand}"
                   AutomationProperties.Name="{DynamicResource L.ZoomIn}"
                   ToolTip.Tip="{DynamicResource L.ZoomIn}">
@@ -517,13 +531,18 @@
               <MenuItem Header="{DynamicResource L.RemoveHighlight}"
                         Click="OnRemoveHighlightClick"
                         IsEnabled="{Binding IsDocumentOpen}" />
-              <MenuItem Header="{DynamicResource L.UndoAnnotation}"
+              <MenuItem Header="{DynamicResource L.Undo}"
                         Command="{Binding UndoAnnotationCommand}" />
+              <MenuItem Header="{DynamicResource L.Redo}"
+                        Command="{Binding RedoAnnotationCommand}" />
               <Separator />
               <MenuItem Header="{DynamicResource L.AddBookmark}"
                         Command="{Binding AddBookmarkCommand}"
                         IsEnabled="{Binding IsDocumentOpen}" />
-              <MenuItem Header="{DynamicResource L.SaveCopy}"
+              <MenuItem Header="{DynamicResource L.Save}"
+                        Command="{Binding SaveDocumentCommand}"
+                        IsEnabled="{Binding IsDocumentOpen}" />
+              <MenuItem Header="{DynamicResource L.SaveAs}"
                         Command="{Binding SaveCopyCommand}"
                         IsEnabled="{Binding IsDocumentOpen}" />
               <Separator />

@@ -1312,11 +1312,33 @@ public partial class MainWindow : Window
             e.Handled = true;
             return;
         }
-        if (ctrl && e.Key == Key.S)
+        if (ctrl && e.KeyModifiers.HasFlag(KeyModifiers.Shift) && e.Key == Key.S)
         {
             if (_viewModel.SaveCopyCommand.CanExecute(null))
             {
                 _viewModel.SaveCopyCommand.Execute(null);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
+        if (ctrl && e.Key == Key.S)
+        {
+            if (_viewModel.SaveDocumentCommand.CanExecute(null))
+            {
+                _viewModel.SaveDocumentCommand.Execute(null);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
+        if (!(e.Source is TextBox) && ctrl && e.Key == Key.Y)
+        {
+            if (_viewModel.RedoAnnotationCommand.CanExecute(null))
+            {
+                _viewModel.RedoAnnotationCommand.Execute(null);
             }
 
             e.Handled = true;

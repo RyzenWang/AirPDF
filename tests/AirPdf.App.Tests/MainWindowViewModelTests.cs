@@ -384,6 +384,82 @@ public sealed class MainWindowViewModelTests
         Assert.True(await context.ViewModel.RemoveHighlightsAtAsync(page.Number, rect.X + (rect.Width / 2), rect.Y + (rect.Height / 2)));
     }
     [AvaloniaFact]
+    public async Task Redo_AppliesTheUndoneHighlightAgain()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        await context.ViewModel.SelectAllTextCommand.ExecuteAsync(null);
+        await WaitForAsync(() => context.ViewModel.HasSelection);
+
+        await context.ViewModel.HighlightSelectionCommand.ExecuteAsync(null);
+        await context.ViewModel.UndoAnnotationCommand.ExecuteAsync(null);
+
+        Assert.False(context.ViewModel.CanUndoAnnotation);
+        Assert.True(context.ViewModel.CanRedoAnnotation);
+
+        await context.ViewModel.RedoAnnotationCommand.ExecuteAsync(null);
+
+        Assert.True(context.ViewModel.CanUndoAnnotation);
+        Assert.False(context.ViewModel.CanRedoAnnotation);
+    }
+
+    [AvaloniaFact]
+    public async Task ANewEditAfterUndo_DropsTheRedoTrail()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        await context.ViewModel.SelectAllTextCommand.ExecuteAsync(null);
+        await WaitForAsync(() => context.ViewModel.HasSelection);
+
+        await context.ViewModel.HighlightSelectionCommand.ExecuteAsync(null);
+        await context.ViewModel.UndoAnnotationCommand.ExecuteAsync(null);
+        Assert.True(context.ViewModel.CanRedoAnnotation);
+
+        await context.ViewModel.HighlightSelectionCommand.ExecuteAsync(null);
+
+        Assert.False(context.ViewModel.CanRedoAnnotation);
+    }
+
+    [AvaloniaFact]
+    public async Task SaveDocument_WritesIntoTheOpenFileAndClearsTheMark()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-save-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var target = Path.Combine(directory, "in-place.pdf");
+            File.Copy(SamplePath, target);
+
+            using var context = new TestContext();
+            await context.ViewModel.OpenPathAsync(target);
+            await context.ViewModel.SelectAllTextCommand.ExecuteAsync(null);
+            await WaitForAsync(() => context.ViewModel.HasSelection);
+            await context.ViewModel.HighlightSelectionCommand.ExecuteAsync(null);
+            Assert.True(context.ViewModel.HasUnsavedAnnotations);
+
+            await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+
+            Assert.False(context.ViewModel.HasUnsavedAnnotations);
+
+            // The file on disk carries the highlight now, not just the copy.
+            using var probe = new PdfDocumentService();
+            await probe.OpenAsync(target);
+            Assert.True(await probe.GetAnnotationCountAsync(target, 1) > 0);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // Best effort.
+            }
+        }
+    }
+    [AvaloniaFact]
     public async Task HighlightSelection_WithoutASelection_CannotRun()
     {
         using var context = new TestContext();

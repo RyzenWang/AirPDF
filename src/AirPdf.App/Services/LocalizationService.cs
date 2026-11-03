@@ -43,7 +43,13 @@ public sealed class LocalizationService : IDisposable
             ["L.Bookmarks"] = ("Bookmarks", "书签"),
             ["L.HighlightSelection"] = ("Highlight selection", "高亮所选"),
             ["L.RemoveHighlight"] = ("Remove highlight", "移除高亮"),
-            ["L.UndoAnnotation"] = ("Undo highlight edit (Ctrl+Z)", "撤销标注修改（Ctrl+Z）"),
+            ["L.Undo"] = ("Undo (Ctrl+Z)", "撤销（Ctrl+Z）"),
+            ["L.Redo"] = ("Redo (Ctrl+Y)", "重做（Ctrl+Y）"),
+            ["L.Redone"] = ("Redone.", "已重做。"),
+            ["L.SaveDocument"] = ("Save (Ctrl+S)", "保存（Ctrl+S）"),
+            ["L.SaveAs"] = ("Save as…", "另存为…"),
+            ["L.Saved"] = ("Saved.", "已保存。"),
+            ["L.NothingToRedo"] = ("Nothing to redo.", "没有可重做的操作。"),
             ["L.Undone"] = ("Undone.", "已撤销。"),
             ["L.NothingToUndo"] = ("Nothing to undo.", "没有可撤销的操作。"),
 
@@ -51,8 +57,8 @@ public sealed class LocalizationService : IDisposable
             ["L.NoHighlightHere"] = ("No highlight under the pointer.", "该位置没有高亮。"),
 
             ["L.HighlightAdded"] = ("Highlight added. Save a copy to keep it.", "已添加高亮。保存副本才能保留。"),
-            ["L.SaveCopy"] = ("Save a copy…", "保存副本…"),
-            ["L.CopySaved"] = ("Saved a copy as {0}", "已保存副本：{0}"),
+
+            ["L.SavedAs"] = ("Saved as {0}", "已另存为 {0}"),
             ["L.UnsavedAnnotations"] = ("Unsaved highlights", "有未保存的高亮"),
             ["L.Markup"] = ("Markup", "标注"),
 
@@ -143,6 +149,7 @@ public sealed class LocalizationService : IDisposable
             ["L.MetaPdfVersion"] = ("PDF version", "PDF 版本"),
             ["L.MetaFileSize"] = ("File size", "文件大小"),
             ["L.MetaKeywords"] = ("Keywords", "关键词"),
+            ["L.ErrorEditFailed"] = ("The change could not be applied.", "无法应用该修改。"),
             ["L.ErrorSaveFailed"] = ("The copy could not be written. Check the location and try again.", "无法写入副本，请检查保存位置后重试。"),
             ["L.ErrorNotFound"] = ("The file does not exist.", "文件不存在。"),
             ["L.ErrorAccessDenied"] = ("You do not have permission to read this file.", "没有权限读取此文件。"),

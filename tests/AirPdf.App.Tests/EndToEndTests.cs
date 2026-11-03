@@ -190,7 +190,10 @@ public sealed class EndToEndTests : IDisposable
         var before = page.Image;
 
         _window.KeyPressQwerty(PhysicalKey.Z, RawInputModifiers.Control);
-        await WaitAsync(() => !document.CanUndoAnnotation);
+
+        // The flags flip before the async work finishes, so wait for the status line the command
+        // writes when it is done; otherwise the fixture can dispose the service mid-flight.
+        await WaitAsync(() => !document.CanUndoAnnotation && document.StatusMessage == _services.Localization.T("L.Undone"));
 
         Assert.False(document.CanUndoAnnotation);
 
@@ -198,6 +201,27 @@ public sealed class EndToEndTests : IDisposable
         // disappear.
         await WaitAsync(() => !ReferenceEquals(page.Image, before));
         Assert.NotSame(before, page.Image);
+    }
+    [AvaloniaFact]
+    public async Task RedoShortcut_AppliesTheHighlightAgain()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages[0].HasTextLayer);
+
+        _window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Control);
+        await WaitAsync(() => document.HasSelection);
+        _window.KeyPressQwerty(PhysicalKey.H, RawInputModifiers.Control | RawInputModifiers.Shift);
+        await WaitAsync(() => document.CanUndoAnnotation);
+
+        _window.KeyPressQwerty(PhysicalKey.Z, RawInputModifiers.Control);
+        await WaitAsync(() => document.CanRedoAnnotation && !document.CanUndoAnnotation);
+        Assert.False(document.CanUndoAnnotation);
+
+        _window.KeyPressQwerty(PhysicalKey.Y, RawInputModifiers.Control);
+        await WaitAsync(() => document.CanUndoAnnotation && document.StatusMessage == _services.Localization.T("L.Redone"));
+
+        Assert.True(document.CanUndoAnnotation);
+        Assert.False(document.CanRedoAnnotation);
     }
     [AvaloniaFact]
     public async Task UpdateCheck_OnABuildThatIsNotInstalled_ShowsNoBanner()

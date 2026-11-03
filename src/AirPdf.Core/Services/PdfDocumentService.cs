@@ -24,6 +24,7 @@ public sealed class PdfDocumentService : IDisposable
 
     private PdfiumDocument? _session;
     private string? _sessionPath;
+    private string? _sessionPassword;
     private bool _disposed;
 
     public Task<PdfDocumentInfo> OpenAsync(
@@ -277,6 +278,63 @@ public sealed class PdfDocumentService : IDisposable
             },
             cancellationToken);
     }
+    /// <summary>
+    /// Writes the resident document back over the file it was opened from.
+    /// </summary>
+    /// <remarks>
+    /// The file cannot simply be overwritten: PDFium reads through an open stream, and the
+    /// replacement needs the handle closed first. The order is therefore: write a temporary file
+    /// beside the original, close the session, move the temporary over the original, then reopen
+    /// it. If the reopen fails the service is left with no session, which degrades to transient
+    /// handles for rendering and refuses edits, rather than crashing.
+    /// </remarks>
+    public Task SaveInPlaceAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var session = ResidentSession(fullPath);
+                    var temporary = fullPath + ".airpdf-save";
+                    try
+                    {
+                        session.SaveCopy(temporary);
+                        var password = _sessionPassword;
+
+                        _session = null;
+                        _sessionPath = null;
+                        _sessionPassword = null;
+                        session.Dispose();
+
+                        File.Move(temporary, fullPath, overwrite: true);
+
+                        _session = PdfiumDocument.Open(fullPath, password);
+                        _sessionPath = fullPath;
+                        _sessionPassword = password;
+                    }
+                    finally
+                    {
+                        if (File.Exists(temporary))
+                        {
+                            File.Delete(temporary);
+                        }
+                    }
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
     /// <summary>Every highlight on a page, read from the resident document.</summary>
     public Task<IReadOnlyList<PdfHighlight>> GetHighlightsAsync(
         string filePath,
@@ -427,6 +485,7 @@ public sealed class PdfDocumentService : IDisposable
             var session = _session;
             _session = null;
             _sessionPath = null;
+            _sessionPassword = null;
             session?.Dispose();
         }
         finally
@@ -493,6 +552,7 @@ public sealed class PdfDocumentService : IDisposable
             var previous = _session;
             _session = session;
             _sessionPath = fullPath;
+            _sessionPassword = password;
             previous?.Dispose();
         }
         finally

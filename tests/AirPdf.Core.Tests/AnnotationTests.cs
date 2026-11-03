@@ -220,6 +220,38 @@ public sealed class AnnotationTests : IDisposable
         Assert.Equal(before, await reopened.GetAnnotationCountAsync(destination, 1));
     }
     [Fact]
+    public async Task SaveInPlace_WritesIntoTheOriginalAndKeepsTheDocumentUsable()
+    {
+        // A copy of the sample, because this test is the one that changes a file.
+        var target = Path.Combine(_directory, "in-place.pdf");
+        File.Copy(SamplePath, target);
+
+        var before = HashOf(target);
+
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(target);
+        var baseline = await service.GetAnnotationCountAsync(target, 1);
+        await service.AddHighlightAsync(target, 1, [Band(info.Pages[0], 0.5)]);
+
+        await service.SaveInPlaceAsync(target);
+
+        // The file itself now carries the annotation...
+        Assert.NotEqual(before, HashOf(target));
+
+        using var reopened = new PdfDocumentService();
+        var reopenedInfo = await reopened.OpenAsync(target);
+        Assert.Equal(baseline + 1, await reopened.GetAnnotationCountAsync(target, 1));
+        Assert.True(reopenedInfo.PageCount > 0);
+
+        // ...the temporary file is gone...
+        Assert.False(File.Exists(target + ".airpdf-save"));
+
+        // ...and the service that saved can still draw the page.
+        var bitmap = await service.RenderPageAsync(target, 1, 400);
+        Assert.NotNull(bitmap);
+        bitmap.Dispose();
+    }
+    [Fact]
     public async Task AddHighlight_WithNoRectangles_ChangesNothing()
     {
         using var service = new PdfDocumentService();

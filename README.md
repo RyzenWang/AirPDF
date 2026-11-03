@@ -56,7 +56,8 @@ small .NET application with a hand-built Avalonia interface.
 - **Light, dark, and high-contrast themes**, following the system on first launch.
 - **Status bar** with the page position and a reading-progress percentage.
 - **Highlights** — select text and press `Ctrl+Shift+H`; right-click a highlight to remove it.
-  They are written into a copy with `Ctrl+S`, never into the file you opened.
+  Every markup change can be undone and redone, from the toolbar or with `Ctrl+Z` and `Ctrl+Y`,
+  and `Ctrl+S` writes them into the document itself.
 - **Per-document bookmarks** — `Ctrl+D` marks the current spot and the sidebar keeps them
   per file. Double-click one to rename it, drag them into the order you want, and the
   welcome screen lists bookmarks from every document so you can jump straight back in.
@@ -215,8 +216,10 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl+F` / `Cmd+F` | Find in document |
 | `Ctrl+D` / `Cmd+D` | Add a bookmark at the current position |
 | `Ctrl+Shift+H` / `Cmd+Shift+H` | Highlight the selected text |
-| `Ctrl+S` / `Cmd+S` | Save a copy of the document, highlights included |
-| `Ctrl+Z` / `Cmd+Z` | Undo the last highlight change |
+| `Ctrl+S` / `Cmd+S` | Save the document, highlights included |
+| `Ctrl+Shift+S` / `Cmd+Shift+S` | Save as… |
+| `Ctrl+Z` / `Cmd+Z` | Undo the last markup change |
+| `Ctrl+Y` / `Cmd+Y` | Redo |
 | `F3` / `Shift+F3` | Next / previous search match |
 | `Alt+Left` | Return to the previous position |
 | Drag on text | Select words |
