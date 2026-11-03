@@ -224,6 +224,38 @@ public sealed class EndToEndTests : IDisposable
         Assert.False(document.CanRedoAnnotation);
     }
     [AvaloniaFact]
+    public async Task DiagnosticShortcut_WritesAProbeBlockOnDemand()
+    {
+        // The report of blank pages has to be captured where it happens, so the shortcut has to
+        // work in a normal build without any environment variable.
+        var log = Path.Combine(Path.GetTempPath(), "airpdf-render-probe.txt");
+        if (File.Exists(log))
+        {
+            File.Delete(log);
+        }
+
+        try
+        {
+            var document = await OpenSampleAsync();
+            await WaitAsync(() => document.Pages.Count > 0);
+
+            _window.KeyPressQwerty(PhysicalKey.D, RawInputModifiers.Control | RawInputModifiers.Shift);
+            await WaitAsync(() => File.Exists(log));
+
+            Assert.True(File.Exists(log), "the shortcut did not write the diagnostic file");
+            var text = File.ReadAllText(log);
+            Assert.Contains("manual", text);
+            Assert.Contains("realized=", text);
+        }
+        finally
+        {
+            if (File.Exists(log))
+            {
+                File.Delete(log);
+            }
+        }
+    }
+    [AvaloniaFact]
     public async Task UpdateCheck_OnABuildThatIsNotInstalled_ShowsNoBanner()
     {
         // The test build is a folder build, so Velopack reports it as not installed and the

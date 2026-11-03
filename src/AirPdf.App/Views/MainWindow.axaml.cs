@@ -398,9 +398,13 @@ public partial class MainWindow : Window
                 return;
             }
 
-            if ((PagesList.Bounds.Width < 1 || PagesList.Bounds.Height < 1) && attempt < 6)
+            if ((PagesList.Bounds.Width < 1 || PagesList.Bounds.Height < 1) && attempt < 8)
             {
-                RestoreDocumentView(viewModel, openPosition, readingPosition, attempt + 1);
+                // Background runs after the layout and render passes, which is where the list
+                // finally has a size; retrying at Loaded could spin before layout ever runs.
+                Dispatcher.UIThread.Post(
+                    () => RestoreDocumentView(viewModel, openPosition, readingPosition, attempt + 1),
+                    DispatcherPriority.Background);
                 return;
             }
 
@@ -509,6 +513,13 @@ public partial class MainWindow : Window
     // on demand, so a failure that happens after the second open can be captured.
     private static readonly bool ProbeEnabled = Environment.GetEnvironmentVariable("AIRPDF_PROBE") == "1";
 
+    /// <summary>Identifies one run, so a stale block cannot be mistaken for a fresh one.</summary>
+    private static readonly string ProbeRunId = DateTime.Now.ToString("HHmmss");
+
+    /// <summary>Path the diagnostic appends to.</summary>
+    private static readonly string ProbePath =
+        Path.Combine(Path.GetTempPath(), "airpdf-render-probe.txt");
+
     private void StartRenderProbe()
     {
         if (!ProbeEnabled)
@@ -536,21 +547,21 @@ public partial class MainWindow : Window
         };
     }
 
+    /// <summary>
+    /// Appends one block describing what the page list is actually doing. Always available from
+    /// Ctrl+Shift+D so a report of "blank pages" can be captured at the moment it happens,
+    /// without asking the reader to launch the app any particular way.
+    /// </summary>
     private void DumpRenderState(string stage)
     {
-        if (!ProbeEnabled)
-        {
-            return;
-        }
-
         try
         {
             var lines = new List<string>
             {
-                $"--- {DateTime.Now:HH:mm:ss} {stage} ---",
+                $"--- {DateTime.Now:HH:mm:ss} run={ProbeRunId} {stage} ---",
                 $"window {Bounds.Width:F0}x{Bounds.Height:F0} documentOpen={_viewModel.IsDocumentOpen} file='{_viewModel.FileName}' pages={_viewModel.Pages.Count} zoom={_viewModel.Zoom:F3} current={_viewModel.CurrentPage}",
                 $"viewer offset={PagesList.Viewer?.Offset.Y ?? -1:F1} extent={PagesList.Viewer?.Extent.Height ?? -1:F1} viewport={PagesList.Viewer?.Viewport.Height ?? -1:F1} listActive={PagesList.IsVisible} listBounds={PagesList.Bounds.Width:F0}x{PagesList.Bounds.Height:F0}",
-                $"error={(_viewModel.HasError ? _viewModel.ErrorMessage : "none")}"
+                $"realized={PagesList.GetRealizedContainers().Count()} items={PagesList.ItemCount} error={(_viewModel.HasError ? _viewModel.ErrorMessage : "none")}"
             };
 
             foreach (var page in _viewModel.Pages.Take(4))
@@ -559,7 +570,7 @@ public partial class MainWindow : Window
                     $"page {page.Number}: active={page.IsActive} image={(page.Image is null ? "null" : $"{page.Image.PixelSize.Width}x{page.Image.PixelSize.Height}")} placeholder={page.ShowPlaceholder} rendering={page.IsRendering} error='{page.RenderError}'");
             }
 
-            File.AppendAllLines(Path.Combine(Path.GetTempPath(), "airpdf-render-probe.txt"), lines);
+            File.AppendAllLines(ProbePath, lines);
         }
         catch
         {
