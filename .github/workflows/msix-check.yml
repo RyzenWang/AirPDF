@@ -417,7 +417,7 @@ jobs:
       # Partner Center accepts several packages in one submission, so ARM64 is a second
       # upload rather than a bundle. It needs the ARM64 C++ tools on the runner.
       - name: Build the ARM64 package for the Store
-        if: steps.identity.outputs.ready == 'true' && inputs.arm64
+        if: steps.identity.outputs.ready == 'true' && (inputs.arm64 || github.event_name == 'push')
         shell: pwsh
         run: |
           ./packaging/msix/Build-Msix.ps1 `

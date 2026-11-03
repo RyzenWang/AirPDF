@@ -126,8 +126,8 @@ package when these repository secrets exist:
 | `MSIX_VERSION` | Optional; defaults to the tag without the `v`, plus `.0` |
 
 Without the secrets the Store step is skipped with a notice, so tagging a release still works
-before the account exists. The resulting `.msixupload` is attached to the run as the
-`AirPDF-store` artifact.
+before the account exists. With them, a tag builds both x64 and ARM64 uploads; upload both to
+the same submission. The packages are attached to the run as the `AirPDF-store` artifact.
 
 ## 3. Listing material
 
