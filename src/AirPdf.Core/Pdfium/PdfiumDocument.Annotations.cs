@@ -73,6 +73,111 @@ public sealed partial class PdfiumDocument
         }
     }
 
+    /// <summary>
+    /// Reads a highlight back out of the document: the rectangles it covers and its colour.
+    /// This is what makes a removal undoable.
+    /// </summary>
+    public PdfHighlight? TryReadHighlight(int pageNumber, int index)
+    {
+        ThrowIfDisposed();
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            var annot = PdfiumNative.PageGetAnnot(page, index);
+            if (annot == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            try
+            {
+                if (PdfiumNative.AnnotGetSubtype(annot) != PdfiumNative.AnnotHighlight)
+                {
+                    return null;
+                }
+
+                var count = (int)PdfiumNative.AnnotCountAttachmentPoints(annot).ToUInt32();
+                var quads = new List<PdfQuad>(count);
+                for (var quad = 0; quad < count; quad++)
+                {
+                    if (PdfiumNative.AnnotGetAttachmentPoints(annot, (UIntPtr)(uint)quad, out var points) == 0)
+                    {
+                        continue;
+                    }
+
+                    quads.Add(QuadFrom(points));
+                }
+
+                if (quads.Count == 0)
+                {
+                    // Older highlights may carry only a rectangle; fall back to it.
+                    if (PdfiumNative.AnnotGetRect(annot, out var rect) != 0)
+                    {
+                        quads.Add(new PdfQuad(rect.Left, rect.Top, rect.Right, rect.Bottom));
+                    }
+                }
+
+                byte red = 0;
+                byte green = 0;
+                byte blue = 0;
+                if (PdfiumNative.AnnotGetColor(annot, PdfiumNative.AnnotColorStroke, out var r, out var g, out var b, out _) != 0)
+                {
+                    red = (byte)Math.Min(r, 255);
+                    green = (byte)Math.Min(g, 255);
+                    blue = (byte)Math.Min(b, 255);
+                }
+
+                return new PdfHighlight(pageNumber, quads, red, green, blue);
+            }
+            finally
+            {
+                PdfiumNative.PageCloseAnnot(annot);
+            }
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
+    /// <summary>
+    /// Removes the highlight whose rectangles match <paramref name="quads"/>, which is how an
+    /// added highlight is taken back without depending on an annotation index that later edits
+    /// may have shifted.
+    /// </summary>
+    /// <returns>True when a matching highlight was removed.</returns>
+    public bool RemoveHighlightMatching(int pageNumber, IReadOnlyList<PdfQuad> quads)
+    {
+        ThrowIfDisposed();
+
+        if (quads.Count == 0)
+        {
+            return false;
+        }
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            for (var index = PdfiumNative.PageGetAnnotCount(page) - 1; index >= 0; index--)
+            {
+                var existing = TryReadHighlight(pageNumber, index);
+                if (existing is null || !SameGeometry(existing.Quads, quads))
+                {
+                    continue;
+                }
+
+                return PdfiumNative.PageRemoveAnnot(page, index) != 0;
+            }
+
+            return false;
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
     /// <summary>Bounds of one annotation, in page space.</summary>
     public PdfQuad GetAnnotationBounds(int pageNumber, int index)
     {
@@ -115,14 +220,14 @@ public sealed partial class PdfiumDocument
     /// Only highlights are considered, so a page's form fields and links are never touched by a
     /// click meant for markup. Indices are walked downwards because removing one shifts the rest.
     /// </remarks>
-    public int RemoveHighlightsAt(int pageNumber, PdfQuad point)
+    public IReadOnlyList<PdfHighlight> RemoveHighlightsAt(int pageNumber, PdfQuad point)
     {
         ThrowIfDisposed();
 
         var page = LoadPageOrThrow(pageNumber);
         try
         {
-            var removed = 0;
+            var removed = new List<PdfHighlight>();
             for (var index = PdfiumNative.PageGetAnnotCount(page) - 1; index >= 0; index--)
             {
                 var annot = PdfiumNative.PageGetAnnot(page, index);
@@ -150,9 +255,10 @@ public sealed partial class PdfiumDocument
                         continue;
                     }
 
-                    if (PdfiumNative.PageRemoveAnnot(page, index) != 0)
+                    var snapshot = TryReadHighlight(pageNumber, index);
+                    if (PdfiumNative.PageRemoveAnnot(page, index) != 0 && snapshot is not null)
                     {
-                        removed++;
+                        removed.Add(snapshot);
                     }
                 }
                 finally
@@ -323,6 +429,35 @@ public sealed partial class PdfiumDocument
         return page;
     }
 
+    private static PdfQuad QuadFrom(PdfiumNative.FsQuadPointsF points) =>
+        new(
+            Math.Min(points.X1, points.X3),
+            Math.Max(points.Y1, points.Y2),
+            Math.Max(points.X2, points.X4),
+            Math.Min(points.Y3, points.Y4));
+
+    private static bool SameGeometry(IReadOnlyList<PdfQuad> left, IReadOnlyList<PdfQuad> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var index = 0; index < left.Count; index++)
+        {
+            var a = left[index];
+            var b = right[index];
+            if (Math.Abs(a.Left - b.Left) > 0.01 ||
+                Math.Abs(a.Top - b.Top) > 0.01 ||
+                Math.Abs(a.Right - b.Right) > 0.01 ||
+                Math.Abs(a.Bottom - b.Bottom) > 0.01)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
     private static PdfQuad BoundingBox(IReadOnlyList<PdfQuad> quads)
     {
         var left = double.MaxValue;

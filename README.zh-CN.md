@@ -164,6 +164,7 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl+D` / `Cmd+D` | 在当前位置添加书签 |
 | `Ctrl+Shift+H` / `Cmd+Shift+H` | 高亮选中的文本 |
 | `Ctrl+S` / `Cmd+S` | 保存副本（含高亮） |
+| `Ctrl+Z` / `Cmd+Z` | 撤销上一次高亮修改 |
 | `F3` / `Shift+F3` | 下一个 / 上一个匹配 |
 | `Alt+Left` | 返回上一个位置 |
 | 在文字上拖动 | 选择单词 |

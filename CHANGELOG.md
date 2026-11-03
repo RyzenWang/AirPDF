@@ -8,6 +8,10 @@ semantic versioning once it reaches 1.0.
 
 ### Added
 
+- Undo for highlight changes (`Ctrl+Z`, or the page menu). One reader action is one step, so a
+  highlight spanning eight pages comes back in one press rather than eight. Adding is undone by
+  removing exactly that geometry and colour; removing is undone by putting the highlight back
+  from the snapshot taken when it was removed, so nothing is guessed.
 - Highlights can be removed again: right-click a highlight and choose **Remove highlight**. Only
   highlights are considered, so form fields and links on the page are never touched, and the
   removal is written by the same **Save a copy** as the highlight itself.
@@ -172,6 +176,10 @@ explicit.
 
 ### Added
 
+- Undo for highlight changes (`Ctrl+Z`, or the page menu). One reader action is one step, so a
+  highlight spanning eight pages comes back in one press rather than eight. Adding is undone by
+  removing exactly that geometry and colour; removing is undone by putting the highlight back
+  from the snapshot taken when it was removed, so nothing is guessed.
 - Highlights can be removed again: right-click a highlight and choose **Remove highlight**. Only
   highlights are considered, so form fields and links on the page are never touched, and the
   removal is written by the same **Save a copy** as the highlight itself.
@@ -227,6 +235,10 @@ explicit.
 
 ### Added
 
+- Undo for highlight changes (`Ctrl+Z`, or the page menu). One reader action is one step, so a
+  highlight spanning eight pages comes back in one press rather than eight. Adding is undone by
+  removing exactly that geometry and colour; removing is undone by putting the highlight back
+  from the snapshot taken when it was removed, so nothing is guessed.
 - Highlights can be removed again: right-click a highlight and choose **Remove highlight**. Only
   highlights are considered, so form fields and links on the page are never touched, and the
   removal is written by the same **Save a copy** as the highlight itself.
@@ -353,6 +365,10 @@ First public preview.
 
 ### Added
 
+- Undo for highlight changes (`Ctrl+Z`, or the page menu). One reader action is one step, so a
+  highlight spanning eight pages comes back in one press rather than eight. Adding is undone by
+  removing exactly that geometry and colour; removing is undone by putting the highlight back
+  from the snapshot taken when it was removed, so nothing is guessed.
 - Highlights can be removed again: right-click a highlight and choose **Remove highlight**. Only
   highlights are considered, so form fields and links on the page are never touched, and the
   removal is written by the same **Save a copy** as the highlight itself.

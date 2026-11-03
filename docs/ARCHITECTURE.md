@@ -272,6 +272,14 @@ PDFium call, but unlike rendering they refuse to fall back to a throwaway handle
 reopen the file for one page; an edit cannot, because a change written to a copy that is then
 discarded would look like it succeeded and silently do nothing.
 
+Undo works on snapshots rather than on indices. Removing a highlight captures its quads and
+colour first, so the undo entry is a complete description of what to put back; adding pushes the
+same shape, and undoing it removes the annotation whose geometry matches. An annotation index
+would be cheaper and wrong: any later edit shifts it.
+
+A step is a reader action, not an annotation. Highlighting a selection that covers eight pages
+produces eight annotations and **one** undo step, because that is what the reader did and what
+they expect Ctrl+Z to take back.
 Until a copy is written, `HasUnsavedAnnotations` is set and the window title carries a marker.
 Annotations that vanish on close would be the kind of bug a reader never forgives.
 ## Windows and shared state

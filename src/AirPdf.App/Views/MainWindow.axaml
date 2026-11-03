@@ -517,6 +517,8 @@
               <MenuItem Header="{DynamicResource L.RemoveHighlight}"
                         Click="OnRemoveHighlightClick"
                         IsEnabled="{Binding IsDocumentOpen}" />
+              <MenuItem Header="{DynamicResource L.UndoAnnotation}"
+                        Command="{Binding UndoAnnotationCommand}" />
               <Separator />
               <MenuItem Header="{DynamicResource L.AddBookmark}"
                         Command="{Binding AddBookmarkCommand}"

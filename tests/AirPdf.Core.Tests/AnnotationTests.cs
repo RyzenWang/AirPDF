@@ -126,7 +126,7 @@ public sealed class AnnotationTests : IDisposable
             1,
             new PdfQuad(band.Left + 1, band.Top - 1, band.Left + 1, band.Top - 1));
 
-        Assert.Equal(1, removed);
+        Assert.Single(removed);
         Assert.Equal(before, await service.GetAnnotationCountAsync(SamplePath, 1));
     }
 
@@ -146,10 +146,57 @@ public sealed class AnnotationTests : IDisposable
             1,
             new PdfQuad(page.Width / 2, 1, page.Width / 2, 1));
 
-        Assert.Equal(0, removed);
+        Assert.Empty(removed);
         Assert.Equal(after, await service.GetAnnotationCountAsync(SamplePath, 1));
     }
 
+    [Fact]
+    public async Task AHighlightCanBeReadBackWithItsGeometryAndColour()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var band = Band(info.Pages[0], 0.5);
+
+        await service.AddHighlightAsync(SamplePath, 1, [band], 12, 34, 56);
+
+        var highlights = await service.GetHighlightsAsync(SamplePath, 1);
+        var added = Assert.Single(
+            highlights,
+            candidate => candidate.Quads.Count == 1 &&
+                         Math.Abs(candidate.Quads[0].Left - band.Left) < 0.5 &&
+                         Math.Abs(candidate.Quads[0].Top - band.Top) < 0.5);
+
+        Assert.Equal(12, added.Red);
+        Assert.Equal(34, added.Green);
+        Assert.Equal(56, added.Blue);
+    }
+    [Fact]
+    public async Task RemoveHighlightMatching_TakesBackExactlyThatHighlight()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var page = info.Pages[0];
+        var band = Band(page, 0.5);
+        var before = await service.GetAnnotationCountAsync(SamplePath, 1);
+
+        await service.AddHighlightAsync(SamplePath, 1, [band]);
+        var removed = await service.RemoveHighlightsAtAsync(
+            SamplePath,
+            1,
+            new PdfQuad(band.Left + 1, band.Top - 1, band.Left + 1, band.Top - 1));
+
+        Assert.Single(removed);
+        var snapshot = removed[0];
+        Assert.Equal(1, snapshot.PageNumber);
+        Assert.Single(snapshot.Quads);
+        Assert.Equal(band.Left, snapshot.Quads[0].Left, 2);
+        Assert.Equal(band.Top, snapshot.Quads[0].Top, 2);
+        Assert.Equal(255, snapshot.Red);
+
+        // Restoring the snapshot brings the annotation count back to where it was after adding.
+        await service.AddHighlightAsync(SamplePath, 1, snapshot.Quads, snapshot.Red, snapshot.Green, snapshot.Blue);
+        Assert.Equal(before + 1, await service.GetAnnotationCountAsync(SamplePath, 1));
+    }
     [Fact]
     public async Task RemovedHighlights_AreGoneFromTheSavedCopyToo()
     {

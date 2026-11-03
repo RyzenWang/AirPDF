@@ -43,6 +43,10 @@ public sealed class LocalizationService : IDisposable
             ["L.Bookmarks"] = ("Bookmarks", "书签"),
             ["L.HighlightSelection"] = ("Highlight selection", "高亮所选"),
             ["L.RemoveHighlight"] = ("Remove highlight", "移除高亮"),
+            ["L.UndoAnnotation"] = ("Undo highlight edit (Ctrl+Z)", "撤销标注修改（Ctrl+Z）"),
+            ["L.Undone"] = ("Undone.", "已撤销。"),
+            ["L.NothingToUndo"] = ("Nothing to undo.", "没有可撤销的操作。"),
+
             ["L.HighlightRemoved"] = ("Highlight removed.", "已移除高亮。"),
             ["L.NoHighlightHere"] = ("No highlight under the pointer.", "该位置没有高亮。"),
 

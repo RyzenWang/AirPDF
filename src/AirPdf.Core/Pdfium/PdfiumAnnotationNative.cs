@@ -82,6 +82,20 @@ internal static partial class PdfiumNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFPage_CloseAnnot")]
     internal static extern int PageCloseAnnot(IntPtr annot);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_GetColor")]
+    internal static extern int AnnotGetColor(
+        IntPtr annot,
+        int colorType,
+        out uint red,
+        out uint green,
+        out uint blue,
+        out uint alpha);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_CountAttachmentPoints")]
+    internal static extern UIntPtr AnnotCountAttachmentPoints(IntPtr annot);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_GetAttachmentPoints")]
+    internal static extern int AnnotGetAttachmentPoints(IntPtr annot, UIntPtr quadIndex, out FsQuadPointsF quadPoints);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_GetRect")]
     internal static extern int AnnotGetRect(IntPtr annot, out FsRectF rect);
 

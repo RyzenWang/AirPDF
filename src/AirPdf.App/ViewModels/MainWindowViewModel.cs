@@ -39,6 +39,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly AppServices _services;
     private readonly AppSettings _settings;
     private readonly List<NavigationPoint> _history = [];
+
+    /// <summary>The highlight colour, kept in one place so undo can restore it exactly.</summary>
+    private static readonly (byte Red, byte Green, byte Blue) HighlightColor = (255, 221, 71);
+
+    /// <summary>
+    /// One reader action, and what it takes to take that action back. A highlight that spans
+    /// eight pages is one action, so one Ctrl+Z has to undo all of it rather than one page at a
+    /// time.
+    /// </summary>
+    private sealed record AnnotationUndoStep(bool WasAddition, IReadOnlyList<PdfHighlight> Highlights);
+
+    private readonly Stack<AnnotationUndoStep> _annotationUndo = new();
     private NavigationPoint? _pendingOpenPosition;
     private CancellationTokenSource? _loadCancellation;
     private CancellationTokenSource? _searchCancellation;
@@ -831,6 +843,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var added = new List<PdfHighlight>();
+
         try
         {
             foreach (var page in Pages.Where(candidate => candidate.SelectionRects.Count > 0).ToList())
@@ -846,10 +860,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                     continue;
                 }
 
-                await _documentService.AddHighlightAsync(FilePath, page.Number, quads);
+                await _documentService.AddHighlightAsync(
+                    FilePath,
+                    page.Number,
+                    quads,
+                    HighlightColor.Red,
+                    HighlightColor.Green,
+                    HighlightColor.Blue);
+
+                added.Add(new PdfHighlight(page.Number, quads, HighlightColor.Red, HighlightColor.Green, HighlightColor.Blue));
                 page.RequestRender();
             }
 
+            PushUndo(wasAddition: true, added);
             HasUnsavedAnnotations = true;
             ShowStatus(_localization.T("L.HighlightAdded"));
         }
@@ -925,11 +948,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 rotation);
 
             var removed = await _documentService.RemoveHighlightsAtAsync(FilePath, pageNumber, point);
-            if (removed == 0)
+            if (removed.Count == 0)
             {
                 ShowStatus(_localization.T("L.NoHighlightHere"));
                 return false;
             }
+
+            PushUndo(wasAddition: false, removed);
 
             page.RequestRender();
             HasUnsavedAnnotations = true;
@@ -942,6 +967,72 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return false;
         }
     }
+    /// <summary>True when there is an annotation edit to take back.</summary>
+    public bool CanUndoAnnotation => _annotationUndo.Count > 0;
+
+    /// <summary>
+    /// Takes back the last annotation edit, whether it added a highlight or removed one.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanUndoAnnotation))]
+    private async Task UndoAnnotationAsync()
+    {
+        if (!IsDocumentOpen || _annotationUndo.Count == 0)
+        {
+            return;
+        }
+
+        var step = _annotationUndo.Pop();
+        NotifyUndoChanged();
+
+        try
+        {
+            foreach (var highlight in step.Highlights)
+            {
+                if (step.WasAddition)
+                {
+                    await _documentService.RemoveHighlightMatchingAsync(FilePath, highlight.PageNumber, highlight.Quads);
+                }
+                else
+                {
+                    await _documentService.AddHighlightAsync(
+                        FilePath,
+                        highlight.PageNumber,
+                        highlight.Quads,
+                        highlight.Red,
+                        highlight.Green,
+                        highlight.Blue);
+                }
+
+                Pages.FirstOrDefault(candidate => candidate.Number == highlight.PageNumber)?.RequestRender();
+            }
+            HasUnsavedAnnotations = true;
+            ShowStatus(_localization.T("L.Undone"));
+        }
+        catch (PdfDocumentException failure)
+        {
+            SetError(_localization.GetPdfFailureMessage(failure.Failure));
+        }
+    }
+
+    private void PushUndo(bool wasAddition, IReadOnlyList<PdfHighlight> highlights)
+    {
+        if (highlights.Count == 0)
+        {
+            return;
+        }
+
+        _annotationUndo.Push(new AnnotationUndoStep(wasAddition, highlights));
+        NotifyUndoChanged();
+    }
+
+    private void ClearUndo()
+    {
+        _annotationUndo.Clear();
+        NotifyUndoChanged();
+    }
+
+    private void NotifyUndoChanged() => UndoAnnotationCommand.NotifyCanExecuteChanged();
+
     private bool CanSaveCopy() => IsDocumentOpen;
 
     private void ShowStatus(string message)
@@ -1713,6 +1804,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         _reading.Detach();
         ClearHistory();
+        ClearUndo();
         _zoomMode = ZoomModes.FitWidth;
         _restoreZoom = null;
         _restoreZoomMode = null;

@@ -344,6 +344,46 @@ public sealed class MainWindowViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task Undo_TakesBackAnAddedHighlight()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        await context.ViewModel.SelectAllTextCommand.ExecuteAsync(null);
+        await WaitForAsync(() => context.ViewModel.HasSelection);
+
+        Assert.False(context.ViewModel.CanUndoAnnotation);
+
+        await context.ViewModel.HighlightSelectionCommand.ExecuteAsync(null);
+        Assert.True(context.ViewModel.CanUndoAnnotation);
+
+        await context.ViewModel.UndoAnnotationCommand.ExecuteAsync(null);
+
+        Assert.False(context.ViewModel.CanUndoAnnotation);
+        Assert.False(string.IsNullOrWhiteSpace(context.ViewModel.StatusMessage));
+    }
+
+    [AvaloniaFact]
+    public async Task Undo_TakesBackARemovedHighlightByRestoringIt()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        await context.ViewModel.SelectAllTextCommand.ExecuteAsync(null);
+        await WaitForAsync(() => context.ViewModel.HasSelection);
+        await context.ViewModel.HighlightSelectionCommand.ExecuteAsync(null);
+
+        var page = context.ViewModel.Pages[0];
+        var rect = page.SelectionRects[0];
+        Assert.True(await context.ViewModel.RemoveHighlightsAtAsync(page.Number, rect.X + (rect.Width / 2), rect.Y + (rect.Height / 2)));
+
+        // Removing pushed its own undo entry on top of the addition.
+        Assert.True(context.ViewModel.CanUndoAnnotation);
+
+        await context.ViewModel.UndoAnnotationCommand.ExecuteAsync(null);
+
+        // The highlight is back, so removing it again at the same point works.
+        Assert.True(await context.ViewModel.RemoveHighlightsAtAsync(page.Number, rect.X + (rect.Width / 2), rect.Y + (rect.Height / 2)));
+    }
+    [AvaloniaFact]
     public async Task HighlightSelection_WithoutASelection_CannotRun()
     {
         using var context = new TestContext();

@@ -246,8 +246,76 @@ public sealed class PdfDocumentService : IDisposable
             },
             cancellationToken);
     }
+    /// <summary>
+    /// Removes the highlight whose geometry matches, which is how an added highlight is taken
+    /// back without relying on an annotation index that later edits may have shifted.
+    /// </summary>
+    public Task<bool> RemoveHighlightMatchingAsync(
+        string filePath,
+        int pageNumber,
+        IReadOnlyList<PdfQuad> quads,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return ResidentSession(fullPath).RemoveHighlightMatching(pageNumber, quads);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+    /// <summary>Every highlight on a page, read from the resident document.</summary>
+    public Task<IReadOnlyList<PdfHighlight>> GetHighlightsAsync(
+        string filePath,
+        int pageNumber,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var session = ResidentSession(fullPath);
+                    var highlights = new List<PdfHighlight>();
+                    for (var index = 0; index < session.GetAnnotationCount(pageNumber); index++)
+                    {
+                        if (session.TryReadHighlight(pageNumber, index) is { } highlight)
+                        {
+                            highlights.Add(highlight);
+                        }
+                    }
+
+                    return (IReadOnlyList<PdfHighlight>)highlights;
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
     /// <summary>Removes the highlights under a page-space point.</summary>
-    public Task<int> RemoveHighlightsAtAsync(
+    public Task<IReadOnlyList<PdfHighlight>> RemoveHighlightsAtAsync(
         string filePath,
         int pageNumber,
         PdfQuad point,

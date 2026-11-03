@@ -216,6 +216,7 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl+D` / `Cmd+D` | Add a bookmark at the current position |
 | `Ctrl+Shift+H` / `Cmd+Shift+H` | Highlight the selected text |
 | `Ctrl+S` / `Cmd+S` | Save a copy of the document, highlights included |
+| `Ctrl+Z` / `Cmd+Z` | Undo the last highlight change |
 | `F3` / `Shift+F3` | Next / previous search match |
 | `Alt+Left` | Return to the previous position |
 | Drag on text | Select words |

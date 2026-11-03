@@ -176,6 +176,30 @@ public sealed class EndToEndTests : IDisposable
         Assert.NotSame(before, page.Image);
     }
     [AvaloniaFact]
+    public async Task UndoShortcut_TakesBackTheHighlightAndReRenders()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages[0].Image is not null && document.Pages[0].HasTextLayer);
+
+        _window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Control);
+        await WaitAsync(() => document.HasSelection);
+        _window.KeyPressQwerty(PhysicalKey.H, RawInputModifiers.Control | RawInputModifiers.Shift);
+        await WaitAsync(() => document.CanUndoAnnotation);
+
+        var page = document.Pages[0];
+        var before = page.Image;
+
+        _window.KeyPressQwerty(PhysicalKey.Z, RawInputModifiers.Control);
+        await WaitAsync(() => !document.CanUndoAnnotation);
+
+        Assert.False(document.CanUndoAnnotation);
+
+        // Undoing is also a document change, so the page has to be redrawn to show the highlight
+        // disappear.
+        await WaitAsync(() => !ReferenceEquals(page.Image, before));
+        Assert.NotSame(before, page.Image);
+    }
+    [AvaloniaFact]
     public async Task UpdateCheck_OnABuildThatIsNotInstalled_ShowsNoBanner()
     {
         // The test build is a folder build, so Velopack reports it as not installed and the

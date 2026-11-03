@@ -1302,6 +1302,16 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (!(e.Source is TextBox) && ctrl && e.Key == Key.Z)
+        {
+            if (_viewModel.UndoAnnotationCommand.CanExecute(null))
+            {
+                _viewModel.UndoAnnotationCommand.Execute(null);
+            }
+
+            e.Handled = true;
+            return;
+        }
         if (ctrl && e.Key == Key.S)
         {
             if (_viewModel.SaveCopyCommand.CanExecute(null))
