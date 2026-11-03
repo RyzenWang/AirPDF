@@ -121,13 +121,17 @@ dotnet publish src/AirPdf.App -c Release -r win-x64 `
 支持 `win-x64`、`win-arm64`、`linux-x64`、`linux-arm64`、`osx-x64`、
 `osx-arm64`。
 
-### 安装器与自动更新
+### 安装包与自动更新
 
 Tag 发布会使用 [Velopack](https://velopack.io/) 生成：
 
-- Windows x64：`AirPDF-win-Setup.exe` 安装器与便携 zip
-- macOS arm64 / x64：`AirPDF-osx-*.pkg` 安装器与便携包
+- Windows x64：`AirPDF-win-Portable.zip`，解压后直接运行 `AirPdf.exe`
+- macOS arm64 / x64：`AirPDF-osx-*-Portable.zip`，解压后把 `AirPDF.app` 拖进「应用程序」
 - Linux x64：便携 `.tar.gz`
+
+**安装器暂不提供。** 当前版本未签名，`Setup.exe` 和 `.pkg` 首次启动会被 SmartScreen 与
+Gatekeeper 拦下，用户会以为阅读器本身有问题。便携包照常提供，首次启动可能仍需在 Windows
+点「更多信息 → 仍要运行」，或在 macOS 上右键 →「打开」。配置好签名证书后会恢复提供安装器。
 
 安装后的 Windows / macOS 版本会检查 GitHub 上的稳定版，后台下载并显示
 “重启以更新”。便携版和源码运行不会自动更新。

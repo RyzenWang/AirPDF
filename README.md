@@ -167,13 +167,19 @@ dotnet publish src/AirPdf.App -c Release -r win-x64 `
 Supported runtime identifiers include `win-x64`, `win-arm64`, `linux-x64`,
 `linux-arm64`, `osx-x64`, and `osx-arm64`.
 
-### Installers and automatic updates
+### Packages, installers, and automatic updates
 
 Tagged releases are packaged with [Velopack](https://velopack.io/):
 
-- Windows x64: `AirPDF-win-Setup.exe` (installer) and a portable zip
-- macOS arm64 / x64: `AirPDF-osx-*.pkg` (installer) and a portable package
+- Windows x64: `AirPDF-win-Portable.zip` — unzip anywhere and run `AirPdf.exe`
+- macOS arm64 / x64: `AirPDF-osx-*-Portable.zip` — unzip and drag `AirPDF.app` to Applications
 - Linux x64: portable `.tar.gz`
+
+**The installers are not published yet.** The builds are unsigned, so `Setup.exe` and the
+`.pkg` would be stopped by SmartScreen and Gatekeeper on first launch, and that reads as a fault
+in the reader rather than in its distribution. The portable archives stay available; the first
+launch may still need *More info → Run anyway* on Windows, or right-click → *Open* on macOS.
+The installers return once a signing certificate is configured.
 
 Installed Windows and macOS builds check GitHub for a newer stable release,
 download it in the background, and show a **Restart to update** action. Portable

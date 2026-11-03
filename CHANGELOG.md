@@ -27,6 +27,12 @@ semantic versioning once it reaches 1.0.
 - The welcome screen lists bookmarks from every document, showing the file name and page, and
   clicking one opens that file at the bookmark.
 
+### Changed
+
+- The release page no longer offers the Windows installer or the macOS `.pkg`. Neither build is
+  signed yet, so SmartScreen and Gatekeeper would block the first launch and it would look like
+  a bug in the reader. The portable archives and the update feed are published as before, and
+  the installers return once a signing certificate is configured.
 ### Fixed
 
 - Settings are now overwritten in place instead of being re-created through a temporary
@@ -50,6 +56,12 @@ Every platform is now compiled ahead of time.
   separately, because Windows says nothing about Linux or macOS: they have different
   toolchains and different native assets.
 
+### Changed
+
+- The release page no longer offers the Windows installer or the macOS `.pkg`. Neither build is
+  signed yet, so SmartScreen and Gatekeeper would block the first launch and it would look like
+  a bug in the reader. The portable archives and the update feed are published as before, and
+  the installers return once a signing certificate is configured.
 ### Fixed
 
 - Switching tabs no longer leaves the previous document's pages active. The page item
@@ -102,6 +114,12 @@ Rotated pages work end to end, and the Windows download halves.
   supplies metadata and the outline, and CJK text keeps its own per-character selection
   units because the search text no longer invents spaces between them.
 
+### Changed
+
+- The release page no longer offers the Windows installer or the macOS `.pkg`. Neither build is
+  signed yet, so SmartScreen and Gatekeeper would block the first launch and it would look like
+  a bug in the reader. The portable archives and the update feed are published as before, and
+  the installers return once a signing certificate is configured.
 ### Fixed
 
 - Switching tabs no longer leaves the previous document's pages active. The page item
@@ -230,6 +248,12 @@ explicit.
   repository secrets. Without them the workflow produces unsigned packages and
   skips notarization.
 
+### Changed
+
+- The release page no longer offers the Windows installer or the macOS `.pkg`. Neither build is
+  signed yet, so SmartScreen and Gatekeeper would block the first launch and it would look like
+  a bug in the reader. The portable archives and the update feed are published as before, and
+  the installers return once a signing certificate is configured.
 ### Fixed
 
 - Switching tabs no longer leaves the previous document's pages active. The page item
@@ -281,6 +305,12 @@ First public preview.
 - Atomic JSON settings storage in the platform application-data folder.
 - MIT license, third-party notices, architecture notes, and CI workflows.
 
+### Changed
+
+- The release page no longer offers the Windows installer or the macOS `.pkg`. Neither build is
+  signed yet, so SmartScreen and Gatekeeper would block the first launch and it would look like
+  a bug in the reader. The portable archives and the update feed are published as before, and
+  the installers return once a signing certificate is configured.
 ### Fixed
 
 - Switching tabs no longer leaves the previous document's pages active. The page item

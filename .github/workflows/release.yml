@@ -456,6 +456,22 @@ jobs:
             echo 'RELEASE_NOTES_EOF'
           } >> "$GITHUB_OUTPUT"
 
+      # The builds are unsigned, so the installers are withheld: SmartScreen and Gatekeeper
+      # would stop the first launch of an unsigned Setup.exe or .pkg, and the reader would
+      # read that as a bug in the app rather than in its distribution. The portable archives
+      # and the update feed stay, so the app is still downloadable and upgradable. Remove
+      # this step once signing secrets are configured and a signed release has been checked.
+      - name: Withdraw the unsigned installers
+        shell: bash
+        run: |
+          found=$(find artifacts -type f \( -name '*Setup.exe' -o -name '*Setup.pkg' \) -print -delete)
+          if [ -n "$found" ]; then
+            echo "Withheld:"
+            echo "$found"
+          else
+            echo "::warning::No installer was found to withhold; check the packaging output."
+          fi
+
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:

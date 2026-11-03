@@ -10,10 +10,17 @@ For a tag such as `v0.2.0`, the workflow publishes:
 
 | Platform | Assets |
 | --- | --- |
-| Windows x64 | `AirPDF-win-Setup.exe`, `AirPDF-win-Portable.zip`, full `.nupkg`, `releases.win.json` |
-| macOS arm64 | `AirPDF-osx-arm64-Setup.pkg`, portable package, full `.nupkg`, `releases.osx-arm64.json` |
-| macOS x64 | `AirPDF-osx-x64-Setup.pkg`, portable package, full `.nupkg`, `releases.osx-x64.json` |
+| Windows x64 | `AirPDF-win-Portable.zip`, full `.nupkg`, `releases.win.json` |
+| macOS arm64 | portable package, full `.nupkg`, `releases.osx-arm64.json` |
+| macOS x64 | portable package, full `.nupkg`, `releases.osx-x64.json` |
 | Linux x64 | `AirPDF-<version>-linux-x64.tar.gz` |
+
+The Windows installer (`AirPDF-win-Setup.exe`) and the macOS `.pkg` bundles are **withheld while
+the builds are unsigned**. Both would be blocked on first launch by SmartScreen and Gatekeeper,
+which reads as a fault in the reader rather than in its distribution. The release job therefore
+deletes them before publishing; delete the `Withdraw the unsigned installers` step once signing
+secrets are configured and a signed release has been checked. The portable archives stay, and a
+first launch may still need *More info → Run anyway* on Windows or right-click → *Open* on macOS.
 
 The `releases.*.json` files are required by the in-app updater. Portable and
 source builds do not self-update; install with the Windows Setup or macOS pkg
@@ -166,8 +173,8 @@ To test updates end to end:
 
 - builds/packages Windows, macOS arm64, macOS x64, and a Linux portable archive;
 - optionally signs and notarizes when the secrets above are present;
-- creates a GitHub Release with all installer, portable, full-package, and
-  `releases.*.json` assets.
+- creates a GitHub Release with the portable archives, the full packages, and the
+  `releases.*.json` assets; the installers are deleted first while the builds are unsigned.
 
 The release body is the annotated tag message, read back by the workflow. Write the
 user-facing summary into the tag (`git tag -a v0.3.1 -F notes.txt`), not into the release
