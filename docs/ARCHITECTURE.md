@@ -125,6 +125,33 @@ available yet; search and selection use the separate PDFium text layer.
 - Cancellation is cooperative: queued work is cancelled, and an in-flight native
   render is discarded when it returns.
 
+### Idle cost, and how it was measured
+
+The window is idle when nothing is being read: no layout passes, no scroll events, no page
+renders. That was checked rather than assumed, with a counter per second and a CPU sample:
+
+```powershell
+$p = Start-Process .\AirPdf.exe -ArgumentList 'sample.pdf' -PassThru
+Start-Sleep -Seconds 12
+$t = $p.TotalProcessorTime
+Start-Sleep -Seconds 8
+$p.Refresh()
+100 * ($p.TotalProcessorTime - $t).TotalSeconds / 8
+```
+
+**Measure this on hardware with a GPU.** The first run of this exercise reported 78-96% of one
+core with a document open and concluded there was a rendering defect. It was measured on a
+VMware VM with "Microsoft Basic Display Adapter", where every frame is composited in software;
+minimising the window dropped it to 0.3%, which located the cost in presentation rather than in
+application code. On real hardware the same build idles in the low single digits, and the
+earlier reading was an artefact of the environment. Forcing a different composition mode in
+`Win32PlatformOptions` did not help there either (DirectComposition 67%, RedirectionSurface
+115%, LowLatencyDxgiSwapChain 121%), which is another sign the cost was the software adapter.
+
+One genuine inefficiency survived the investigation even though it is not worth a change on
+its own: every visible thumbnail and page placeholder carries an `IsIndeterminate="True"`
+`ProgressBar`, so each visible item runs its own animation clock. It is a candidate to replace
+with a static indicator if a low-end machine ever shows idle cost.
 ## Navigation
 
 Vertical page positions are deterministic: a 24 px top padding, a 28 px gap, and
@@ -155,6 +182,33 @@ the document maximized would otherwise keep a zoom that no longer fits.
 `ApplyInitialZoom` resolves the mode once the viewport is known; older settings
 files have no mode and fall back to fit-width.
 
+### Idle cost, and how it was measured
+
+The window is idle when nothing is being read: no layout passes, no scroll events, no page
+renders. That was checked rather than assumed, with a counter per second and a CPU sample:
+
+```powershell
+$p = Start-Process .\AirPdf.exe -ArgumentList 'sample.pdf' -PassThru
+Start-Sleep -Seconds 12
+$t = $p.TotalProcessorTime
+Start-Sleep -Seconds 8
+$p.Refresh()
+100 * ($p.TotalProcessorTime - $t).TotalSeconds / 8
+```
+
+**Measure this on hardware with a GPU.** The first run of this exercise reported 78-96% of one
+core with a document open and concluded there was a rendering defect. It was measured on a
+VMware VM with "Microsoft Basic Display Adapter", where every frame is composited in software;
+minimising the window dropped it to 0.3%, which located the cost in presentation rather than in
+application code. On real hardware the same build idles in the low single digits, and the
+earlier reading was an artefact of the environment. Forcing a different composition mode in
+`Win32PlatformOptions` did not help there either (DirectComposition 67%, RedirectionSurface
+115%, LowLatencyDxgiSwapChain 121%), which is another sign the cost was the software adapter.
+
+One genuine inefficiency survived the investigation even though it is not worth a change on
+its own: every visible thumbnail and page placeholder carries an `IsIndeterminate="True"`
+`ProgressBar`, so each visible item runs its own animation clock. It is a candidate to replace
+with a static indicator if a low-end machine ever shows idle cost.
 ## Navigation history
 
 `MainWindowViewModel` keeps a bounded stack of `(page, offset)` points. Every
