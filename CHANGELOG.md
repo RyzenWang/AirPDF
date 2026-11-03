@@ -8,6 +8,13 @@ semantic versioning once it reaches 1.0.
 
 ### Added
 
+- End-to-end tests that drive a real window with real key events: zoom through `Ctrl+=`,
+  `Ctrl+-` and `Ctrl+1` (checking the page bitmap is re-rendered at the new width), search
+  through `Ctrl+F`, typing, `Enter` and `F3` (checking results and highlight rectangles),
+  language switching through `Ctrl+Shift+L` (checking the visual tree actually shows the new
+  strings and that the choice is written to settings), and the update banner staying absent on a
+  build that cannot install updates. The three defects fixed this week were all invisible to the
+  unit tests; this layer is meant to catch the next one.
 - A crash log. Unhandled exceptions on any thread, including the UI thread, are appended to
   `crash.log` next to `settings.json`, because a crash otherwise leaves nothing behind to look
   at.
@@ -140,6 +147,13 @@ explicit.
 
 ### Added
 
+- End-to-end tests that drive a real window with real key events: zoom through `Ctrl+=`,
+  `Ctrl+-` and `Ctrl+1` (checking the page bitmap is re-rendered at the new width), search
+  through `Ctrl+F`, typing, `Enter` and `F3` (checking results and highlight rectangles),
+  language switching through `Ctrl+Shift+L` (checking the visual tree actually shows the new
+  strings and that the choice is written to settings), and the update banner staying absent on a
+  build that cannot install updates. The three defects fixed this week were all invisible to the
+  unit tests; this layer is meant to catch the next one.
 - A crash log. Unhandled exceptions on any thread, including the UI thread, are appended to
   `crash.log` next to `settings.json`, because a crash otherwise leaves nothing behind to look
   at.
@@ -178,6 +192,13 @@ explicit.
 
 ### Added
 
+- End-to-end tests that drive a real window with real key events: zoom through `Ctrl+=`,
+  `Ctrl+-` and `Ctrl+1` (checking the page bitmap is re-rendered at the new width), search
+  through `Ctrl+F`, typing, `Enter` and `F3` (checking results and highlight rectangles),
+  language switching through `Ctrl+Shift+L` (checking the visual tree actually shows the new
+  strings and that the choice is written to settings), and the update banner staying absent on a
+  build that cannot install updates. The three defects fixed this week were all invisible to the
+  unit tests; this layer is meant to catch the next one.
 - A crash log. Unhandled exceptions on any thread, including the UI thread, are appended to
   `crash.log` next to `settings.json`, because a crash otherwise leaves nothing behind to look
   at.
@@ -282,6 +303,13 @@ First public preview.
 
 ### Added
 
+- End-to-end tests that drive a real window with real key events: zoom through `Ctrl+=`,
+  `Ctrl+-` and `Ctrl+1` (checking the page bitmap is re-rendered at the new width), search
+  through `Ctrl+F`, typing, `Enter` and `F3` (checking results and highlight rectangles),
+  language switching through `Ctrl+Shift+L` (checking the visual tree actually shows the new
+  strings and that the choice is written to settings), and the update banner staying absent on a
+  build that cannot install updates. The three defects fixed this week were all invisible to the
+  unit tests; this layer is meant to catch the next one.
 - A crash log. Unhandled exceptions on any thread, including the UI thread, are appended to
   `crash.log` next to `settings.json`, because a crash otherwise leaves nothing behind to look
   at.

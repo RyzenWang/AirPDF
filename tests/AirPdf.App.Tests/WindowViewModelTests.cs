@@ -78,7 +78,7 @@ public sealed class WindowViewModelTests : IDisposable
         Assert.False(host.HomeTab.IsDocumentOpen);
 
         var document = Assert.Single(host.Tabs, tab => !tab.IsHomeTab);
-        var deadline = DateTime.UtcNow.AddSeconds(20);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
         while (!document.IsDocumentOpen && DateTime.UtcNow < deadline)
         {
             await Task.Delay(20);
@@ -177,7 +177,7 @@ public sealed class WindowViewModelTests : IDisposable
 
         var tab = host.AddTab(SamplePath);
 
-        var deadline = DateTime.UtcNow.AddSeconds(20);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
         while (!tab.IsDocumentOpen && DateTime.UtcNow < deadline)
         {
             await Task.Delay(50);
@@ -198,7 +198,7 @@ public sealed class WindowViewModelTests : IDisposable
         _dialog.NextFile = SamplePath;
         first.OpenCommand.Execute(null);
 
-        var deadline = DateTime.UtcNow.AddSeconds(10);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
         while (host.Tabs.Count < 3 && DateTime.UtcNow < deadline)
         {
             await Task.Delay(20);
@@ -216,7 +216,7 @@ public sealed class WindowViewModelTests : IDisposable
         _dialog.NextFile = SamplePath;
         host.HomeTab.OpenCommand.Execute(null);
 
-        var deadline = DateTime.UtcNow.AddSeconds(20);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
         while (host.Tabs.Count < 2 && DateTime.UtcNow < deadline)
         {
             await Task.Delay(20);

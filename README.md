@@ -299,7 +299,7 @@ docs/                   Screenshots and architecture notes
 - [ ] Additional UI languages (English and Simplified Chinese are available)
 - [ ] Configure production Windows signing and Apple notarization credentials
 - [x] NativeAOT (Windows, Linux, and macOS)
-- [ ] UI/end-to-end coverage for zoom, search, language switching, and updates
+- [x] UI/end-to-end coverage for zoom, search, language switching, and updates
 
 Contributions and issue reports are welcome. If you want to pick up a roadmap
 item, open an issue first so we can keep the design coherent.

@@ -337,6 +337,37 @@ is missing.
 - No web view. The UI and renderer are native to the process.
 - No plugin system yet. Keep changes small and composable.
 
+## Tests
+
+Four layers, and a defect is usually caught by the lowest one that can see it:
+
+| Layer | Project | Drives | Catches |
+| --- | --- | --- | --- |
+| Storage and PDF | `AirPdf.Core.Tests` | services directly | parsing, geometry, persistence |
+| View models | `AirPdf.App.Tests` (`MainWindowViewModelTests`) | view models with a window | command wiring, state machines |
+| XAML | `AirPdf.App.Tests` (`MainWindowXamlTests`) | a real `MainWindow` | bindings, templates, compiled-binding data types |
+| End to end | `AirPdf.App.Tests` (`EndToEndTests`) | a real window plus real key events | anything that depends on routing, focus, or the visual tree |
+
+The end-to-end tests are the newest layer precisely because the other three all missed the
+defects they were supposed to catch: a bookmark jump that left the page blank, a tab switch that
+crashed, and a scroll-triggered stack overflow were each invisible to 131 unit tests.
+
+Two rules make them reliable in a headless process:
+
+- **Send input, do not call commands.** `window.KeyPressQwerty(PhysicalKey.F, RawInputModifiers.Control)`
+  goes through Avalonia's input pipeline, so a missing handler, a wrong gesture, or an
+  unfocused text box fails the test. Calling `SearchCommand.Execute` directly would not.
+- **Assert something the reader can observe.** The bitmap width after a zoom, the highlight
+  rectangles after a search, a `TextBlock` showing `书签` after the language switch. A bare
+  property change proves the view model works, not that the window does.
+
+Headless has no real layout: the page list reports a zero-extent scroll viewer, so anything
+derived from a scroll offset (the current page number, the reading position) is not reliable
+there. Assertions should use state that does not depend on layout.
+
+Pixel assertions are not used. The test app runs with `UseHeadlessDrawing`, which installs a stub
+drawing backend, so a captured frame proves nothing; page bitmaps are asserted instead, which are
+produced by our own SkiaSharp renderer and are therefore real.
 ## Adding a feature
 
 1. Put PDF parsing and file work in `AirPdf.Core`, with a unit test against the
