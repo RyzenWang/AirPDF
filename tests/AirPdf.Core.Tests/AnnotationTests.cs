@@ -252,6 +252,40 @@ public sealed class AnnotationTests : IDisposable
         bitmap.Dispose();
     }
     [Fact]
+    public async Task AfterSaveInPlace_ThePagesStillHaveContent()
+    {
+        // "It renders" is not the same as "it has ink on it": a blank bitmap is still a bitmap,
+        // which is exactly the failure being chased here.
+        var target = Path.Combine(_directory, "content.pdf");
+        File.Copy(SamplePath, target);
+
+        using (var writer = new PdfDocumentService())
+        {
+            var info = await writer.OpenAsync(target);
+            await writer.AddHighlightAsync(target, 1, [Band(info.Pages[0], 0.5)]);
+            await writer.SaveInPlaceAsync(target);
+        }
+
+        using var reader = new PdfDocumentService();
+        await reader.OpenAsync(target);
+        using var page = await reader.RenderPageAsync(target, 1, 600);
+
+        var dark = 0;
+        for (var y = 0; y < page.Height; y += 4)
+        {
+            for (var x = 0; x < page.Width; x += 4)
+            {
+                var colour = page.GetPixel(x, y);
+                if (colour.Red < 200 || colour.Green < 200 || colour.Blue < 200)
+                {
+                    dark++;
+                }
+            }
+        }
+
+        Assert.True(dark > 50, $"the rendered page is blank: {dark} non-white samples");
+    }
+    [Fact]
     public async Task AddHighlight_WithNoRectangles_ChangesNothing()
     {
         using var service = new PdfDocumentService();

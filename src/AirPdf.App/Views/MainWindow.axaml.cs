@@ -480,6 +480,34 @@ public partial class MainWindow : Window
         _viewModel.UpdateViewport(PagesList.Bounds.Width, PagesList.Bounds.Height);
     }
 
+    // TEMPORARY: dumps page rendering state when AIRPDF_PROBE=1 is set.
+    private void StartRenderProbe()
+    {
+        if (Environment.GetEnvironmentVariable("AIRPDF_PROBE") != "1")
+        {
+            return;
+        }
+
+        DispatcherTimer.RunOnce(
+            () =>
+            {
+                var lines = new List<string>
+                {
+                    $"window {Bounds.Width:F0}x{Bounds.Height:F0} documentOpen={_viewModel.IsDocumentOpen} pages={_viewModel.Pages.Count} zoom={_viewModel.Zoom:F3} current={_viewModel.CurrentPage}",
+                    $"viewer offset={PagesList.Viewer?.Offset.Y ?? -1:F1} extent={PagesList.Viewer?.Extent.Height ?? -1:F1} viewport={PagesList.Viewer?.Viewport.Height ?? -1:F1} listActive={PagesList.IsVisible} listBounds={PagesList.Bounds.Width:F0}x{PagesList.Bounds.Height:F0}"
+                };
+
+                foreach (var page in _viewModel.Pages.Take(4))
+                {
+                    lines.Add(
+                        $"page {page.Number}: active={page.IsActive} image={(page.Image is null ? "null" : $"{page.Image.PixelSize.Width}x{page.Image.PixelSize.Height}")} placeholder={page.ShowPlaceholder} error='{page.RenderError}' display={page.DisplayWidth:F0}x{page.DisplayHeight:F0}");
+                }
+
+                var path = Path.Combine(Path.GetTempPath(), "airpdf-render-probe.txt");
+                File.WriteAllLines(path, lines);
+            },
+            TimeSpan.FromSeconds(6));
+    }
     private void OnPagesScrollChanged(object? sender, EventArgs e)
     {
         if (_suppressScrollSync || !_viewModel.IsDocumentOpen)

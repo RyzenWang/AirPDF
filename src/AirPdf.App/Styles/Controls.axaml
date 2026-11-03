@@ -93,6 +93,8 @@
   <Style Selector="Button.icon">
     <Setter Property="Width" Value="34" />
     <Setter Property="Height" Value="34" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="MinHeight" Value="34" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="CornerRadius" Value="8" />
@@ -100,6 +102,8 @@
   <Style Selector="Button.zoom">
     <Setter Property="Width" Value="30" />
     <Setter Property="Height" Value="30" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="MinHeight" Value="30" />
     <Setter Property="Padding" Value="0" />
     <Setter Property="CornerRadius" Value="7" />

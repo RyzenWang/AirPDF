@@ -181,6 +181,21 @@
             <Path Classes="icon" Data="{StaticResource IconChevronRight}" />
           </Button>
 
+          <Button Classes="icon"
+                  Command="{Binding UndoAnnotationCommand}"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{DynamicResource L.Undo}"
+                  ToolTip.Tip="{DynamicResource L.Undo}">
+            <Path Classes="icon" Data="{StaticResource IconUndo}" />
+          </Button>
+          <Button Classes="icon"
+                  Command="{Binding RedoAnnotationCommand}"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{DynamicResource L.Redo}"
+                  ToolTip.Tip="{DynamicResource L.Redo}">
+            <Path Classes="icon" Data="{StaticResource IconRedo}" />
+          </Button>
+
           <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="8,0" VerticalAlignment="Center" />
 
           <Button Classes="zoom"
@@ -208,37 +223,23 @@
               </MenuFlyout>
             </Button.Flyout>
           </Button>
-          <Button Classes="icon"
-                  Command="{Binding UndoAnnotationCommand}"
-                  IsVisible="{Binding IsDocumentOpen}"
-                  AutomationProperties.Name="{DynamicResource L.Undo}"
-                  ToolTip.Tip="{DynamicResource L.Undo}">
-            <Path Classes="icon" Data="{StaticResource IconUndo}" />
-          </Button>
-          <Button Classes="icon"
-                  Command="{Binding RedoAnnotationCommand}"
-                  IsVisible="{Binding IsDocumentOpen}"
-                  AutomationProperties.Name="{DynamicResource L.Redo}"
-                  ToolTip.Tip="{DynamicResource L.Redo}">
-            <Path Classes="icon" Data="{StaticResource IconRedo}" />
-          </Button>
-          <Border Width="1" Height="18" Background="{DynamicResource BorderBrush}" Margin="3,0" IsVisible="{Binding IsDocumentOpen}" />          <Button Classes="zoom"
+          <Button Classes="zoom"
                   Command="{Binding ZoomInCommand}"
                   AutomationProperties.Name="{DynamicResource L.ZoomIn}"
                   ToolTip.Tip="{DynamicResource L.ZoomIn}">
             <Path Classes="icon small" Data="{StaticResource IconPlus}" />
           </Button>
-          <Button Classes="icon"
+          <Button Classes="zoom"
                   Command="{Binding FitWidthCommand}"
                   AutomationProperties.Name="{DynamicResource L.FitWidth}"
                   ToolTip.Tip="{DynamicResource L.FitWidth}">
-            <Path Classes="icon" Data="{StaticResource IconFitWidth}" />
+            <Path Classes="icon small" Data="{StaticResource IconFitWidth}" />
           </Button>
-          <Button Classes="icon"
+          <Button Classes="zoom"
                   Command="{Binding FitPageCommand}"
                   AutomationProperties.Name="{DynamicResource L.FitPage}"
                   ToolTip.Tip="{DynamicResource L.FitPage}">
-            <Path Classes="icon" Data="{StaticResource IconFitPage}" />
+            <Path Classes="icon small" Data="{StaticResource IconFitPage}" />
           </Button>
         </StackPanel>
 
