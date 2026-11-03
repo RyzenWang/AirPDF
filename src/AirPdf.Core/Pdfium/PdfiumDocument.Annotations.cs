@@ -10,6 +10,24 @@ namespace AirPdf.Core.Pdfium;
 /// </summary>
 public sealed partial class PdfiumDocument
 {
+    /// <summary>
+    /// The page's <c>/Rotate</c> in degrees. Selections are recorded in display space, so
+    /// mapping them back for an annotation needs the same rotation that produced them.
+    /// </summary>
+    public int GetPageRotation(int pageNumber)
+    {
+        ThrowIfDisposed();
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            return PageGeometry.NormalizeRotation(PdfiumNative.GetPageRotation(page) * 90);
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
     /// <summary>Number of annotations on a page, including the PDF's own ones.</summary>
     public int GetAnnotationCount(int pageNumber)
     {

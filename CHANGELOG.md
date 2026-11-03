@@ -8,6 +8,13 @@ semantic versioning once it reaches 1.0.
 
 ### Added
 
+- Highlight annotations. Select text, press `Ctrl+Shift+H` (or use the page menu) and the
+  selection becomes a highlight in the document, drawn immediately. Highlights are written into
+  the file only by **Save a copy** (`Ctrl+S`), which asks where to write and never touches the
+  file you opened; until then the title carries a marker, because annotations that disappear on
+  close would be worse than not having them. The colour is stored in both the stroke and fill
+  slots so viewers agree, the print flag is set, and the selection is mapped back to page space
+  with the page's rotation so rotated pages land correctly.
 - End-to-end tests that drive a real window with real key events: zoom through `Ctrl+=`,
   `Ctrl+-` and `Ctrl+1` (checking the page bitmap is re-rendered at the new width), search
   through `Ctrl+F`, typing, `Enter` and `F3` (checking results and highlight rectangles),
@@ -147,6 +154,13 @@ explicit.
 
 ### Added
 
+- Highlight annotations. Select text, press `Ctrl+Shift+H` (or use the page menu) and the
+  selection becomes a highlight in the document, drawn immediately. Highlights are written into
+  the file only by **Save a copy** (`Ctrl+S`), which asks where to write and never touches the
+  file you opened; until then the title carries a marker, because annotations that disappear on
+  close would be worse than not having them. The colour is stored in both the stroke and fill
+  slots so viewers agree, the print flag is set, and the selection is mapped back to page space
+  with the page's rotation so rotated pages land correctly.
 - End-to-end tests that drive a real window with real key events: zoom through `Ctrl+=`,
   `Ctrl+-` and `Ctrl+1` (checking the page bitmap is re-rendered at the new width), search
   through `Ctrl+F`, typing, `Enter` and `F3` (checking results and highlight rectangles),
@@ -192,6 +206,13 @@ explicit.
 
 ### Added
 
+- Highlight annotations. Select text, press `Ctrl+Shift+H` (or use the page menu) and the
+  selection becomes a highlight in the document, drawn immediately. Highlights are written into
+  the file only by **Save a copy** (`Ctrl+S`), which asks where to write and never touches the
+  file you opened; until then the title carries a marker, because annotations that disappear on
+  close would be worse than not having them. The colour is stored in both the stroke and fill
+  slots so viewers agree, the print flag is set, and the selection is mapped back to page space
+  with the page's rotation so rotated pages land correctly.
 - End-to-end tests that drive a real window with real key events: zoom through `Ctrl+=`,
   `Ctrl+-` and `Ctrl+1` (checking the page bitmap is re-rendered at the new width), search
   through `Ctrl+F`, typing, `Enter` and `F3` (checking results and highlight rectangles),
@@ -303,6 +324,13 @@ First public preview.
 
 ### Added
 
+- Highlight annotations. Select text, press `Ctrl+Shift+H` (or use the page menu) and the
+  selection becomes a highlight in the document, drawn immediately. Highlights are written into
+  the file only by **Save a copy** (`Ctrl+S`), which asks where to write and never touches the
+  file you opened; until then the title carries a marker, because annotations that disappear on
+  close would be worse than not having them. The colour is stored in both the stroke and fill
+  slots so viewers agree, the print flag is set, and the selection is mapped back to page space
+  with the page's rotation so rotated pages land correctly.
 - End-to-end tests that drive a real window with real key events: zoom through `Ctrl+=`,
   `Ctrl+-` and `Ctrl+1` (checking the page bitmap is re-rendered at the new width), search
   through `Ctrl+F`, typing, `Enter` and `F3` (checking results and highlight rectangles),

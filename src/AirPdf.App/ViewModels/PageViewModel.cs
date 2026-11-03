@@ -271,6 +271,9 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         IsRendering = false;
     }
 
+    /// <summary>Re-renders the page, for example after an annotation was added to it.</summary>
+    public void RequestRender() => QueueRender();
+
     public void SetHighlights(IReadOnlyList<PdfSearchRect> rects, IReadOnlyList<PdfSearchRect> activeRects)
     {
         HighlightRects = rects;

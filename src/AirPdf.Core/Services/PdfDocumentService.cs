@@ -183,6 +183,40 @@ public sealed class PdfDocumentService : IDisposable
             cancellationToken);
     }
 
+    /// <summary>
+    /// Rotation of one page, read on demand.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately not part of <see cref="PdfDocumentInfo"/>: reading rotation for every page
+    /// cost 45 s of a 55 s open on a 9,277-page document. Callers that need it ask for the pages
+    /// they are touching, which is at most a handful.
+    /// </remarks>
+    public Task<int> GetPageRotationAsync(
+        string filePath,
+        int pageNumber,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return ResidentSession(fullPath).GetPageRotation(pageNumber);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
     /// <summary>Subtype of one annotation, 9 for a highlight, for verification.</summary>
     public Task<int> GetAnnotationSubtypeAsync(
         string filePath,

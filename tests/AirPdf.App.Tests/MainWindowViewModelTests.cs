@@ -262,6 +262,96 @@ public sealed class MainWindowViewModelTests
     }
 
     [AvaloniaFact]
+    public async Task HighlightSelection_WritesAnAnnotationIntoTheSavedCopy()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-markup-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            using var context = new TestContext();
+            await context.ViewModel.OpenPathAsync(SamplePath);
+
+            await context.ViewModel.SelectAllTextCommand.ExecuteAsync(null);
+            await WaitForAsync(() => context.ViewModel.HasSelection);
+
+            Assert.True(context.ViewModel.HighlightSelectionCommand.CanExecute(null));
+            await context.ViewModel.HighlightSelectionCommand.ExecuteAsync(null);
+
+            // The window has to say the change is not in the file yet.
+            Assert.True(context.ViewModel.HasUnsavedAnnotations);
+            Assert.False(string.IsNullOrWhiteSpace(context.ViewModel.StatusMessage));
+
+            var destination = Path.Combine(directory, "annotated.pdf");
+            context.Dialog.NextSavePath = destination;
+            await context.ViewModel.SaveCopyCommand.ExecuteAsync(null);
+
+            Assert.True(File.Exists(destination));
+            Assert.False(context.ViewModel.HasUnsavedAnnotations);
+
+            // The whole point: the highlight survives into the file and comes back when reopened.
+            using var probe = new PdfDocumentService();
+            await probe.OpenAsync(destination);
+            Assert.True(await probe.GetAnnotationCountAsync(destination, 1) > 0);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch
+            {
+                // Best effort.
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task SaveCopy_WhenThePickerIsCancelled_KeepsTheUnsavedMark()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        await context.ViewModel.SelectAllTextCommand.ExecuteAsync(null);
+        await WaitForAsync(() => context.ViewModel.HasSelection);
+
+        await context.ViewModel.HighlightSelectionCommand.ExecuteAsync(null);
+        context.Dialog.NextSavePath = null;
+
+        await context.ViewModel.SaveCopyCommand.ExecuteAsync(null);
+
+        // Nothing was written, so the reader still has to be told the edits are unsaved.
+        Assert.True(context.ViewModel.HasUnsavedAnnotations);
+    }
+
+    [AvaloniaFact]
+    public async Task HighlightSelection_WithoutASelection_CannotRun()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        Assert.False(context.ViewModel.HasSelection);
+        Assert.False(context.ViewModel.HighlightSelectionCommand.CanExecute(null));
+
+        await context.ViewModel.HighlightSelectionCommand.ExecuteAsync(null);
+
+        Assert.False(context.ViewModel.HasUnsavedAnnotations);
+    }
+
+    private static async Task WaitForAsync(Func<bool> condition, int timeoutMs = 30_000)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Delay(50);
+        }
+    }
+    [AvaloniaFact]
     public void GoHome_WithoutADocument_DoesNothing()
     {
         using var context = new TestContext();
@@ -591,6 +681,11 @@ public sealed class MainWindowViewModelTests
 
         /// <summary>Text the next prompt returns; null simulates the reader cancelling.</summary>
         public string? NextText { get; set; }
+
+        /// <summary>Path the save picker returns; null simulates the reader cancelling.</summary>
+        public string? NextSavePath { get; set; }
+
+        public Task<string?> PickSavePathAsync(string suggestedName) => Task.FromResult(NextSavePath);
 
         public Task<string?> PromptTextAsync(string title, string heading, string fieldLabel, string initialValue) =>
             Task.FromResult(NextText);

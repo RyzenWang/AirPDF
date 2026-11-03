@@ -248,6 +248,32 @@ The selection is word-granular by design: it keeps hit-testing deterministic
 and avoids a second character-level layout system. Rotated pages are skipped
 for now, matching the search-highlight limitation.
 
+## Annotations and saving
+
+The reader is a reader: the file the user opened is never written to. Annotations are added to
+the resident PDFium document in memory, and the only way they leave the process is
+**Save a copy**, which writes a new file through `FPDF_SaveAsCopy`. The test for this hashes the
+original before and after.
+
+Two things make this less trivial than it sounds:
+
+- **Page space versus display space.** Selections are stored normalized, with the origin at the
+  top-left, because that is what the overlays draw. Annotations are written in page space: points,
+  origin bottom-left, Y up. `PageGeometry.ToPageQuad` is the exact inverse of the mapping that
+  produced the selection, including `/Rotate`, and its test round-trips through the forward
+  function for every quarter turn. Getting the direction wrong flips every highlight vertically
+  and looks like a rendering bug.
+- **Rotation is read per page, on demand.** Opening a document deliberately does not read
+  `/Rotate` for every page: doing so cost 45 s of a 55 s open on a 9,277-page file. The highlight
+  path asks only for the pages the selection touches.
+
+`PdfDocumentService.AddHighlightAsync` and `SaveCopyAsync` take the render gate like every other
+PDFium call, but unlike rendering they refuse to fall back to a throwaway handle. A render can
+reopen the file for one page; an edit cannot, because a change written to a copy that is then
+discarded would look like it succeeded and silently do nothing.
+
+Until a copy is written, `HasUnsavedAnnotations` is set and the window title carries a marker.
+Annotations that vanish on close would be the kind of bug a reader never forgives.
 ## Windows and shared state
 
 Each window owns its document, page view models, renderer, and dialog service, so closing

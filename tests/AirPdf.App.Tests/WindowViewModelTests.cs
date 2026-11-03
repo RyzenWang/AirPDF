@@ -279,6 +279,11 @@ public sealed class WindowViewModelTests : IDisposable
 
         public Task ShowErrorAsync(string title, string message) => Task.CompletedTask;
 
+        /// <summary>Path the save picker returns; null simulates the reader cancelling.</summary>
+        public string? NextSavePath { get; set; }
+
+        public Task<string?> PickSavePathAsync(string suggestedName) => Task.FromResult(NextSavePath);
+
         public Task<string?> PromptTextAsync(string title, string heading, string fieldLabel, string initialValue) =>
             Task.FromResult<string?>(null);
     }

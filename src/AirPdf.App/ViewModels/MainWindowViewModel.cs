@@ -139,6 +139,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private IReadOnlyList<UserBookmarkViewModel> _bookmarks = [];
 
+    /// <summary>
+    /// True once an annotation has been added and no copy has been written since. Annotations
+    /// live in memory only, so the window has to say so or a reader will close it and lose them.
+    /// </summary>
+    [ObservableProperty]
+    private bool _hasUnsavedAnnotations;
+
+    /// <summary>A short-lived line in the status bar, for "highlight added" and "copy saved".</summary>
+    [ObservableProperty]
+    private string _statusMessage = string.Empty;
+
     /// <summary>Bookmarks from every document, for the overview on the welcome screen.</summary>
     [ObservableProperty]
     private IReadOnlyList<BookmarkOverviewViewModel> _allBookmarks = [];
@@ -260,6 +271,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool HasOutlineItems => OutlineItems.Count > 0;
 
     public bool HasNoOutlineItems => !HasOutlineItems;
+
+    public bool HasStatusMessage => !string.IsNullOrWhiteSpace(StatusMessage);
 
     public bool HasBookmarks => Bookmarks.Count > 0;
 
@@ -802,6 +815,115 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Moves a bookmark to a new index; used by drag and drop and the arrow commands.</summary>
+    /// <summary>
+    /// Turns the current text selection into highlight annotations.
+    /// </summary>
+    /// <remarks>
+    /// The selection lives in normalized display space and annotations need page space, so every
+    /// rectangle is mapped back with the page's own rotation, read on demand for just the pages
+    /// the selection touches.
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanHighlightSelection))]
+    private async Task HighlightSelectionAsync()
+    {
+        if (!IsDocumentOpen || !HasSelection)
+        {
+            return;
+        }
+
+        try
+        {
+            foreach (var page in Pages.Where(candidate => candidate.SelectionRects.Count > 0).ToList())
+            {
+                var rotation = await _documentService.GetPageRotationAsync(FilePath, page.Number);
+                var quads = page.SelectionRects
+                    .Select(rect => PageGeometry.ToPageQuad(rect, page.WidthPoints, page.HeightPoints, rotation))
+                    .Where(quad => quad.Width > 0 && quad.Height > 0)
+                    .ToList();
+
+                if (quads.Count == 0)
+                {
+                    continue;
+                }
+
+                await _documentService.AddHighlightAsync(FilePath, page.Number, quads);
+                page.RequestRender();
+            }
+
+            HasUnsavedAnnotations = true;
+            ShowStatus(_localization.T("L.HighlightAdded"));
+        }
+        catch (PdfDocumentException failure)
+        {
+            SetError(_localization.GetPdfFailureMessage(failure.Failure));
+        }
+    }
+
+    private bool CanHighlightSelection() => IsDocumentOpen && HasSelection && !IsBusy;
+
+    /// <summary>Writes the document, annotations included, to a file the reader chooses.</summary>
+    [RelayCommand(CanExecute = nameof(CanSaveCopy))]
+    private async Task SaveCopyAsync()
+    {
+        if (!IsDocumentOpen)
+        {
+            return;
+        }
+
+        var suggested = $"{Path.GetFileNameWithoutExtension(FileName)} - annotated.pdf";
+        var destination = await _dialogs.PickSavePathAsync(suggested);
+        if (string.IsNullOrWhiteSpace(destination))
+        {
+            return;
+        }
+
+        try
+        {
+            await _documentService.SaveCopyAsync(FilePath, destination);
+            HasUnsavedAnnotations = false;
+            ShowStatus(_localization.Format("L.CopySaved", Path.GetFileName(destination)));
+        }
+        catch (PdfDocumentException failure)
+        {
+            SetError(_localization.GetPdfFailureMessage(failure.Failure));
+        }
+        catch (IOException)
+        {
+            SetError(_localization.T("L.ErrorSaveFailed"));
+        }
+    }
+
+    private bool CanSaveCopy() => IsDocumentOpen;
+
+    private void ShowStatus(string message)
+    {
+        StatusMessage = message;
+
+        // Long enough to read, short enough not to sit there. A posted callback would clear it
+        // on the next idle turn, which is one frame.
+        DispatcherTimer.RunOnce(
+            () =>
+            {
+                if (string.Equals(StatusMessage, message, StringComparison.Ordinal))
+                {
+                    StatusMessage = string.Empty;
+                }
+            },
+            TimeSpan.FromSeconds(6));
+    }
+
+    /// <summary>Marks the title while annotations exist only in memory.</summary>
+    private void UpdateTitleMarker()
+    {
+        if (!IsDocumentOpen)
+        {
+            WindowTitle = "AirPDF";
+            return;
+        }
+
+        var title = $"{FileName} — AirPDF";
+        WindowTitle = HasUnsavedAnnotations ? $"• {title}" : title;
+    }
     /// <summary>Jumps to a position and records a back step; used when another tab asks.</summary>
     public void JumpToPosition(NavigationPoint position)
     {
@@ -1430,6 +1552,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void NotifySelectionChanged()
     {
+        HighlightSelectionCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(SelectionStatus));
     }
@@ -1971,6 +2094,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnBookmarksChanged(IReadOnlyList<UserBookmarkViewModel> value) =>
         NotifyBookmarksChanged();
+
+    partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(HasStatusMessage));
+
+    partial void OnHasUnsavedAnnotationsChanged(bool value) => UpdateTitleMarker();
 
     partial void OnAllBookmarksChanged(IReadOnlyList<BookmarkOverviewViewModel> value)
     {

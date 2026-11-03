@@ -1245,6 +1245,27 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (ctrl && e.KeyModifiers.HasFlag(KeyModifiers.Shift) && e.Key == Key.H)
+        {
+            if (_viewModel.HighlightSelectionCommand.CanExecute(null))
+            {
+                _viewModel.HighlightSelectionCommand.Execute(null);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
+        if (ctrl && e.Key == Key.S)
+        {
+            if (_viewModel.SaveCopyCommand.CanExecute(null))
+            {
+                _viewModel.SaveCopyCommand.Execute(null);
+            }
+
+            e.Handled = true;
+            return;
+        }
         if (ctrl && e.Key == Key.D)
         {
             _viewModel.AddBookmarkCommand.Execute(null);

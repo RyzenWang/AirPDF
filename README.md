@@ -212,6 +212,8 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
 | `Ctrl+F` / `Cmd+F` | Find in document |
 | `Ctrl+D` / `Cmd+D` | Add a bookmark at the current position |
+| `Ctrl+Shift+H` / `Cmd+Shift+H` | Highlight the selected text |
+| `Ctrl+S` / `Cmd+S` | Save a copy of the document, highlights included |
 | `F3` / `Shift+F3` | Next / previous search match |
 | `Alt+Left` | Return to the previous position |
 | Drag on text | Select words |
@@ -293,7 +295,8 @@ docs/                   Screenshots and architecture notes
 - [ ] Native printing and "Save a copy"
 - [x] Per-document bookmarks
 - [x] Rotated pages (links, search highlights, text selection)
-- [ ] Annotations (highlight, ink, notes)
+- [x] Highlight annotations, saved with "Save a copy"
+- [ ] Ink and sticky-note annotations
 - [x] Multiple windows
 - [x] Tabs
 - [ ] Additional UI languages (English and Simplified Chinese are available)

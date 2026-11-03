@@ -511,9 +511,15 @@
                         Command="{Binding CopySelectionCommand}"
                         IsEnabled="{Binding HasSelection}" />
               <MenuItem Header="{DynamicResource L.SelectAll}"
-                        Command="{Binding SelectAllTextCommand}" />              <Separator />
+                        Command="{Binding SelectAllTextCommand}" />
+              <MenuItem Header="{DynamicResource L.HighlightSelection}"
+                        Command="{Binding HighlightSelectionCommand}" />
+              <Separator />
               <MenuItem Header="{DynamicResource L.AddBookmark}"
                         Command="{Binding AddBookmarkCommand}"
+                        IsEnabled="{Binding IsDocumentOpen}" />
+              <MenuItem Header="{DynamicResource L.SaveCopy}"
+                        Command="{Binding SaveCopyCommand}"
                         IsEnabled="{Binding IsDocumentOpen}" />
               <Separator />
               <MenuItem Header="{DynamicResource L.OpenContainingFolder}"
@@ -1064,6 +1070,12 @@
                      FontSize="11"
                      AutomationProperties.Name="{DynamicResource L.PageStatusFormat}"
                      IsVisible="{Binding IsDocumentOpen}" />
+          <TextBlock Text="{Binding StatusMessage}"
+                     Classes="caption"
+                     FontSize="11"
+                     Foreground="{DynamicResource AccentTextBrush}"
+                     IsVisible="{Binding HasStatusMessage}"
+                     TextTrimming="CharacterEllipsis" />
           <TextBlock Text="{Binding ReadingProgressText}"
                      Classes="caption tertiary"
                      FontSize="11"

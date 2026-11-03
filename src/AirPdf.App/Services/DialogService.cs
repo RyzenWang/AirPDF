@@ -53,6 +53,32 @@ public sealed class DialogService : IUserDialogService
         return await dialog.ShowDialog<string?>(owner);
     }
 
+    public async Task<string?> PickSavePathAsync(string suggestedName)
+    {
+        var owner = _ownerProvider();
+        if (owner is null)
+        {
+            return null;
+        }
+
+        var file = await owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = _localization.T("L.SaveCopy"),
+            SuggestedFileName = suggestedName,
+            DefaultExtension = "pdf",
+            FileTypeChoices =
+            [
+                new FilePickerFileType(_localization.T("L.PdfDocuments"))
+                {
+                    Patterns = ["*.pdf"],
+                    MimeTypes = ["application/pdf"],
+                    AppleUniformTypeIdentifiers = ["com.adobe.pdf"]
+                }
+            ]
+        });
+
+        return file?.TryGetLocalPath();
+    }
     public async Task<string?> PromptTextAsync(
         string title,
         string heading,

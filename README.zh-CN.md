@@ -161,6 +161,8 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | 下一个 / 上一个标签页 |
 | `Ctrl+F` / `Cmd+F` | 在文档中查找 |
 | `Ctrl+D` / `Cmd+D` | 在当前位置添加书签 |
+| `Ctrl+Shift+H` / `Cmd+Shift+H` | 高亮选中的文本 |
+| `Ctrl+S` / `Cmd+S` | 保存副本（含高亮） |
 | `F3` / `Shift+F3` | 下一个 / 上一个匹配 |
 | `Alt+Left` | 返回上一个位置 |
 | 在文字上拖动 | 选择单词 |
@@ -213,7 +215,8 @@ docs/                   截图与架构说明
 - [ ] 原生打印与“保存副本”
 - [x] 单文档书签
 - [x] 旋转页（链接、搜索高亮、文本选择）
-- [ ] 批注（高亮、墨迹、便签）
+- [x] 高亮批注，配合「保存副本」
+- [ ] 墨迹与便签批注
 - [x] 多窗口
 - [x] 标签页
 - [ ] 更多界面语言（当前已有英文与简体中文）
