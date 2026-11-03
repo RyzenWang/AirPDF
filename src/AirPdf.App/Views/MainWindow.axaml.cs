@@ -373,10 +373,34 @@ public partial class MainWindow : Window
         var openPosition = viewModel.TakePendingOpenPosition();
         var readingPosition = viewModel.TakePendingReadingPosition();
 
+        RestoreDocumentView(viewModel, openPosition, readingPosition, attempt: 0);
+    }
+
+    /// <summary>
+    /// Applies zoom, layout and the starting scroll once the page list has a size.
+    /// </summary>
+    /// <remarks>
+    /// A tab can be opened before its list has been laid out - the width and height come back as
+    /// zero for a moment - and applying the fit-width zoom against a zero viewport produces a
+    /// tiny page and a scroll offset that belongs to nothing. Retrying until the list has a size
+    /// costs nothing when it already does.
+    /// </remarks>
+    private void RestoreDocumentView(
+        MainWindowViewModel viewModel,
+        NavigationPoint? openPosition,
+        ReadingPositionEntry? readingPosition,
+        int attempt)
+    {
         Dispatcher.UIThread.Post(() =>
         {
             if (!ReferenceEquals(_viewModel, viewModel))
             {
+                return;
+            }
+
+            if ((PagesList.Bounds.Width < 1 || PagesList.Bounds.Height < 1) && attempt < 6)
+            {
+                RestoreDocumentView(viewModel, openPosition, readingPosition, attempt + 1);
                 return;
             }
 
@@ -481,33 +505,66 @@ public partial class MainWindow : Window
         _viewModel.UpdateViewport(PagesList.Bounds.Width, PagesList.Bounds.Height);
     }
 
-    // TEMPORARY: dumps page rendering state when AIRPDF_PROBE=1 is set.
+    // Diagnostic mode (AIRPDF_PROBE=1): appends one block per document open, plus Ctrl+Shift+D
+    // on demand, so a failure that happens after the second open can be captured.
+    private static readonly bool ProbeEnabled = Environment.GetEnvironmentVariable("AIRPDF_PROBE") == "1";
+
     private void StartRenderProbe()
     {
-        if (Environment.GetEnvironmentVariable("AIRPDF_PROBE") != "1")
+        if (!ProbeEnabled)
         {
             return;
         }
 
-        DispatcherTimer.RunOnce(
-            () =>
+        DumpRenderState("startup");
+
+        foreach (var tab in _tabs.Tabs)
+        {
+            tab.DocumentOpened += (_, _) => DispatcherTimer.RunOnce(
+                () => DumpRenderState($"opened {tab.FileName}"),
+                TimeSpan.FromSeconds(3));
+        }
+
+        _tabs.Tabs.CollectionChanged += (_, args) =>
+        {
+            foreach (var tab in args.NewItems?.OfType<MainWindowViewModel>() ?? [])
             {
-                var lines = new List<string>
-                {
-                    $"window {Bounds.Width:F0}x{Bounds.Height:F0} documentOpen={_viewModel.IsDocumentOpen} pages={_viewModel.Pages.Count} zoom={_viewModel.Zoom:F3} current={_viewModel.CurrentPage}",
-                    $"viewer offset={PagesList.Viewer?.Offset.Y ?? -1:F1} extent={PagesList.Viewer?.Extent.Height ?? -1:F1} viewport={PagesList.Viewer?.Viewport.Height ?? -1:F1} listActive={PagesList.IsVisible} listBounds={PagesList.Bounds.Width:F0}x{PagesList.Bounds.Height:F0}"
-                };
+                tab.DocumentOpened += (_, _) => DispatcherTimer.RunOnce(
+                    () => DumpRenderState($"opened {tab.FileName}"),
+                    TimeSpan.FromSeconds(3));
+            }
+        };
+    }
 
-                foreach (var page in _viewModel.Pages.Take(4))
-                {
-                    lines.Add(
-                        $"page {page.Number}: active={page.IsActive} image={(page.Image is null ? "null" : $"{page.Image.PixelSize.Width}x{page.Image.PixelSize.Height}")} placeholder={page.ShowPlaceholder} error='{page.RenderError}' display={page.DisplayWidth:F0}x{page.DisplayHeight:F0}");
-                }
+    private void DumpRenderState(string stage)
+    {
+        if (!ProbeEnabled)
+        {
+            return;
+        }
 
-                var path = Path.Combine(Path.GetTempPath(), "airpdf-render-probe.txt");
-                File.WriteAllLines(path, lines);
-            },
-            TimeSpan.FromSeconds(6));
+        try
+        {
+            var lines = new List<string>
+            {
+                $"--- {DateTime.Now:HH:mm:ss} {stage} ---",
+                $"window {Bounds.Width:F0}x{Bounds.Height:F0} documentOpen={_viewModel.IsDocumentOpen} file='{_viewModel.FileName}' pages={_viewModel.Pages.Count} zoom={_viewModel.Zoom:F3} current={_viewModel.CurrentPage}",
+                $"viewer offset={PagesList.Viewer?.Offset.Y ?? -1:F1} extent={PagesList.Viewer?.Extent.Height ?? -1:F1} viewport={PagesList.Viewer?.Viewport.Height ?? -1:F1} listActive={PagesList.IsVisible} listBounds={PagesList.Bounds.Width:F0}x{PagesList.Bounds.Height:F0}",
+                $"error={(_viewModel.HasError ? _viewModel.ErrorMessage : "none")}"
+            };
+
+            foreach (var page in _viewModel.Pages.Take(4))
+            {
+                lines.Add(
+                    $"page {page.Number}: active={page.IsActive} image={(page.Image is null ? "null" : $"{page.Image.PixelSize.Width}x{page.Image.PixelSize.Height}")} placeholder={page.ShowPlaceholder} rendering={page.IsRendering} error='{page.RenderError}'");
+            }
+
+            File.AppendAllLines(Path.Combine(Path.GetTempPath(), "airpdf-render-probe.txt"), lines);
+        }
+        catch
+        {
+            // Diagnostics must never break the app.
+        }
     }
     private void OnPagesScrollChanged(object? sender, EventArgs e)
     {
@@ -1320,6 +1377,12 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (ctrl && e.KeyModifiers.HasFlag(KeyModifiers.Shift) && e.Key == Key.D)
+        {
+            DumpRenderState("manual");
+            e.Handled = true;
+            return;
+        }
         if (ctrl && e.KeyModifiers.HasFlag(KeyModifiers.Shift) && e.Key == Key.H)
         {
             if (_viewModel.HighlightSelectionCommand.CanExecute(null))

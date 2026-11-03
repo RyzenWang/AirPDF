@@ -148,6 +148,10 @@ earlier reading was an artefact of the environment. Forcing a different composit
 `Win32PlatformOptions` did not help there either (DirectComposition 67%, RedirectionSurface
 115%, LowLatencyDxgiSwapChain 121%), which is another sign the cost was the software adapter.
 
+Setting `AIRPDF_PROBE=1` turns on the render diagnostic: every document open appends a block to
+`%TEMP%\airpdf-render-probe.txt` with the page size, whether each page is active, whether it has a
+bitmap, and the viewer extent; `Ctrl+Shift+D` appends one on demand. It is the fastest way to tell
+"never activated" from "rendered blank" in a report from a machine you cannot look at.
 One genuine inefficiency survived the investigation even though it is not worth a change on
 its own: every visible thumbnail and page placeholder carries an `IsIndeterminate="True"`
 `ProgressBar`, so each visible item runs its own animation clock. It is a candidate to replace
@@ -205,6 +209,10 @@ earlier reading was an artefact of the environment. Forcing a different composit
 `Win32PlatformOptions` did not help there either (DirectComposition 67%, RedirectionSurface
 115%, LowLatencyDxgiSwapChain 121%), which is another sign the cost was the software adapter.
 
+Setting `AIRPDF_PROBE=1` turns on the render diagnostic: every document open appends a block to
+`%TEMP%\airpdf-render-probe.txt` with the page size, whether each page is active, whether it has a
+bitmap, and the viewer extent; `Ctrl+Shift+D` appends one on demand. It is the fastest way to tell
+"never activated" from "rendered blank" in a report from a machine you cannot look at.
 One genuine inefficiency survived the investigation even though it is not worth a change on
 its own: every visible thumbnail and page placeholder carries an `IsIndeterminate="True"`
 `ProgressBar`, so each visible item runs its own animation clock. It is a candidate to replace
