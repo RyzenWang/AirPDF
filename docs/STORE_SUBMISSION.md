@@ -95,6 +95,10 @@ produces two files:
 | `artifacts/msix/AirPDF-<version>-x64.msix` | what was actually packed |
 | `artifacts/msix/AirPDF-<version>-x64.msixupload` | what Partner Center accepts |
 
+The publish is ahead of time, so the Store download is 25.2 MB rather than 51.9 MB and the
+first window appears in under a second instead of several. Pass `-NoAot` only if the build
+machine has no C++ toolchain.
+
 The package is intentionally unsigned. Microsoft re-signs Store submissions, and a
 second signature only creates room for confusion.
 

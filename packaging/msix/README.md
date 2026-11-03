@@ -42,6 +42,11 @@ Sign with a certificate whose subject matches the manifest `Publisher`:
   -CertificatePath ./test.pfx -CertificatePassword test
 ```
 
+The publish is **ahead of time** by default, because that is what the releases ship: the
+package comes out at 25.2 MB against 51.9 MB for the JIT build, and the first window appears in
+under a second instead of several. AOT needs the C++ toolchain (`clang` and the MSVC linker) on
+the build machine; pass `-NoAot` to publish the JIT build when it is not available.
+
 Use `-SkipPublish` to repack an existing `artifacts/msix/app` folder.
 
 For a Store submission, pass the identity Partner Center assigned and add

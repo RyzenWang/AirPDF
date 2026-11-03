@@ -8,7 +8,9 @@
 
       1. resolves makeappx.exe (installed Windows SDK, or the
          Microsoft.Windows.SDK.BuildTools NuGet package downloaded on demand),
-      2. publishes the app as a folder (MSIX cannot use PublishSingleFile),
+      2. publishes the app as a folder (MSIX cannot use PublishSingleFile), ahead of
+         time by default: the AOT build is about half the size and starts in well
+         under a second, so the package matches what the releases ship,
       3. generates the logo assets MSIX requires from the existing icon,
       4. expands the manifest template and packs the .msix,
       5. unpacks the result and asserts the parts Microsoft certifies.
@@ -26,11 +28,25 @@
 .PARAMETER Publisher
     Certificate subject. Must match the signing certificate exactly when signed.
 
+.PARAMETER NoAot
+    Publish the JIT build instead. Roughly twice the download and a few seconds to
+    the first window, but it needs no C++ toolchain and packages faster.
+
 .EXAMPLE
     ./Build-Msix.ps1 -Version 0.3.3.0
 
 .EXAMPLE
-    ./Build-Msix.ps1 -Version 0.3.3.0 -CertificatePath ../../artifacts/test.pfx -CertificatePassword test
+    ./Build-Msix.ps1 -Version 0.3.3.0 -NoAot
+
+.PARAMETER NoAot
+    Publish the JIT build instead. Roughly twice the download and a few seconds to
+    the first window, but it needs no C++ toolchain and packages faster.
+
+.EXAMPLE
+    ./Build-Msix.ps1 -Version 0.3.3.0
+
+.EXAMPLE
+    ./Build-Msix.ps1 -Version 0.3.3.0 -NoAot -CertificatePath ../../artifacts/test.pfx -CertificatePassword test
 #>
 [CmdletBinding()]
 param(
@@ -43,7 +59,8 @@ param(
     [string] $CertificatePath,
     [string] $CertificatePassword,
     [switch] $SkipPublish,
-    [switch] $ForStore
+    [switch] $ForStore,
+    [switch] $NoAot
 )
 
 $ErrorActionPreference = 'Stop'
@@ -180,8 +197,18 @@ $makeAppx = Resolve-BuildTools -ToolName 'makeappx'
 Write-Host "makeappx: $makeAppx"
 
 if (-not $SkipPublish) {
-    Write-Step 'Publishing the application as a folder layout'
+    if ($NoAot) {
+        Write-Step 'Publishing the application as a folder layout (JIT, -NoAot)'
+    }
+    else {
+        Write-Step 'Publishing the application as a folder layout (AOT)'
+    }
     if (Test-Path $publishDirectory) { Remove-Item $publishDirectory -Recurse -Force }
+
+    $aotArguments = @()
+    if (-not $NoAot) {
+        $aotArguments = @('-p:PublishAot=true', '-p:StripSymbols=true')
+    }
 
     & dotnet publish (Join-Path $root 'src/AirPdf.App/AirPdf.App.csproj') `
         -c $Configuration `
@@ -189,6 +216,7 @@ if (-not $SkipPublish) {
         --self-contained true `
         -p:PublishSingleFile=false `
         -p:Version=$Version `
+        @aotArguments `
         -o $publishDirectory
 
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed with exit code $LASTEXITCODE." }
