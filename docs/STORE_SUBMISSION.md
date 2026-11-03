@@ -137,12 +137,12 @@ need filling in.
 | Item | Requirement | Status |
 | --- | --- | --- |
 | Description | Plain text, no placeholder links, must match what the app does | Ready: [store/listing.md](store/listing.md), English and Chinese |
-| Screenshots | At least one desktop screenshot, 1366×768 or larger, PNG | Ready: `docs/store/screenshot-*.png`, 1578×944 client area |
+| Screenshots | At least one desktop screenshot, 1366×768 or larger, PNG | Ready: `docs/store/screenshot-*.png`, 1578×944 client area, captured from the shipping build |
 | Store logo | 300×300 PNG | Ready: `docs/store/logo-300.png` |
 | App icon | Provided by the package | Done |
 | Category | Books & reference | Decided in [store/listing.md](store/listing.md) |
 | Supported languages | English, Simplified Chinese | Copy ready in both |
-| Privacy policy URL | Required if any personal data is touched | Text ready: [store/PRIVACY.md](store/PRIVACY.md); still needs publishing |
+| Privacy policy URL | Required if any personal data is touched | Published: `https://ryzenwang.github.io/AirPDF/store/PRIVACY.html` |
 | Support contact | A URL or email | GitHub issues page |
 | Age rating questionnaire | Answer honestly; a PDF reader is unrestricted | Guidance in [store/listing.md](store/listing.md) |
 | System requirements | Windows 10 version 2004 (build 19041) or later, x64 | Aligns with the manifest |
@@ -196,13 +196,13 @@ a human, because they are about what a person sees.
 
 ## Checklist
 
-- [ ] Developer account registered and verified
-- [ ] App name reserved; identity values copied
-- [ ] `Build-Msix.ps1 -ForStore` succeeds with the reserved identity
+- [x] Developer account registered and verified
+- [x] App name reserved; identity values copied
+- [x] `Build-Msix.ps1 -ForStore` succeeds with the reserved identity
 - [x] Screenshots captured at 1578×944 (`docs/store/`)
 - [x] Store logo (300×300) exported
 - [x] Description written in English and Simplified Chinese
-- [ ] Privacy policy page published and linked
+- [x] Privacy policy page published and linked
 - [ ] Support contact set
 - [ ] Age rating questionnaire completed
 - [ ] `.msixupload` uploaded and certification passed

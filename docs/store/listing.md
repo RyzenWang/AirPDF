@@ -33,6 +33,8 @@ screen full of recommendations. Just the page, the way it was typeset.
 WHAT IT DOES
 
 • Opens PDF and remembers where you stopped, including how far down the page
+• Highlight annotations: select text and press Ctrl+Shift+H, with undo and redo
+• Saves your highlights back into the PDF itself with Ctrl+S
 • Tabs and multiple windows, so a manual and a paper can sit side by side
 • Full-text search with highlights, and F3 / Shift+F3 to step through matches
 • Select and copy text, with Ctrl+A for the whole document
@@ -66,6 +68,8 @@ AirPDF 是一个小巧、快速的 Windows PDF 阅读器。
 主要功能
 
 • 自动记住阅读位置，包括页内滚动到哪儿
+• 高亮批注:选中文字按 Ctrl+Shift+H,可撤销可重做
+• Ctrl+S 把高亮写回 PDF 本身
 • 标签页与多窗口,技术手册和论文可以并排看
 • 全文搜索并高亮,F3 / Shift+F3 在结果间跳转
 • 选中并复制文本,Ctrl+A 全选整篇
@@ -87,13 +91,14 @@ AirPDF 是一个小巧、快速的 Windows PDF 阅读器。
 源代码托管在 GitHub。支持 Windows 10 2004 及以上版本的 x64 设备。
 ```
 
-## Feature bullets for screenshots
+## Screenshots
+
+Captured at 1578×944 from the shipping build, English and light theme.
 
 | Screenshot | Caption (English) | Caption (简体中文) |
 | --- | --- | --- |
 | `screenshot-welcome.png` | Opens straight to the page, not a start screen | 打开就是页面,不是首页 |
 | `screenshot-reading.png` | Fit-width reading with the page in front of you | 适应宽度,专注页面本身 |
-| `screenshot-bookmarks.png` | Bookmarks you can rename and reorder | 书签可重命名、可排序 |
 
 ## Category and audience
 
@@ -111,7 +116,7 @@ AirPDF 是一个小巧、快速的 Windows PDF 阅读器。
 | --- | --- |
 | Support contact | `https://github.com/RyzenWang/AirPDF/issues` |
 | Website | `https://github.com/RyzenWang/AirPDF` |
-| Privacy policy URL | Publish [PRIVACY.md](PRIVACY.md) and link the published page |
+| Privacy policy URL | `https://ryzenwang.github.io/AirPDF/store/PRIVACY.html` |
 | License terms | MIT, link to the repository's `LICENSE` |
 
 ## Search keywords (optional)
@@ -129,8 +134,12 @@ AirPDF is a desktop PDF reader. It needs no account and no test credentials.
 To test: open the app, press Ctrl+O, and choose any PDF. The repository includes a
 sample at tests/Assets/sample.pdf.
 
+Highlighting: select text on a page and press Ctrl+Shift+H. Ctrl+Z undoes it. Ctrl+S
+writes the highlight into a copy beside the original file and asks before replacing
+anything, so testing with a read-only document is also fine.
+
 Notifications, location, camera, and microphone are not used. The app reads files
-the user picks and stores preferences in %APPDATA%\AirPdf. The only network call in
-the packaged build is none; the standalone installer exposes an optional update
-check that the Store build never reaches.
+the user picks and stores preferences in %APPDATA%\AirPdf. The packaged build makes
+no network request at all; only the standalone installer from GitHub offers an
+update check, which the Store build never reaches.
 ```
