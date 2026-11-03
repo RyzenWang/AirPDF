@@ -68,6 +68,47 @@ public static class PageGeometry
         return new PdfSearchRect(x, y, w, h);
     }
 
+    /// <summary>
+    /// The inverse of <see cref="ToDisplayRect"/>: turns a normalized display rectangle back into
+    /// page space, which is where annotations are written.
+    /// </summary>
+    /// <param name="display">Normalized rectangle with the origin at the top-left.</param>
+    /// <param name="width">Unrotated page width in points.</param>
+    /// <param name="height">Unrotated page height in points.</param>
+    /// <param name="rotation">Page <c>/Rotate</c> in degrees.</param>
+    public static PdfQuad ToPageQuad(
+        PdfSearchRect display,
+        double width,
+        double height,
+        int rotation)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            return default;
+        }
+
+        var quarters = NormalizeRotation(rotation);
+        var displayWidth = quarters is 90 or 270 ? height : width;
+        var displayHeight = quarters is 90 or 270 ? width : height;
+
+        var x0 = display.X * displayWidth;
+        var y0 = display.Y * displayHeight;
+        var x1 = (display.X + display.Width) * displayWidth;
+        var y1 = (display.Y + display.Height) * displayHeight;
+
+        var (u0, v0) = UnmapCorner(x0, y0, width, height, quarters);
+        var (u1, v1) = UnmapCorner(x1, y1, width, height, quarters);
+
+        // Page space is Y-up, and the display coordinate carries the top edge.
+        var top = height - Math.Min(v0, v1);
+        var bottom = height - Math.Max(v0, v1);
+
+        return new PdfQuad(
+            Math.Min(u0, u1),
+            top,
+            Math.Max(u0, u1),
+            bottom);
+    }
     /// <summary>Reduces a <c>/Rotate</c> value to 0, 90, 180, or 270.</summary>
     public static int NormalizeRotation(int rotation)
     {
@@ -84,6 +125,19 @@ public static class PageGeometry
     /// (height × width) for quarter turns, which is why the mapped coordinates come back in
     /// that box rather than in the caller's.
     /// </summary>
+    /// <summary>Inverts <see cref="MapCorner"/>.</summary>
+    private static (double U, double V) UnmapCorner(
+        double x,
+        double y,
+        double width,
+        double height,
+        int quarters) => quarters switch
+    {
+        90 => (y, height - x),
+        180 => (width - x, height - y),
+        270 => (width - y, x),
+        _ => (x, y)
+    };
     private static (double X, double Y) MapCorner(
         double u,
         double v,

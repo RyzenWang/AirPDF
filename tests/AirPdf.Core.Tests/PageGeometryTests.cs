@@ -128,6 +128,53 @@ public sealed class PageGeometryTests
         Assert.InRange(rect.Y + rect.Height, 0, 1.0001);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(90)]
+    [InlineData(180)]
+    [InlineData(270)]
+    public void ToPageQuad_RoundTripsThroughToDisplayRect(int rotation)
+    {
+        // Annotations are written in page space, so the inverse of the display mapping has to be
+        // exact; a highlight that lands somewhere else would be a silent, visible defect.
+        var rectangles = new[]
+        {
+            new PdfSearchRect(0.10, 0.20, 0.25, 0.04),
+            new PdfSearchRect(0.55, 0.05, 0.40, 0.10),
+            new PdfSearchRect(0.00, 0.00, 1.00, 1.00),
+            new PdfSearchRect(0.80, 0.70, 0.20, 0.30)
+        };
+
+        foreach (var expected in rectangles)
+        {
+            var quad = PageGeometry.ToPageQuad(expected, Width, Height, rotation);
+            var actual = PageGeometry.ToDisplayRect(quad.Left, quad.Top, quad.Right, quad.Bottom, Width, Height, rotation);
+
+            AssertClose(expected.X, actual.X, 1e-9);
+            AssertClose(expected.Y, actual.Y, 1e-9);
+            AssertClose(expected.Width, actual.Width, 1e-9);
+            AssertClose(expected.Height, actual.Height, 1e-9);
+        }
+    }
+
+    [Fact]
+    public void ToPageQuad_PutsTheTopOfTheDisplayAtTheTopOfThePage()
+    {
+        // Page space is Y-up, so the top edge of a band near the top of the display has to come
+        // back as the larger Y. Getting this backwards would flip every highlight vertically.
+        var quad = PageGeometry.ToPageQuad(new PdfSearchRect(0.1, 0.1, 0.2, 0.1), Width, Height, 0);
+
+        Assert.True(quad.Top > quad.Bottom);
+        AssertClose(Height * 0.9, quad.Top, 1e-6);
+        AssertClose(Width * 0.1, quad.Left, 1e-6);
+        AssertClose(Width * 0.3, quad.Right, 1e-6);
+    }
+
+    [Fact]
+    public void ToPageQuad_WithNoPageSize_ReturnsEmpty()
+    {
+        Assert.Equal(default, PageGeometry.ToPageQuad(new PdfSearchRect(0.1, 0.1, 0.2, 0.2), 0, 0, 0));
+    }
     private static void AssertClose(double expected, double actual, double tolerance = 1e-6) =>
         Assert.InRange(actual, expected - tolerance, expected + tolerance);
 }
