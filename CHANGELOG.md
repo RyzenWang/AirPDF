@@ -8,74 +8,47 @@ semantic versioning once it reaches 1.0.
 
 ### Added
 
-- Windows builds are available from the [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1),
-  which is now the recommended way to install on Windows: updates arrive through the Store and no
-  unsigned installer has to be downloaded.
-- Redo (`Ctrl+Y`), and undo and redo buttons in the toolbar next to the zoom group, so the pair
-  is visible without opening a menu. A new edit drops the redo trail, as elsewhere.
-- Saving into the document itself (`Ctrl+S`, **Save**). It is written beside the original and
-  moved over it, then reopened, because PDFium reads through an open stream that has to be closed
-  before the file can be replaced. The copy path is now **Save as…** (`Ctrl+Shift+S`).
-- Undo for highlight changes (`Ctrl+Z`, or the page menu). One reader action is one step, so a
-  highlight spanning eight pages comes back in one press rather than eight. Adding is undone by
-  removing exactly that geometry and colour; removing is undone by putting the highlight back
-  from the snapshot taken when it was removed, so nothing is guessed.
-- Highlights can be removed again: right-click a highlight and choose **Remove highlight**. Only
-  highlights are considered, so form fields and links on the page are never touched, and the
-  removal is written by the same **Save a copy** as the highlight itself.
-- Highlight annotations. Select text, press `Ctrl+Shift+H` (or use the page menu) and the
-  selection becomes a highlight in the document, drawn immediately. Highlights are written into
-  the file only by **Save a copy** (`Ctrl+S`), which asks where to write and never touches the
-  file you opened; until then the title carries a marker, because annotations that disappear on
-  close would be worse than not having them. The colour is stored in both the stroke and fill
-  slots so viewers agree, the print flag is set, and the selection is mapped back to page space
-  with the page's rotation so rotated pages land correctly.
-- End-to-end tests that drive a real window with real key events: zoom through `Ctrl+=`,
-  `Ctrl+-` and `Ctrl+1` (checking the page bitmap is re-rendered at the new width), search
-  through `Ctrl+F`, typing, `Enter` and `F3` (checking results and highlight rectangles),
-  language switching through `Ctrl+Shift+L` (checking the visual tree actually shows the new
-  strings and that the choice is written to settings), and the update banner staying absent on a
-  build that cannot install updates. The three defects fixed this week were all invisible to the
-  unit tests; this layer is meant to catch the next one.
-- A crash log. Unhandled exceptions on any thread, including the UI thread, are appended to
-  `crash.log` next to `settings.json`, because a crash otherwise leaves nothing behind to look
-  at.
-- The welcome screen is now the first tab, named Home, so the tab strip exists from the
-  first document and returning home no longer closes what you are reading. The logo and
-  wordmark in the toolbar form one button back to it, and a document already open in another
-  tab is focused rather than opened twice when you click one of its bookmarks from Home.
-- Per-document bookmarks. `Ctrl+D` marks the current page and scroll offset, the sidebar
-  gains a Bookmarks tab listing them with page numbers, clicking one jumps there and records
-  a back step, and they are stored per file in the settings file next to the reading
-  position, so they survive restarts. Pressing the shortcut twice on the same spot does not
-  duplicate the entry, and a document is capped at 100 bookmarks. This is separate from a
-  PDF's own outline, which still has its own tab.
-- Bookmarks can be renamed (double-click, or the right-click menu) and reordered by dragging
-  them, with the order stored so it survives a restart. The sidebar menu also offers move up
-  and move down for keyboard and screen-reader use.
-- The welcome screen lists bookmarks from every document, showing the file name and page, and
-  clicking one opens that file at the bookmark.
+- Windows builds are available from the
+  [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1), which is now the recommended way
+  to install on Windows: updates arrive through the Store and no unsigned installer has to be downloaded.
+- Highlight annotations. Select text and press `Ctrl+Shift+H`; the selection becomes a highlight in
+  the document and is drawn immediately. Right-click a highlight to remove it, `Ctrl+Z` and
+  `Ctrl+Y` take either back, and the toolbar carries undo and redo buttons next to the navigation
+  icons. One reader action is one undo step, so a highlight spanning eight pages goes back in one
+  press.
+- Saving. `Ctrl+S` writes into the document you opened: it saves to a temporary file beside it,
+  swaps that in, and reopens, because PDFium reads through an open stream that has to be closed
+  first. `Ctrl+Shift+S` is **Save as** and leaves the original alone.
+- Per-document bookmarks: `Ctrl+D` marks the current page and scroll offset, the sidebar gains a
+  Bookmarks tab, a bookmark can be renamed by double-clicking it, dragged into a different order,
+  and the welcome screen lists bookmarks from every document.
+- The welcome screen is the first tab, so the tab strip exists from the first document, and going
+  home no longer closes what you were reading. The logo and wordmark are one button back to it, and
+  a document already open in another tab is focused rather than opened twice.
+- A crash log: unhandled exceptions on any thread are appended to `crash.log` next to
+  `settings.json`.
+- End-to-end tests that drive a real window with real key events, covering zoom, search, language
+  switching, undo/redo, and the update banner.
 
 ### Changed
 
-- The release page no longer offers the Windows installer or the macOS `.pkg`. Neither build is
-  signed yet, so SmartScreen and Gatekeeper would block the first launch and it would look like
-  a bug in the reader. The portable archives and the update feed are published as before, and
-  the installers return once a signing certificate is configured.
+- The release page no longer offers the Windows installer or the macOS `.pkg` while the builds are
+  unsigned: SmartScreen and Gatekeeper would stop the first launch and it would read as a fault in
+  the reader. Portable archives stay, and Windows users have the Store.
+- The toolbar's zoom controls share one size, and the new undo/redo buttons sit with the navigation
+  icons rather than inside the zoom group.
+
 ### Fixed
 
-- A highlight was invisible until the document was saved and reopened. Adding the annotation
-  asked the page to re-render, but the page already had a bitmap at the same width and the render
-  returned early, so nothing changed on screen. The page now re-renders when it is asked to,
-  whatever it already holds. Caught by a test that fails on the old behaviour: the bitmap was the
-  same instance before and after highlighting.
-- Settings are now overwritten in place instead of being re-created through a temporary
-  file, so an installed package and the portable build share one `settings.json`. A
-  packaged (MSIX) build redirects *new* files under `%APPDATA%` into its private cache but
-  leaves *existing* ones alone, and the temporary-file write always counted as new — the
-  Store build would have forked recent files, bookmarks, and reading positions into a
-  hidden copy. The previous file is kept as `settings.json.bak` and loaded when the live
-  file is missing, empty, or truncated.
+- A highlight stayed invisible until the document was saved and reopened: the page already had a
+  bitmap at that width, so the re-render that should have shown it returned early.
+- Switching tabs left the previous document's pages active, keeping their bitmaps and re-rendering
+  them in the background as memory crept up.
+- Scrolling after a tab switch could overflow the stack, because the thumbnail list was scrolled
+  from inside a layout pass.
+- A save that could not replace the file used to strand the document: the session was closed before
+  the file was swapped, so editing failed and rendering fell back to a transient handle per page. A
+  read-only or busy file is now detected before the session is released.
 
 ## [0.3.2] - 2026-11-02
 
@@ -90,23 +63,8 @@ Every platform is now compiled ahead of time.
   separately, because Windows says nothing about Linux or macOS: they have different
   toolchains and different native assets.
 
-### Changed
-
-- The release page no longer offers the Windows installer or the macOS `.pkg`. Neither build is
-  signed yet, so SmartScreen and Gatekeeper would block the first launch and it would look like
-  a bug in the reader. The portable archives and the update feed are published as before, and
-  the installers return once a signing certificate is configured.
 ### Fixed
 
-- A highlight was invisible until the document was saved and reopened. Adding the annotation
-  asked the page to re-render, but the page already had a bitmap at the same width and the render
-  returned early, so nothing changed on screen. The page now re-renders when it is asked to,
-  whatever it already holds. Caught by a test that fails on the old behaviour: the bitmap was the
-  same instance before and after highlighting.
-- Switching tabs no longer leaves the previous document's pages active. The page item
-  container is reused when the list switches documents, and nothing detached the old page, so
-  it stayed active: its bitmap was never trimmed and it kept re-rendering. Memory crept up as
-  you switched and scrolled, which is what made scrolling after a tab switch end in a crash.
 - The Linux build no longer demands `GLIBC_2.38`. NativeAOT links against the build machine's
   glibc, and building on `ubuntu-latest` (24.04) produced a binary that died on 22.04 with
   "version `GLIBC_2.38' not found". The Linux jobs are pinned to `ubuntu-22.04` (glibc 2.35),
@@ -153,23 +111,8 @@ Rotated pages work end to end, and the Windows download halves.
   supplies metadata and the outline, and CJK text keeps its own per-character selection
   units because the search text no longer invents spaces between them.
 
-### Changed
-
-- The release page no longer offers the Windows installer or the macOS `.pkg`. Neither build is
-  signed yet, so SmartScreen and Gatekeeper would block the first launch and it would look like
-  a bug in the reader. The portable archives and the update feed are published as before, and
-  the installers return once a signing certificate is configured.
 ### Fixed
 
-- A highlight was invisible until the document was saved and reopened. Adding the annotation
-  asked the page to re-render, but the page already had a bitmap at the same width and the render
-  returned early, so nothing changed on screen. The page now re-renders when it is asked to,
-  whatever it already holds. Caught by a test that fails on the old behaviour: the bitmap was the
-  same instance before and after highlighting.
-- Switching tabs no longer leaves the previous document's pages active. The page item
-  container is reused when the list switches documents, and nothing detached the old page, so
-  it stayed active: its bitmap was never trimmed and it kept re-rendering. Memory crept up as
-  you switched and scrolled, which is what made scrolling after a tab switch end in a crash.
 - Rotated pages are fully supported: links, search highlights, and text selection. Two
   halves were broken. Geometry: the document's page box already accounts for `/Rotate`
   while content rectangles do not, so they are mapped through a shared `PageGeometry`
@@ -184,43 +127,7 @@ explicit.
 
 ### Added
 
-- Windows builds are available from the [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1),
-  which is now the recommended way to install on Windows: updates arrive through the Store and no
-  unsigned installer has to be downloaded.
-- Redo (`Ctrl+Y`), and undo and redo buttons in the toolbar next to the zoom group, so the pair
-  is visible without opening a menu. A new edit drops the redo trail, as elsewhere.
-- Saving into the document itself (`Ctrl+S`, **Save**). It is written beside the original and
-  moved over it, then reopened, because PDFium reads through an open stream that has to be closed
-  before the file can be replaced. The copy path is now **Save as…** (`Ctrl+Shift+S`).
-- Undo for highlight changes (`Ctrl+Z`, or the page menu). One reader action is one step, so a
-  highlight spanning eight pages comes back in one press rather than eight. Adding is undone by
-  removing exactly that geometry and colour; removing is undone by putting the highlight back
-  from the snapshot taken when it was removed, so nothing is guessed.
-- Highlights can be removed again: right-click a highlight and choose **Remove highlight**. Only
-  highlights are considered, so form fields and links on the page are never touched, and the
-  removal is written by the same **Save a copy** as the highlight itself.
-- Highlight annotations. Select text, press `Ctrl+Shift+H` (or use the page menu) and the
-  selection becomes a highlight in the document, drawn immediately. Highlights are written into
-  the file only by **Save a copy** (`Ctrl+S`), which asks where to write and never touches the
-  file you opened; until then the title carries a marker, because annotations that disappear on
-  close would be worse than not having them. The colour is stored in both the stroke and fill
-  slots so viewers agree, the print flag is set, and the selection is mapped back to page space
-  with the page's rotation so rotated pages land correctly.
-- End-to-end tests that drive a real window with real key events: zoom through `Ctrl+=`,
-  `Ctrl+-` and `Ctrl+1` (checking the page bitmap is re-rendered at the new width), search
-  through `Ctrl+F`, typing, `Enter` and `F3` (checking results and highlight rectangles),
-  language switching through `Ctrl+Shift+L` (checking the visual tree actually shows the new
-  strings and that the choice is written to settings), and the update banner staying absent on a
-  build that cannot install updates. The three defects fixed this week were all invisible to the
-  unit tests; this layer is meant to catch the next one.
-- A crash log. Unhandled exceptions on any thread, including the UI thread, are appended to
-  `crash.log` next to `settings.json`, because a crash otherwise leaves nothing behind to look
-  at.
-- The welcome screen is now the first tab, named Home, so the tab strip exists from the
-  first document and returning home no longer closes what you are reading. The logo and
-  wordmark in the toolbar form one button back to it, and a document already open in another
-  tab is focused rather than opened twice when you click one of its bookmarks from Home.
-- The AirPDF logo in the toolbar returns to the welcome screen. It closes the open document,- `packaging/signing/Set-SigningSecrets.ps1` validates a Windows or macOS
+- `packaging/signing/Set-SigningSecrets.ps1` validates a Windows or macOS
   code-signing certificate (private key present, Code Signing extended key usage,
   not expired) and uploads it as the repository secrets the release workflow
   reads.
@@ -251,43 +158,7 @@ explicit.
 
 ### Added
 
-- Windows builds are available from the [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1),
-  which is now the recommended way to install on Windows: updates arrive through the Store and no
-  unsigned installer has to be downloaded.
-- Redo (`Ctrl+Y`), and undo and redo buttons in the toolbar next to the zoom group, so the pair
-  is visible without opening a menu. A new edit drops the redo trail, as elsewhere.
-- Saving into the document itself (`Ctrl+S`, **Save**). It is written beside the original and
-  moved over it, then reopened, because PDFium reads through an open stream that has to be closed
-  before the file can be replaced. The copy path is now **Save as…** (`Ctrl+Shift+S`).
-- Undo for highlight changes (`Ctrl+Z`, or the page menu). One reader action is one step, so a
-  highlight spanning eight pages comes back in one press rather than eight. Adding is undone by
-  removing exactly that geometry and colour; removing is undone by putting the highlight back
-  from the snapshot taken when it was removed, so nothing is guessed.
-- Highlights can be removed again: right-click a highlight and choose **Remove highlight**. Only
-  highlights are considered, so form fields and links on the page are never touched, and the
-  removal is written by the same **Save a copy** as the highlight itself.
-- Highlight annotations. Select text, press `Ctrl+Shift+H` (or use the page menu) and the
-  selection becomes a highlight in the document, drawn immediately. Highlights are written into
-  the file only by **Save a copy** (`Ctrl+S`), which asks where to write and never touches the
-  file you opened; until then the title carries a marker, because annotations that disappear on
-  close would be worse than not having them. The colour is stored in both the stroke and fill
-  slots so viewers agree, the print flag is set, and the selection is mapped back to page space
-  with the page's rotation so rotated pages land correctly.
-- End-to-end tests that drive a real window with real key events: zoom through `Ctrl+=`,
-  `Ctrl+-` and `Ctrl+1` (checking the page bitmap is re-rendered at the new width), search
-  through `Ctrl+F`, typing, `Enter` and `F3` (checking results and highlight rectangles),
-  language switching through `Ctrl+Shift+L` (checking the visual tree actually shows the new
-  strings and that the choice is written to settings), and the update banner staying absent on a
-  build that cannot install updates. The three defects fixed this week were all invisible to the
-  unit tests; this layer is meant to catch the next one.
-- A crash log. Unhandled exceptions on any thread, including the UI thread, are appended to
-  `crash.log` next to `settings.json`, because a crash otherwise leaves nothing behind to look
-  at.
-- The welcome screen is now the first tab, named Home, so the tab strip exists from the
-  first document and returning home no longer closes what you are reading. The logo and
-  wordmark in the toolbar form one button back to it, and a document already open in another
-  tab is focused rather than opened twice when you click one of its bookmarks from Home.
-- The AirPDF logo in the toolbar returns to the welcome screen. It closes the open document,- Windows installer and portable package built with Velopack.
+- Windows installer and portable package built with Velopack.
 - macOS `.pkg` and portable package built with optional Developer ID signing
   and Apple notarization.
 - In-app update checks, background downloads, and a restart-to-update action for
@@ -350,23 +221,8 @@ explicit.
   repository secrets. Without them the workflow produces unsigned packages and
   skips notarization.
 
-### Changed
-
-- The release page no longer offers the Windows installer or the macOS `.pkg`. Neither build is
-  signed yet, so SmartScreen and Gatekeeper would block the first launch and it would look like
-  a bug in the reader. The portable archives and the update feed are published as before, and
-  the installers return once a signing certificate is configured.
 ### Fixed
 
-- A highlight was invisible until the document was saved and reopened. Adding the annotation
-  asked the page to re-render, but the page already had a bitmap at the same width and the render
-  returned early, so nothing changed on screen. The page now re-renders when it is asked to,
-  whatever it already holds. Caught by a test that fails on the old behaviour: the bitmap was the
-  same instance before and after highlighting.
-- Switching tabs no longer leaves the previous document's pages active. The page item
-  container is reused when the list switches documents, and nothing detached the old page, so
-  it stayed active: its bitmap was never trimmed and it kept re-rendering. Memory crept up as
-  you switched and scrolled, which is what made scrolling after a tab switch end in a crash.
 - Rendering keeps the PDFium document handle open while a document is displayed instead of
   reparsing the file for every page. Measured on a 9,277-page / 35 MB document: a page
   render dropped from 0.72 s to 0.023 s, and opening dropped from 7.1 s to 1.9 s. Page
@@ -389,43 +245,7 @@ First public preview.
 
 ### Added
 
-- Windows builds are available from the [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1),
-  which is now the recommended way to install on Windows: updates arrive through the Store and no
-  unsigned installer has to be downloaded.
-- Redo (`Ctrl+Y`), and undo and redo buttons in the toolbar next to the zoom group, so the pair
-  is visible without opening a menu. A new edit drops the redo trail, as elsewhere.
-- Saving into the document itself (`Ctrl+S`, **Save**). It is written beside the original and
-  moved over it, then reopened, because PDFium reads through an open stream that has to be closed
-  before the file can be replaced. The copy path is now **Save as…** (`Ctrl+Shift+S`).
-- Undo for highlight changes (`Ctrl+Z`, or the page menu). One reader action is one step, so a
-  highlight spanning eight pages comes back in one press rather than eight. Adding is undone by
-  removing exactly that geometry and colour; removing is undone by putting the highlight back
-  from the snapshot taken when it was removed, so nothing is guessed.
-- Highlights can be removed again: right-click a highlight and choose **Remove highlight**. Only
-  highlights are considered, so form fields and links on the page are never touched, and the
-  removal is written by the same **Save a copy** as the highlight itself.
-- Highlight annotations. Select text, press `Ctrl+Shift+H` (or use the page menu) and the
-  selection becomes a highlight in the document, drawn immediately. Highlights are written into
-  the file only by **Save a copy** (`Ctrl+S`), which asks where to write and never touches the
-  file you opened; until then the title carries a marker, because annotations that disappear on
-  close would be worse than not having them. The colour is stored in both the stroke and fill
-  slots so viewers agree, the print flag is set, and the selection is mapped back to page space
-  with the page's rotation so rotated pages land correctly.
-- End-to-end tests that drive a real window with real key events: zoom through `Ctrl+=`,
-  `Ctrl+-` and `Ctrl+1` (checking the page bitmap is re-rendered at the new width), search
-  through `Ctrl+F`, typing, `Enter` and `F3` (checking results and highlight rectangles),
-  language switching through `Ctrl+Shift+L` (checking the visual tree actually shows the new
-  strings and that the choice is written to settings), and the update banner staying absent on a
-  build that cannot install updates. The three defects fixed this week were all invisible to the
-  unit tests; this layer is meant to catch the next one.
-- A crash log. Unhandled exceptions on any thread, including the UI thread, are appended to
-  `crash.log` next to `settings.json`, because a crash otherwise leaves nothing behind to look
-  at.
-- The welcome screen is now the first tab, named Home, so the tab strip exists from the
-  first document and returning home no longer closes what you are reading. The logo and
-  wordmark in the toolbar form one button back to it, and a document already open in another
-  tab is focused rather than opened twice when you click one of its bookmarks from Home.
-- The AirPDF logo in the toolbar returns to the welcome screen. It closes the open document,- Cross-platform Avalonia desktop shell with a custom light and dark palette.
+- Cross-platform Avalonia desktop shell with a custom light and dark palette.
 - PDFium page rendering with high-DPI sizing and a virtualized continuous page
   list.
 - Thumbnail rail, document outline, page navigation, and zoom controls.
@@ -441,23 +261,8 @@ First public preview.
 - Atomic JSON settings storage in the platform application-data folder.
 - MIT license, third-party notices, architecture notes, and CI workflows.
 
-### Changed
-
-- The release page no longer offers the Windows installer or the macOS `.pkg`. Neither build is
-  signed yet, so SmartScreen and Gatekeeper would block the first launch and it would look like
-  a bug in the reader. The portable archives and the update feed are published as before, and
-  the installers return once a signing certificate is configured.
 ### Fixed
 
-- A highlight was invisible until the document was saved and reopened. Adding the annotation
-  asked the page to re-render, but the page already had a bitmap at the same width and the render
-  returned early, so nothing changed on screen. The page now re-renders when it is asked to,
-  whatever it already holds. Caught by a test that fails on the old behaviour: the bitmap was the
-  same instance before and after highlighting.
-- Switching tabs no longer leaves the previous document's pages active. The page item
-  container is reused when the list switches documents, and nothing detached the old page, so
-  it stayed active: its bitmap was never trimmed and it kept re-rendering. Memory crept up as
-  you switched and scrolled, which is what made scrolling after a tab switch end in a crash.
 - Zooming in and out could terminate the process. Cancellation tokens are now
   retired safely, and replaced page bitmaps are released after the compositor
   has had a chance to finish the frame.
