@@ -424,6 +424,190 @@ public sealed class AnnotationTests : IDisposable
         Assert.Equal(98, ink.Green);
         Assert.Equal(255, ink.Blue);
     }
+    /// <summary>
+    /// Rendering a page makes PDFium generate the annotation's appearance stream, and it drops
+    /// the standard colour entries while doing it. The eraser takes its snapshot after that, so
+    /// the colour has to be read from somewhere else; without it, undoing the erase restored
+    /// every highlight and stroke as black.
+    /// </summary>
+    [Fact]
+    public async Task RemoveMarkupAt_KeepsTheColoursAfterThePageHasRendered()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var page = info.Pages[0];
+
+        var highlight = new PdfQuad(page.Width * 0.1, page.Height * 0.9, page.Width * 0.9, page.Height * 0.85);
+        var stroke = new PdfInkStroke(
+        [
+            new PdfPoint(page.Width * 0.1, page.Height * 0.6),
+            new PdfPoint(page.Width * 0.9, page.Height * 0.6)
+        ]);
+
+        await service.AddHighlightAsync(SamplePath, 1, [highlight], 255, 221, 71);
+        await service.AddInkAsync(SamplePath, 1, [stroke], 41, 98, 255, 8f);
+
+        // This is what the reader does by looking at the page after drawing.
+        using (var bitmap = await service.RenderPageAsync(SamplePath, 1, 600))
+        {
+            Assert.NotNull(bitmap);
+        }
+
+        var removed = new List<PdfMarkup>();
+        removed.AddRange(await service.RemoveMarkupAtAsync(
+            SamplePath, 1, page.Width * 0.5, page.Height * 0.875));
+        removed.AddRange(await service.RemoveMarkupAtAsync(
+            SamplePath, 1, page.Width * 0.5, page.Height * 0.6));
+
+        var removedHighlight = Assert.Single(
+            removed,
+            markup => markup.Kind == PdfMarkupKind.Highlight).Highlight!;
+        Assert.Equal(255, removedHighlight.Red);
+        Assert.Equal(221, removedHighlight.Green);
+        Assert.Equal(71, removedHighlight.Blue);
+
+        var removedInk = Assert.Single(
+            removed,
+            markup => markup.Kind == PdfMarkupKind.Ink).Ink!;
+        Assert.Equal(41, removedInk.Red);
+        Assert.Equal(98, removedInk.Green);
+        Assert.Equal(255, removedInk.Blue);
+        Assert.Equal(8f, removedInk.Width, 2);
+    }
+
+    /// <summary>
+    /// The whole reader path: draw, look at the page, erase, undo. The restored markup has to
+    /// come back in its original colour, including on the rendered page.
+    /// </summary>
+    [Fact]
+    public async Task ErasingAndUndoing_RestoresTheOriginalColours()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var page = info.Pages[0];
+
+        var highlight = new PdfQuad(page.Width * 0.1, page.Height * 0.9, page.Width * 0.9, page.Height * 0.85);
+        await service.AddHighlightAsync(SamplePath, 1, [highlight], 255, 221, 71);
+        await service.AddInkAsync(
+            SamplePath,
+            1,
+            [
+                new PdfInkStroke(
+                [
+                    new PdfPoint(page.Width * 0.1, page.Height * 0.6),
+                    new PdfPoint(page.Width * 0.9, page.Height * 0.6)
+                ])
+            ],
+            41,
+            98,
+            255,
+            8f);
+
+        using (var bitmap = await service.RenderPageAsync(SamplePath, 1, 600))
+        {
+            Assert.NotNull(bitmap);
+        }
+
+        var removed = new List<PdfMarkup>();
+        removed.AddRange(await service.RemoveMarkupAtAsync(
+            SamplePath, 1, page.Width * 0.5, page.Height * 0.875));
+        removed.AddRange(await service.RemoveMarkupAtAsync(
+            SamplePath, 1, page.Width * 0.5, page.Height * 0.6));
+        Assert.Equal(2, removed.Count);
+
+        // What undo does with the snapshots.
+        foreach (var markup in removed)
+        {
+            switch (markup.Kind)
+            {
+                case PdfMarkupKind.Highlight:
+                    await service.AddHighlightAsync(
+                        SamplePath, 1, markup.Highlight!.Quads, markup.Highlight.Red, markup.Highlight.Green, markup.Highlight.Blue);
+                    break;
+                case PdfMarkupKind.Ink:
+                    await service.AddInkAsync(
+                        SamplePath, 1, markup.Ink!.Strokes, markup.Ink.Red, markup.Ink.Green, markup.Ink.Blue, markup.Ink.Width);
+                    break;
+            }
+        }
+
+        var restoredHighlight = Assert.Single(await service.GetHighlightsAsync(SamplePath, 1));
+        Assert.Equal(255, restoredHighlight.Red);
+        Assert.Equal(221, restoredHighlight.Green);
+        Assert.Equal(71, restoredHighlight.Blue);
+
+        var restoredInk = Assert.Single(await service.GetInksAsync(SamplePath, 1));
+        Assert.Equal(41, restoredInk.Red);
+        Assert.Equal(98, restoredInk.Green);
+        Assert.Equal(255, restoredInk.Blue);
+
+        // And the restored stroke is visibly blue on the page, not a black line.
+        using var rendered = await service.RenderPageAsync(SamplePath, 1, 600);
+        var row = (int)(rendered.Height * 0.4);
+        var blue = false;
+        for (var x = rendered.Width / 8; x < rendered.Width * 7 / 8; x++)
+        {
+            var colour = rendered.GetPixel(x, row);
+            if (colour.Blue > 180 && colour.Red < 120 && colour.Blue > colour.Red + 60)
+            {
+                blue = true;
+                break;
+            }
+        }
+
+        Assert.True(blue, "the restored stroke did not render in blue");
+    }
+
+    /// <summary>
+    /// The colour also has to survive a save: PDFium consumes the standard colour entries when
+    /// it renders, so the copy written after a page was viewed used to carry uncoloured markup.
+    /// </summary>
+    [Fact]
+    public async Task SaveCopy_KeepsTheColoursOfMarkupWhosePageWasRendered()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var page = info.Pages[0];
+
+        await service.AddHighlightAsync(
+            SamplePath, 1,
+            [new PdfQuad(page.Width * 0.1, page.Height * 0.9, page.Width * 0.9, page.Height * 0.85)],
+            255, 221, 71);
+        await service.AddInkAsync(
+            SamplePath, 1,
+            [
+                new PdfInkStroke(
+                [
+                    new PdfPoint(page.Width * 0.1, page.Height * 0.6),
+                    new PdfPoint(page.Width * 0.9, page.Height * 0.6)
+                ])
+            ],
+            41,
+            98,
+            255,
+            4f);
+
+        using (var bitmap = await service.RenderPageAsync(SamplePath, 1, 500))
+        {
+            Assert.NotNull(bitmap);
+        }
+
+        var destination = Path.Combine(_directory, "coloured.pdf");
+        await service.SaveCopyAsync(SamplePath, destination);
+
+        using var reopened = new PdfDocumentService();
+        await reopened.OpenAsync(destination);
+
+        var highlight = Assert.Single(await reopened.GetHighlightsAsync(destination, 1));
+        Assert.Equal(255, highlight.Red);
+        Assert.Equal(221, highlight.Green);
+        Assert.Equal(71, highlight.Blue);
+
+        var ink = Assert.Single(await reopened.GetInksAsync(destination, 1));
+        Assert.Equal(41, ink.Red);
+        Assert.Equal(98, ink.Green);
+        Assert.Equal(255, ink.Blue);
+    }
     [Fact]
     public async Task Ink_RendersInTheColourItWasGiven()
     {

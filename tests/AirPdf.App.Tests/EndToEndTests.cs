@@ -2,6 +2,7 @@ using Avalonia;
 using AirPdf.App.Services;
 using AirPdf.App.ViewModels;
 using AirPdf.App.Views;
+using AirPdf.Core.Services;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -298,12 +299,73 @@ public sealed class EndToEndTests : IDisposable
     }
 
     /// <summary>
+    /// The reported path end to end: draw, look at the page, erase, undo, save. Rendering the
+    /// page is what used to strip the annotation's colour, so the restored stroke came back
+    /// black. This goes through the real window and the real document so the render is part of
+    /// the test rather than simulated.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ErasingAndUndoingAStroke_KeepsItsColour()
+    {
+        var target = Path.Combine(Path.GetTempPath(), $"airpdf-e2e-erase-{Guid.NewGuid():N}.pdf");
+        File.Copy(SamplePath, target);
+
+        try
+        {
+            var document = await OpenAsync(target);
+            var page = document.Pages[0];
+            await WaitAsync(() => page.Image is not null);
+
+            var blue = document.Palette.Single(colour => colour.Name == "Blue");
+            document.SetInkColor(blue);
+
+            var before = page.Image;
+            await document.AddInkAtAsync(1, [(0.2, 0.5), (0.8, 0.5)]);
+
+            // Wait for the page to be drawn with the stroke, because that render is what makes
+            // PDFium discard the standard colour entries.
+            await WaitAsync(() => page.Image is { } image && !ReferenceEquals(image, before));
+
+            document.ToggleEraserModeCommand.Execute(null);
+            document.BeginErase();
+            Assert.True(await document.EraseAtAsync(1, 0.5, 0.5));
+            document.EndErase();
+
+            await document.UndoAnnotationCommand.ExecuteAsync(null);
+            await document.SaveDocumentCommand.ExecuteAsync(null);
+
+            using var probe = new PdfDocumentService();
+            await probe.OpenAsync(target);
+            var ink = Assert.Single(await probe.GetInksAsync(target, 1));
+            Assert.Equal(blue.Red, ink.Red);
+            Assert.Equal(blue.Green, ink.Green);
+            Assert.Equal(blue.Blue, ink.Blue);
+
+            // Let go of the file so the temporary copy can be removed.
+            document.CloseDocumentCommand.Execute(null);
+        }
+        finally
+        {
+            try
+            {
+                File.Delete(target);
+            }
+            catch (IOException)
+            {
+                // A leftover temporary file must not fail the test.
+            }
+        }
+    }
+
+    /// <summary>
     /// Opens the sample from the home tab, which is how a reader gets a document: the open lands
     /// in a new tab and that tab becomes active.
     /// </summary>
-    private async Task<MainWindowViewModel> OpenSampleAsync()
+    private Task<MainWindowViewModel> OpenSampleAsync() => OpenAsync(SamplePath);
+
+    private async Task<MainWindowViewModel> OpenAsync(string path)
     {
-        await _home.OpenPathAsync(SamplePath);
+        await _home.OpenPathAsync(path);
 
         MainWindowViewModel? document = null;
         await WaitAsync(() =>

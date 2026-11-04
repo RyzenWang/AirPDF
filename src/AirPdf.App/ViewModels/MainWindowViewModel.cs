@@ -988,11 +988,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     /// <summary>
     /// The pen button picks a colour and starts drawing in one action: choosing a pen colour is
-    /// how a reader says "I want to draw with this".
+    /// how a reader says "I want to draw with this". It also leaves erasing, because a colour
+    /// can only mean the pen: leaving the eraser on would keep rubbing markup out while the pen
+    /// looked active.
     /// </summary>
     public void UseInkColor(MarkupColor? color)
     {
         SetInkColor(color);
+        IsEraserMode = false;
         IsInkMode = true;
         ShowStatus(_localization.T("L.InkModeOn"));
     }
@@ -1171,7 +1174,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public void ClearNoteText() => NoteText = null;
     /// <summary>Label on the pen flyout, which doubles as the way out of drawing mode.</summary>
     public string InkModeLabel => _localization.T(IsInkMode ? "L.StopDrawing" : "L.StartDrawing");
-    /// <summary>Turns freehand drawing on or off.</summary>
+    /// <summary>Turns freehand drawing on or off. Turning it on always leaves erasing.</summary>
     [RelayCommand]
     private void ToggleInkMode()
     {
@@ -1180,16 +1183,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        IsInkMode = !IsInkMode;
         if (IsInkMode)
         {
+            IsInkMode = false;
+        }
+        else
+        {
             IsEraserMode = false;
+            IsInkMode = true;
         }
 
         ShowStatus(_localization.T(IsInkMode ? "L.InkModeOn" : "L.InkModeOff"));
     }
 
-    /// <summary>Turns the eraser on or off.</summary>
+    /// <summary>Turns the eraser on or off. Turning it on always leaves drawing.</summary>
     [RelayCommand]
     private void ToggleEraserMode()
     {
@@ -1198,10 +1205,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        IsEraserMode = !IsEraserMode;
         if (IsEraserMode)
         {
+            IsEraserMode = false;
+        }
+        else
+        {
             IsInkMode = false;
+            IsEraserMode = true;
         }
 
         ShowStatus(_localization.T(IsEraserMode ? "L.EraserModeOn" : "L.EraserModeOff"));
@@ -2503,10 +2514,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         Pages = info.Pages.Select(page => new PageViewModel(_pageRenderer, page, _localization)).ToList();
 
-        // The stroke drawn under the pointer has to be the colour it will keep.
+        // The stroke drawn under the pointer has to be the colour and width it will keep.
         foreach (var page in Pages)
         {
             page.InkBrush = InkColor.Brush;
+            page.InkWidthPoints = InkWidth;
         }
         Thumbnails = info.Pages.Select(page => new ThumbnailViewModel(_pageRenderer, page)).ToList();
         OutlineItems = info.Bookmarks.Select(item => new OutlineItemViewModel(item)).ToList();
@@ -3010,6 +3022,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         foreach (var page in Pages)
         {
             page.InkBrush = value.Brush;
+        }
+    }
+
+    partial void OnInkWidthChanged(double value)
+    {
+        foreach (var page in Pages)
+        {
+            page.InkWidthPoints = value;
         }
     }
 

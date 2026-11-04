@@ -198,59 +198,86 @@
                   ToolTip.Tip="{DynamicResource L.Redo}">
             <Path Classes="icon" Data="{StaticResource IconRedo}" />
           </Button>
-          <Button x:Name="InkButton"
-                  Classes="icon"
-                  Classes.inkOn="{Binding IsInkMode}"
-                  Command="{Binding ToggleInkModeCommand}"
+          <!-- Pen and its palette arrow are one segmented control, the way Edge draws the
+               PDF pen: the active state and the hover belong to the whole group, and the bar
+               under the nib is the colour the next stroke will have. -->
+          <Border x:Name="InkToolGroup"
+                  Classes="toolGroup"
+                  Classes.active="{Binding IsInkMode}"
                   IsVisible="{Binding IsDocumentOpen}"
-                  AutomationProperties.Name="{DynamicResource L.InkMode}"
-                  ToolTip.Tip="{DynamicResource L.InkMode}">
-            <Path Classes="icon" Data="{StaticResource IconPen}" Stroke="{Binding InkColor.Brush}" />
-          </Button>
-          <Button x:Name="InkPaletteButton"
-                  Classes="caret"
-                  IsVisible="{Binding IsDocumentOpen}"
-                  AutomationProperties.Name="{DynamicResource L.InkColor}"
-                  ToolTip.Tip="{DynamicResource L.InkColor}">
-            <Path Data="{StaticResource IconCaretDown}"
-                  Stroke="{DynamicResource TextSecondaryBrush}"
-                  StrokeThickness="1.8"
-                  StrokeLineCap="Round"
-                  Stretch="Uniform"
-                  Width="8"
-                  Height="8" />
-            <Button.Flyout>
-              <Flyout Placement="BottomEdgeAlignedLeft">
-                <StackPanel Spacing="9" Width="200">
-                  <TextBlock Text="{DynamicResource L.InkColorLabel}" Classes="eyebrow" />
-                  <ItemsControl ItemsSource="{Binding Palette}">
-                    <ItemsControl.ItemsPanel>
-                      <ItemsPanelTemplate>
-                        <WrapPanel />
-                      </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="vm:MarkupColor">
-                        <Button Classes="swatch" Margin="0,0,6,6"
-                                Background="{Binding Brush}" Tag="{Binding}"
-                                Click="OnInkSwatchClick" />
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                  <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
-                    <TextBlock Text="{DynamicResource L.InkWidthLabel}" Classes="eyebrow" />
-                    <TextBlock Grid.Column="1"
-                               Text="{Binding InkWidth, StringFormat={}{0:0.#}}"
-                               Classes="caption" />
-                  </Grid>
-                  <Slider Minimum="1" Maximum="10"
-                          TickFrequency="1"
-                          IsSnapToTickEnabled="True"
-                          Value="{Binding InkWidth, Mode=TwoWay}" />
+                  VerticalAlignment="Center"
+                  PointerEntered="OnInkToolPointerEntered"
+                  PointerExited="OnInkToolPointerExited">
+            <StackPanel Orientation="Horizontal">
+              <Button x:Name="InkButton"
+                      Classes="toolMain"
+                      Command="{Binding ToggleInkModeCommand}"
+                      AutomationProperties.Name="{DynamicResource L.InkMode}"
+                      ToolTip.Tip="{DynamicResource L.InkMode}">
+                <StackPanel Spacing="2" HorizontalAlignment="Center">
+                  <Path Classes="icon" Data="{StaticResource IconPen}" Stroke="{Binding InkColor.Brush}" />
+                  <Border Width="15"
+                          Height="2.5"
+                          CornerRadius="1.5"
+                          Background="{Binding InkColor.Brush}" />
                 </StackPanel>
-              </Flyout>
-            </Button.Flyout>
-          </Button>
+              </Button>
+              <Button x:Name="InkPaletteButton"
+                      Classes="toolCaret"
+                      AutomationProperties.Name="{DynamicResource L.InkColor}"
+                      ToolTip.Tip="{DynamicResource L.InkColor}">
+                <Path Data="{StaticResource IconCaretDown}"
+                      Stroke="{DynamicResource TextSecondaryBrush}"
+                      StrokeThickness="1.8"
+                      StrokeLineCap="Round"
+                      Stretch="Uniform"
+                      Width="8"
+                      Height="8" />
+                <Button.Flyout>
+                  <Flyout Placement="BottomEdgeAlignedLeft">
+                    <StackPanel Spacing="9" Width="200">
+                      <TextBlock Text="{DynamicResource L.InkColorLabel}" Classes="eyebrow" />
+                      <ItemsControl ItemsSource="{Binding Palette}">
+                        <ItemsControl.ItemsPanel>
+                          <ItemsPanelTemplate>
+                            <WrapPanel />
+                          </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate x:DataType="vm:MarkupColor">
+                            <Button Classes="swatch" Margin="0,0,6,6"
+                                    Background="{Binding Brush}" Tag="{Binding}"
+                                    Click="OnInkSwatchClick" />
+                          </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <!-- A slider alone says "3" without showing how thick 3 is. The sample
+                           sits on paper-white so near-black ink stays visible in dark themes. -->
+                      <Border Background="White"
+                              BorderBrush="{DynamicResource BorderBrush}"
+                              BorderThickness="1"
+                              CornerRadius="9"
+                              Height="46"
+                              Padding="12,0">
+                        <controls:InkThicknessPreview Stroke="{Binding InkColor.Brush}"
+                                                      Thickness="{Binding InkWidth}" />
+                      </Border>
+                      <Grid ColumnDefinitions="*,Auto" Margin="0,2,0,0">
+                        <TextBlock Text="{DynamicResource L.InkWidthLabel}" Classes="eyebrow" />
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding InkWidth, StringFormat={}{0:0.#}}"
+                                   Classes="caption" />
+                      </Grid>
+                      <Slider Minimum="1" Maximum="10"
+                              TickFrequency="1"
+                              IsSnapToTickEnabled="True"
+                              Value="{Binding InkWidth, Mode=TwoWay}" />
+                    </StackPanel>
+                  </Flyout>
+                </Button.Flyout>
+              </Button>
+            </StackPanel>
+          </Border>
           <Button x:Name="EraserButton"
                   Classes="icon"
                   Classes.inkOn="{Binding IsEraserMode}"

@@ -32,8 +32,8 @@ small .NET application with a hand-built Avalonia interface.
 
 > **Status:** 0.4. Windows builds are in the
 > [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1); macOS and Linux ship as
-> portable archives. Highlights, bookmarks, undo/redo, and saving are in; printing and ink
-> annotations are not. See the [roadmap](#roadmap).
+> portable archives. Highlights, ink, notes, bookmarks, undo/redo, and saving are in; printing is
+> not. See the [roadmap](#roadmap).
 
 ---
 
@@ -63,8 +63,9 @@ small .NET application with a hand-built Avalonia interface.
 - **Status bar** with the page position and a reading-progress percentage.
 - **Highlights, ink, and notes** — select text and press `Ctrl+Shift+H` to highlight it, or pick a
   colour under **Highlight** in the page menu, which highlights it as you choose. Turn on drawing
-  with `Ctrl+Shift+K` or the pen button and write on the page; the pen opens the ink colours.
-  Sticky notes come from the page menu, and a highlight can be removed from it too.
+  with `Ctrl+Shift+K` or the pen button and write on the page; the arrow beside the pen opens the
+  ink colours and the thickness slider, which previews the stroke it will draw. Sticky notes come
+  from the page menu, and a highlight can be removed from it too.
   Every markup change can be undone and redone, from the toolbar or with `Ctrl+Z` and `Ctrl+Y`,
   and `Ctrl+S` writes them into the document itself.
 - **Per-document bookmarks** — `Ctrl+D` marks the current spot and the sidebar keeps them
@@ -298,7 +299,7 @@ docs/                   Screenshots and architecture notes
 ## Limitations
 
 - Text selection is word-granular rather than character-granular.
-- No annotations, form filling, printing, or PDF editing.
+- No form filling, printing, or PDF text editing.
 - Only `http`, `https`, and `mailto` link targets are followed; `Launch` and
   remote-`GoTo` actions are ignored so a document cannot start a program.
 - One document per tab, plus a Home tab that is always there. `Ctrl+W` closes the tab and

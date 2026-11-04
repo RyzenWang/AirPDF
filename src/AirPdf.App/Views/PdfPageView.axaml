@@ -21,7 +21,7 @@
 
         <controls:InkOverlay Points="{Binding LiveInk}"
                                Stroke="{Binding InkBrush}"
-                               StrokeThickness="2"
+                               StrokeThickness="{Binding InkPreviewThickness}"
                                IsHitTestVisible="False" />
 
         <controls:SearchHighlightOverlay Rects="{Binding HighlightRects}"

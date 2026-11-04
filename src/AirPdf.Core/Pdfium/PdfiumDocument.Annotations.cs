@@ -11,6 +11,19 @@ namespace AirPdf.Core.Pdfium;
 public sealed partial class PdfiumDocument
 {
     /// <summary>
+    /// A private annotation key holding <c>"r,g,b"</c>.
+    /// </summary>
+    /// <remarks>
+    /// PDFium generates an appearance stream the first time a page carrying one of our
+    /// annotations is rendered, and removes <c>/C</c> and <c>/IC</c> while doing it. After that
+    /// <c>FPDFAnnot_GetColor</c> finds nothing, so a markup removed with the eraser was restored
+    /// black. The colour is therefore written both to the standard slots, which the first render
+    /// consumes, and to this key, which survives. Annotations made by other applications keep
+    /// their appearance and their <c>/C</c>, so they still read through the standard slots.
+    /// </remarks>
+    private const string ColourKey = "AirPdfColor";
+
+    /// <summary>
     /// The page's <c>/Rotate</c> in degrees. Selections are recorded in display space, so
     /// mapping them back for an annotation needs the same rotation that produced them.
     /// </summary>
@@ -122,6 +135,7 @@ public sealed partial class PdfiumDocument
             // stroke that comes back black is worse than one written twice.
             PdfiumNative.AnnotSetColor(annot, PdfiumNative.AnnotColorStroke, red, green, blue, 255);
             PdfiumNative.AnnotSetColor(annot, PdfiumNative.AnnotColorFill, red, green, blue, 255);
+            PdfiumNative.AnnotSetStringValue(annot, ColourKey, FormatColour(red, green, blue));
             PdfiumNative.AnnotSetBorder(annot, width, width, width);
             PdfiumNative.AnnotSetFlags(annot, PdfiumNative.AnnotFlagPrint);
         }
@@ -446,12 +460,17 @@ public sealed partial class PdfiumDocument
     }
 
     /// <summary>
-    /// Reads an annotation's colour from whichever slot holds it; ink is written to both, but a
-    /// file from elsewhere may only carry one, and reading the wrong one turns a coloured stroke
-    /// black.
+    /// Reads an annotation's colour. The private key is checked first because PDFium removes
+    /// the standard colour entries when it generates an appearance for an annotation we made;
+    /// annotations from elsewhere still answer through <c>/C</c> or <c>/IC</c>.
     /// </summary>
     private static (byte Red, byte Green, byte Blue) ReadColour(IntPtr annot)
     {
+        if (TryReadStoredColour(annot, out var storedRed, out var storedGreen, out var storedBlue))
+        {
+            return (storedRed, storedGreen, storedBlue);
+        }
+
         foreach (var slot in new[] { PdfiumNative.AnnotColorStroke, PdfiumNative.AnnotColorFill })
         {
             if (PdfiumNative.AnnotGetColor(annot, slot, out var r, out var g, out var b, out _) == 0)
@@ -469,6 +488,48 @@ public sealed partial class PdfiumDocument
 
         return (0, 0, 0);
     }
+
+    /// <summary>Reads the colour this application recorded when it created the annotation.</summary>
+    private static bool TryReadStoredColour(IntPtr annot, out byte red, out byte green, out byte blue)
+    {
+        red = 0;
+        green = 0;
+        blue = 0;
+
+        var bytes = (int)PdfiumNative.AnnotGetStringValue(annot, ColourKey, null, 0);
+        if (bytes <= 0)
+        {
+            return false;
+        }
+
+        var buffer = new byte[bytes];
+        var written = (int)PdfiumNative.AnnotGetStringValue(annot, ColourKey, buffer, (uint)bytes);
+        if (written <= 0)
+        {
+            return false;
+        }
+
+        var text = System.Text.Encoding.Unicode
+            .GetString(buffer, 0, Math.Min(written, buffer.Length))
+            .TrimEnd('\0');
+
+        var parts = text.Split(',');
+        if (parts.Length != 3 ||
+            !byte.TryParse(parts[0], out red) ||
+            !byte.TryParse(parts[1], out green) ||
+            !byte.TryParse(parts[2], out blue))
+        {
+            red = 0;
+            green = 0;
+            blue = 0;
+            return false;
+        }
+
+        return true;
+    }
+
+    private static string FormatColour(byte red, byte green, byte blue) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{red},{green},{blue}");
     private static bool SameStrokes(IReadOnlyList<PdfInkStroke> left, IReadOnlyList<PdfInkStroke> right)
     {
         if (left.Count != right.Count)
@@ -558,16 +619,7 @@ public sealed partial class PdfiumDocument
                     }
                 }
 
-                byte red = 0;
-                byte green = 0;
-                byte blue = 0;
-                if (PdfiumNative.AnnotGetColor(annot, PdfiumNative.AnnotColorStroke, out var r, out var g, out var b, out _) != 0)
-                {
-                    red = (byte)Math.Min(r, 255);
-                    green = (byte)Math.Min(g, 255);
-                    blue = (byte)Math.Min(b, 255);
-                }
-
+                var (red, green, blue) = ReadColour(annot);
                 return new PdfHighlight(pageNumber, quads, red, green, blue);
             }
             finally
@@ -771,6 +823,7 @@ public sealed partial class PdfiumDocument
             PdfiumNative.AnnotSetRect(annot, ref rect);
             PdfiumNative.AnnotSetColor(annot, PdfiumNative.AnnotColorStroke, red, green, blue, 255);
             PdfiumNative.AnnotSetColor(annot, PdfiumNative.AnnotColorFill, red, green, blue, 255);
+            PdfiumNative.AnnotSetStringValue(annot, ColourKey, FormatColour(red, green, blue));
             PdfiumNative.AnnotSetFlags(annot, PdfiumNative.AnnotFlagPrint);
         }
         finally

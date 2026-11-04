@@ -35,6 +35,7 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     private IReadOnlyList<PdfLink> _links = [];
     private Task? _linkLoad;
     private IReadOnlyList<PdfSearchRect> _selectionRects = [];
+    private double _inkWidthPoints = 2;
 
     public PageViewModel(PdfPageRenderer renderer, PdfPageInfo pageInfo, LocalizationService localization)
     {
@@ -248,6 +249,7 @@ public sealed class PageViewModel : ObservableObject, IDisposable
 
         DisplayWidth = width;
         DisplayHeight = height;
+        OnPropertyChanged(nameof(InkPreviewThickness));
         OnPropertyChanged(nameof(DimensionsLabel));
 
         if (_isActive)
@@ -282,6 +284,31 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     private IReadOnlyList<PdfSearchRect> _liveInk = [];
     private IBrush? _inkBrush;
     private bool _clearLiveInkAfterRender;
+
+    /// <summary>
+    /// The width of the stroke being drawn, in points. The document stores ink in points, so the
+    /// live stroke has to be scaled by the same factor as the page or it changes size the moment
+    /// it is committed.
+    /// </summary>
+    public double InkWidthPoints
+    {
+        get => _inkWidthPoints;
+        set
+        {
+            if (SetProperty(ref _inkWidthPoints, value))
+            {
+                OnPropertyChanged(nameof(InkPreviewThickness));
+            }
+        }
+    }
+
+    /// <summary>
+    /// The live stroke's thickness in display units: points scaled by the page's current scale,
+    /// which is what makes the stroke under the pointer the same size as the annotation drawn
+    /// over it once the page is re-rendered.
+    /// </summary>
+    public double InkPreviewThickness =>
+        _inkWidthPoints * (DisplayWidth / Math.Max(1, WidthPoints));
 
     /// <summary>
     /// The stroke being drawn right now, as normalized points, so the reader sees the line under

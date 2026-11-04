@@ -1669,13 +1669,22 @@ public partial class MainWindow : Window
     }
     private void HidePalettes()
     {
-        if (InkButton.Flyout is { } ink)
+        if (InkPaletteButton.Flyout is { } ink)
         {
             ink.Hide();
         }
-
-
     }
+
+    /// <summary>
+    /// The pen and its palette arrow are one visual control, so the whole group lights up while
+    /// either half is under the pointer. Tracking it here keeps that state on the group rather
+    /// than on whichever button the pointer happens to be over.
+    /// </summary>
+    private void OnInkToolPointerEntered(object? sender, PointerEventArgs e) =>
+        InkToolGroup.Classes.Set("hover", true);
+
+    private void OnInkToolPointerExited(object? sender, PointerEventArgs e) =>
+        InkToolGroup.Classes.Set("hover", false);
     private async void OnAddNoteClick(object? sender, RoutedEventArgs e)
     {
         if (_contextPoint is not { } point)

@@ -25,9 +25,12 @@ semantic versioning once it reaches 1.0.
 
 ### Changed
 
-- The pen is a plain toggle again and a small arrow beside it opens the ink palette, which now
-  carries a thickness slider as well as the colours. The pen itself only shows which tool is
-  active and what colour it draws in.
+- The pen and the arrow that opens its palette are one segmented control now: the group carries
+  the hover and the active background, and a bar under the nib shows the colour the next stroke
+  will have. The arrow used to be a smaller button with its own hover, which made the pair look
+  unrelated.
+- The ink palette previews the chosen thickness as a stroke sample in the current colour, so the
+  slider shows what 3 means instead of only naming it.
 - The drawing and erasing cursors are real bitmap cursors built from the tool icons, set once
   when the pointer enters a page. Drawing a glyph on every pointer move is what made those
   modes feel slow, and the glyph itself was painted behind the page, which is why no cursor was
@@ -38,7 +41,6 @@ semantic versioning once it reaches 1.0.
 - While a drawing or erasing tool is active, the pointer carries that tool over a page and
   stays an arrow everywhere else, so the tool is visible without guessing where it works.
 - The status bar texts share one vertical alignment instead of sitting at different heights.
-- The pen button opens the ink colours again, and clicking it while drawing leaves the mode.
 - **Highlight** in the page menu is a submenu now, so the colours appear on hover instead of after
   a click, and choosing one highlights the selection in it.
 - The test suite no longer writes into its own fixture: several tests saved edits into the copied
@@ -46,12 +48,23 @@ semantic versioning once it reaches 1.0.
 - Undo and redo sit next to each other in the toolbar; the pen moved after them.
 - The page menu only offers what applies to what was clicked: a highlight can be highlighted, a
   note read, and any markup removed only when the pointer is actually on one.
-- The palette hangs off the tools that use it instead of a button of its own: the pen opens the ink
-  colours and picking one starts drawing, and **Highlight** in the page menu opens the highlight
-  colours and applies the chosen colour to the selection straight away.
 
 ### Fixed
 
+- Erasing a highlight or a stroke and then undoing it used to bring the markup back black.
+  Rendering a page makes PDFium generate the annotation's appearance stream, and it discards the
+  standard `/C` and `/IC` colour entries while doing so; the eraser's snapshot then had no colour
+  left to restore. The colour is now also written to a private `AirPdfColor` key that survives the
+  render and the save, and read from there first. Annotations from other applications still read
+  through the standard entries, and a saved copy keeps this application's colours even after its
+  pages have been viewed.
+- The stroke under the pointer was always drawn two units thick, whatever the palette said, and
+  jumped to the chosen width when the page was re-rendered. It is now sized in points scaled by the
+  page's zoom, with the same round caps as the committed annotation, so releasing the pointer
+  changes nothing.
+- Choosing a pen colour while the eraser was on left both modes active: the pen looked selected
+  while the pointer still erased, and clicking the pen seemed to do nothing. Picking a colour now
+  leaves erasing, and the pen toggle always turns the eraser off.
 - Highlighting the same text twice no longer stacks a second annotation on top of the first, which
   made it darker every time. The behaviour is a property (Skip for now, Stack available), so
   stacking later is a setting rather than a rewrite.

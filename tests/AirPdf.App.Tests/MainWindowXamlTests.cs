@@ -9,6 +9,8 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Xunit;
 
 namespace AirPdf.App.Tests;
@@ -227,6 +229,74 @@ public sealed class MainWindowXamlTests : IDisposable
             second.Dispose();
         }
     }
+    /// <summary>
+    /// The pen and its palette arrow have to read as one control: the arrow used to be a tiny
+    /// separate button with its own hover and height, which is what made the pair look unrelated.
+    /// </summary>
+    [AvaloniaFact]
+    public void ThePenAndItsPalette_AreOneSegmentedControl()
+    {
+        var window = CreateWindow();
+        var viewModel = Assert.IsType<MainWindowViewModel>(window.DataContext);
+        var group = window.FindControl<Border>("InkToolGroup");
+        var pen = window.FindControl<Button>("InkButton");
+        var palette = window.FindControl<Button>("InkPaletteButton");
+
+        Assert.NotNull(group);
+        Assert.NotNull(pen);
+        Assert.NotNull(palette);
+
+        Assert.Same(viewModel.ToggleInkModeCommand, pen!.Command);
+        Assert.NotNull(palette!.Flyout);
+        Assert.Contains("toolGroup", group!.Classes);
+        Assert.Contains("toolMain", pen.Classes);
+        Assert.Contains("toolCaret", palette.Classes);
+
+        // Both buttons live in the one group, so the group owns the hover and active background.
+        var stack = Assert.IsType<StackPanel>(group.Child);
+        Assert.Contains(pen, stack.Children);
+        Assert.Contains(palette, stack.Children);
+
+        viewModel.IsInkMode = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Contains("active", group.Classes);
+    }
+
+    /// <summary>
+    /// The live stroke is the same annotation the reader is about to commit, so its thickness
+    /// binding has to follow the page's scale: a hard-coded 2 made the line jump when released.
+    /// </summary>
+    [AvaloniaFact]
+    public void LiveInkOverlay_UsesThePagePreviewThickness()
+    {
+        using var documents = new PdfDocumentService();
+        var localization = new LocalizationService();
+        var sample = Path.Combine(AppContext.BaseDirectory, "Assets", "sample.pdf");
+        var renderer = new PdfPageRenderer(documents, sample, null);
+        var page = new PageViewModel(renderer, new PdfPageInfo(1, 612, 792), localization);
+        page.InkWidthPoints = 4;
+
+        var view = new PdfPageView { DataContext = page };
+        var window = new Window { Content = view, Width = 420, Height = 620 };
+
+        try
+        {
+            window.Show();
+            Dispatcher.UIThread.RunJobs();
+
+            var overlay = Assert.Single(view.GetVisualDescendants().OfType<InkOverlay>());
+            Assert.Equal(page.InkPreviewThickness, overlay.StrokeThickness, 3);
+
+            page.ApplyZoom(2);
+            Assert.Equal(page.InkPreviewThickness, overlay.StrokeThickness, 3);
+        }
+        finally
+        {
+            window.Close();
+            page.Dispose();
+        }
+    }
+
     private MainWindow CreateWindow()
     {
         var services = new AppServices(_settingsDirectory);

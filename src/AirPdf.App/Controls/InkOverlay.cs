@@ -66,6 +66,15 @@ public sealed class InkOverlay : Control
             sink.EndFigure(false);
         }
 
-        context.DrawGeometry(null, new Pen(Stroke ?? Brushes.Black, StrokeThickness), geometry);
+        // Round caps and joins match how PDFium draws a committed ink annotation: with flat
+        // ones the line changes shape as well as width when the page is re-rendered.
+        context.DrawGeometry(
+            null,
+            new Pen(Stroke ?? Brushes.Black, StrokeThickness)
+            {
+                LineCap = PenLineCap.Round,
+                LineJoin = PenLineJoin.Round
+            },
+            geometry);
     }
 }

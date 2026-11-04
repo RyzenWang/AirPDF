@@ -641,6 +641,53 @@ public sealed class MainWindowViewModelTests : IDisposable
 
         Assert.Same(blue.Brush, context.ViewModel.Pages[0].InkBrush);
     }
+
+    /// <summary>
+    /// Ink is stored in points, but the live stroke is drawn in display units. Sizing it from
+    /// the page keeps the line under the pointer the same thickness after it is committed;
+    /// without that it jumped to 2 units the moment the pointer was released.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Pages_ScaleTheLiveStrokeToTheChosenThickness()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        var page = context.ViewModel.Pages[0];
+
+        Assert.Equal(2, context.ViewModel.InkWidth);
+        Assert.Equal(2 * PageViewModel.PixelsPerPointAt100, page.InkPreviewThickness, 3);
+
+        context.ViewModel.SetZoomCommand.Execute("2");
+        Assert.Equal(2 * 2 * PageViewModel.PixelsPerPointAt100, page.InkPreviewThickness, 3);
+
+        context.ViewModel.InkWidth = 6;
+        Assert.Equal(6 * 2 * PageViewModel.PixelsPerPointAt100, page.InkPreviewThickness, 3);
+    }
+
+    /// <summary>
+    /// Picking a pen colour means "draw with this". It has to leave the eraser, or the pen looks
+    /// active while the pointer still rubs markup out.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ChoosingAPenColour_SwitchesOutOfErasing()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        context.ViewModel.ToggleEraserModeCommand.Execute(null);
+        Assert.True(context.ViewModel.IsEraserMode);
+
+        var blue = context.ViewModel.Palette.Single(color => color.Name == "Blue");
+        context.ViewModel.UseInkColor(blue);
+
+        Assert.True(context.ViewModel.IsInkMode);
+        Assert.False(context.ViewModel.IsEraserMode);
+        Assert.Same(blue, context.ViewModel.InkColor);
+
+        // And the tool now draws instead of erasing.
+        Assert.True(await context.ViewModel.AddInkAtAsync(1, [(0.2, 0.4), (0.6, 0.4)]));
+        Assert.False(await context.ViewModel.EraseAtAsync(1, 0.4, 0.4));
+    }
+
     [AvaloniaFact]
     public async Task RemoveMarkupAtAsync_TakesTheInkBackAndUndoPutsItThere()
     {
