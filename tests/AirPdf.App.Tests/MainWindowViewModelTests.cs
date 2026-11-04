@@ -585,6 +585,20 @@ public sealed class MainWindowViewModelTests
         }
     }
     [AvaloniaFact]
+    public async Task UseInkColor_SetsTheColourAndStartsDrawing()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        var blue = context.ViewModel.Palette.Single(color => color.Name == "Blue");
+        Assert.False(context.ViewModel.IsInkMode);
+
+        context.ViewModel.UseInkColor(blue);
+
+        Assert.True(context.ViewModel.IsInkMode);
+        Assert.Same(blue, context.ViewModel.InkColor);
+    }
+    [AvaloniaFact]
     public async Task HighlightSelection_WithoutASelection_CannotRun()
     {
         using var context = new TestContext();

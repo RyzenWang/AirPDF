@@ -934,6 +934,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             InkColor = color;
         }
     }
+
+    /// <summary>
+    /// The pen button picks a colour and starts drawing in one action: choosing a pen colour is
+    /// how a reader says "I want to draw with this".
+    /// </summary>
+    public void UseInkColor(MarkupColor? color)
+    {
+        SetInkColor(color);
+        IsInkMode = true;
+        ShowStatus(_localization.T("L.InkModeOn"));
+    }
+
+    /// <summary>Label on the pen flyout, which doubles as the way out of drawing mode.</summary>
+    public string InkModeLabel => _localization.T(IsInkMode ? "L.StopDrawing" : "L.StartDrawing");
     /// <summary>Turns freehand drawing on or off.</summary>
     [RelayCommand]
     private void ToggleInkMode()
@@ -2553,6 +2567,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         NotifyBookmarksChanged();
 
     partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(HasStatusMessage));
+
+    partial void OnIsInkModeChanged(bool value) => OnPropertyChanged(nameof(InkModeLabel));
 
     partial void OnHasUnsavedAnnotationsChanged(bool value) => UpdateTitleMarker();
 

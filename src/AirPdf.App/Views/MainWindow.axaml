@@ -188,12 +188,77 @@
                   ToolTip.Tip="{DynamicResource L.Undo}">
             <Path Classes="icon" Data="{StaticResource IconUndo}" />
           </Button>
-          <Button Classes="icon"
+          <Button x:Name="InkButton"
+                  Classes="icon"
                   Classes.inkOn="{Binding IsInkMode}"
-                  Command="{Binding ToggleInkModeCommand}"
                   AutomationProperties.Name="{DynamicResource L.InkMode}"
                   ToolTip.Tip="{DynamicResource L.InkMode}">
             <Path Classes="icon" Data="{StaticResource IconPen}" />
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedLeft">
+                <StackPanel Spacing="9" Width="176">
+                  <Button Content="{Binding InkModeLabel}"
+                          Command="{Binding ToggleInkModeCommand}"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Center" />
+                <StackPanel Spacing="9" Width="176">
+                  <TextBlock Text="{DynamicResource L.InkColorLabel}" Classes="eyebrow" />
+                  <ItemsControl ItemsSource="{Binding Palette}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:MarkupColor">
+                        <Button Classes="swatch"
+                                Margin="0,0,6,6"
+                                Background="{Binding Brush}"
+                                Tag="{Binding}"
+                                Click="OnInkSwatchClick" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+                </StackPanel>
+              </Flyout>
+            </Button.Flyout>
+          </Button>
+          <Button x:Name="HighlightButton"
+                  Classes="icon"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{DynamicResource L.HighlightSelection}"
+                  ToolTip.Tip="{DynamicResource L.HighlightSelection}">
+            <Path Classes="icon" Data="{StaticResource IconHighlighter}" />
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedLeft">
+                <StackPanel Spacing="9" Width="176">
+                  <Button Content="{DynamicResource L.HighlightSelection}"
+                          Command="{Binding HighlightSelectionCommand}"
+                          HorizontalAlignment="Stretch"
+                          HorizontalContentAlignment="Center" />
+                <StackPanel Spacing="9" Width="176">
+                  <TextBlock Text="{DynamicResource L.HighlightColorLabel}" Classes="eyebrow" />
+                  <ItemsControl ItemsSource="{Binding Palette}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:MarkupColor">
+                        <Button Classes="swatch"
+                                Margin="0,0,6,6"
+                                Background="{Binding Brush}"
+                                Tag="{Binding}"
+                                Click="OnHighlightSwatchClick" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+                </StackPanel>
+              </Flyout>
+            </Button.Flyout>
           </Button>          <Button Classes="icon"
                   Command="{Binding RedoAnnotationCommand}"
                   IsVisible="{Binding IsDocumentOpen}"
@@ -251,52 +316,6 @@
 
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
           <Button Classes="icon"
-                  IsVisible="{Binding IsDocumentOpen}"
-                  AutomationProperties.Name="{DynamicResource L.MarkupColors}"
-                  ToolTip.Tip="{DynamicResource L.MarkupColors}">
-            <Path Classes="icon" Data="{StaticResource IconPalette}" />
-            <Button.Flyout>
-              <Flyout Placement="BottomEdgeAlignedRight">
-                <StackPanel Spacing="9" Width="188">
-                  <TextBlock Text="{DynamicResource L.HighlightColorLabel}" Classes="eyebrow" />
-                  <ItemsControl ItemsSource="{Binding Palette}">
-                    <ItemsControl.ItemsPanel>
-                      <ItemsPanelTemplate>
-                        <WrapPanel />
-                      </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="vm:MarkupColor">
-                        <Button Classes="swatch"
-                                Margin="0,0,6,6"
-                                Background="{Binding Brush}"
-                                Tag="{Binding}"
-                                Click="OnHighlightSwatchClick" />
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-
-                  <TextBlock Text="{DynamicResource L.InkColorLabel}" Classes="eyebrow" Margin="0,4,0,0" />
-                  <ItemsControl ItemsSource="{Binding Palette}">
-                    <ItemsControl.ItemsPanel>
-                      <ItemsPanelTemplate>
-                        <WrapPanel />
-                      </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                      <DataTemplate x:DataType="vm:MarkupColor">
-                        <Button Classes="swatch"
-                                Margin="0,0,6,6"
-                                Background="{Binding Brush}"
-                                Tag="{Binding}"
-                                Click="OnInkSwatchClick" />
-                      </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                  </ItemsControl>
-                </StackPanel>
-              </Flyout>
-            </Button.Flyout>
-          </Button>          <Button Classes="icon"
                   Command="{Binding ToggleSearchCommand}"
                   IsVisible="{Binding IsDocumentOpen}"
                   AutomationProperties.Name="{DynamicResource L.FindInDocument}"

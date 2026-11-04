@@ -73,6 +73,16 @@ A good pull request:
 By contributing, you agree that your contribution is licensed under the MIT
 License used by this repository.
 
+## The changelog
+
+`CHANGELOG.md` has one `### Added` heading per release, so a plain search-and-replace on that
+heading pastes the new entry into every version. It has happened here three times. Anchor the edit
+on the release heading it belongs to - `## [Unreleased]` - and afterwards check that the entry
+appears exactly once:
+
+```powershell
+(Select-String -Path CHANGELOG.md -Pattern 'your entry' -AllMatches).Matches.Count
+```
 ## Commit messages
 
 Use short, imperative subjects:

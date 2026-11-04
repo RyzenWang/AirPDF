@@ -224,6 +224,23 @@ public sealed class EndToEndTests : IDisposable
         Assert.False(document.CanRedoAnnotation);
     }
     [AvaloniaFact]
+    public async Task EscapeAfterSelectAll_ClearsTheSelection()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 0 && document.Pages[0].HasTextLayer);
+
+        _window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Control);
+        await WaitAsync(() => document.HasSelection);
+        Assert.True(document.HasSelection);
+
+        // Until now a select-all could not be undone without selecting something else.
+        _window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        await WaitAsync(() => !document.HasSelection);
+
+        Assert.False(document.HasSelection);
+        Assert.DoesNotContain(document.Pages, page => page.SelectionRects.Count > 0);
+    }
+    [AvaloniaFact]
     public async Task DiagnosticShortcut_WritesAProbeBlockOnDemand()
     {
         // The report of blank pages has to be captured where it happens, so the shortcut has to

@@ -183,7 +183,7 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl+C` / `Cmd+C` | 复制选中文本 |
 | `Ctrl+A` / `Cmd+A` | 全选文档文本 |
 | `Enter` | 跳转到输入的页码，或执行搜索 |
-| `Esc` | 关闭搜索 / 忽略错误 / 退出全屏 |
+| `Esc` | 退出绘制、取消选择、关闭搜索、忽略错误、退出全屏 |
 | `Ctrl++` / `Ctrl+-` | 放大 / 缩小 |
 | `Ctrl+0` | 适合页面 |
 | `Ctrl+1` | 实际大小 |

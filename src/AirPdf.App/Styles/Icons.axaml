@@ -23,6 +23,7 @@
   <StreamGeometry x:Key="IconHistory">M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l4 2</StreamGeometry>
   <StreamGeometry x:Key="IconArrowUpRight">M7 17L17 7M7 7h10v10</StreamGeometry>
   <StreamGeometry x:Key="IconPen">M4 20l4.5-1.2L19 8.3a2 2 0 0 0 0-2.8l-1.5-1.5a2 2 0 0 0-2.8 0L4.2 14.5Z</StreamGeometry>
+  <StreamGeometry x:Key="IconHighlighter">M5 20h14M9 20l-3-6 8-8 5 5-8 8-2 1Z</StreamGeometry>
   <StreamGeometry x:Key="IconPalette">M4 12a8 8 0 1 1 16 0c0 2-1.6 3-3.5 3H15a2 2 0 0 0 0 4 2 2 0 0 1-2 2A8 8 0 0 1 4 12Zm3.5-1.5a1.5 1.5 0 1 0 0-.001M11 6.5a1.5 1.5 0 1 0 0-.001M16.5 8a1.5 1.5 0 1 0 0-.001</StreamGeometry>
   <StreamGeometry x:Key="IconUndo">M9 14L4 9l5-5M4 9h9a6 6 0 0 1 0 12h-3</StreamGeometry>
   <StreamGeometry x:Key="IconRedo">M15 14l5-5-5-5M20 9h-9a6 6 0 0 0 0 12h3</StreamGeometry>  <StreamGeometry x:Key="IconCheck">M20 6L9 17l-5-5</StreamGeometry>

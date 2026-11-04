@@ -239,7 +239,7 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl+C` / `Cmd+C` | Copy the selected text |
 | `Ctrl+A` / `Cmd+A` | Select all document text |
 | `Enter` | Jump to the typed page, or run a search |
-| `Esc` | Close search, dismiss an error, or leave full screen |
+| `Esc` | Leave drawing mode, clear the selection, close search, dismiss an error, or leave full screen |
 | `Ctrl++` / `Ctrl+-` | Zoom in / out |
 | `Ctrl+0` | Fit page |
 | `Ctrl+1` | Actual size |

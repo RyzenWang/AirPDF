@@ -46,6 +46,8 @@ public sealed class LocalizationService : IDisposable
             ["L.MarkupColors"] = ("Markup colours", "标注颜色"),
             ["L.HighlightColorLabel"] = ("Highlight", "高亮"),
             ["L.InkColorLabel"] = ("Ink", "墨迹"),
+            ["L.StartDrawing"] = ("Start drawing", "开始绘制"),
+            ["L.StopDrawing"] = ("Stop drawing", "停止绘制"),
             ["L.InkMode"] = ("Draw (Ctrl+Shift+K)", "自由绘制（Ctrl+Shift+K）"),
             ["L.InkModeOn"] = ("Drawing: drag on the page to draw. Press again to select.", "自由绘制已开启：在页面上拖动即可绘制，再次按下回到选择。"),
             ["L.InkModeOff"] = ("Drawing off.", "自由绘制已关闭。"),

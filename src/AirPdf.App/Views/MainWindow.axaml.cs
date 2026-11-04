@@ -1107,6 +1107,9 @@ public partial class MainWindow : Window
 
         if (!began || !_viewModel.IsDocumentOpen)
         {
+            // A click that landed on no text is a click on the page: the previous selection
+            // should go, which is also how a reader cancels a select-all.
+            _viewModel.ClearTextSelection();
             return;
         }
 
@@ -1361,10 +1364,20 @@ public partial class MainWindow : Window
             return;
         }
 
-        _contextPoint = (
-            page.Number,
-            point.X / Math.Max(1, pageView.Bounds.Width),
-            point.Y / Math.Max(1, pageView.Bounds.Height));
+        var x = point.X / Math.Max(1, pageView.Bounds.Width);
+        var y = point.Y / Math.Max(1, pageView.Bounds.Height);
+
+        _contextPoint = (page.Number, x, y);
+
+        // Right-clicking away from the selection clears it; right-clicking on it keeps it, which
+        // is what makes "Highlight selection" usable from the menu.
+        var insideSelection = page.SelectionRects.Any(rect =>
+            x >= rect.X && x <= rect.X + rect.Width && y >= rect.Y && y <= rect.Y + rect.Height);
+
+        if (!insideSelection && _viewModel.HasSelection)
+        {
+            _viewModel.ClearTextSelection();
+        }
     }
 
     private void OnHighlightSwatchClick(object? sender, RoutedEventArgs e)
@@ -1372,14 +1385,32 @@ public partial class MainWindow : Window
         if (sender is Control { Tag: MarkupColor color })
         {
             _viewModel.SetHighlightColor(color);
+
+            // Picking a colour with text selected means "highlight it in this colour".
+            if (_viewModel.HighlightSelectionCommand.CanExecute(null))
+            {
+                _viewModel.HighlightSelectionCommand.Execute(null);
+            }
         }
+
+        CloseFlyout(HighlightButton);
     }
 
     private void OnInkSwatchClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Control { Tag: MarkupColor color })
         {
-            _viewModel.SetInkColor(color);
+            _viewModel.UseInkColor(color);
+        }
+
+        CloseFlyout(InkButton);
+    }
+
+    private static void CloseFlyout(Button button)
+    {
+        if (button.Flyout is { } flyout)
+        {
+            flyout.Hide();
         }
     }
     private async void OnAddNoteClick(object? sender, RoutedEventArgs e)
@@ -1642,9 +1673,17 @@ public partial class MainWindow : Window
 
         if (e.Key == Key.Escape)
         {
-            if (_viewModel.IsSearchOpen)
+            if (_viewModel.IsInkMode)
+            {
+                _viewModel.ToggleInkModeCommand.Execute(null);
+            }
+            else if (_viewModel.IsSearchOpen)
             {
                 _viewModel.CloseSearchCommand.Execute(null);
+            }
+            else if (_viewModel.HasSelection)
+            {
+                _viewModel.ClearTextSelection();
             }
             else if (_viewModel.HasError)
             {
