@@ -946,6 +946,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ShowStatus(_localization.T("L.InkModeOn"));
     }
 
+    /// <summary>Text of the note being shown, if any.</summary>
+    [ObservableProperty]
+    private string? _noteText;
+
+    /// <summary>True when a note's text is worth showing.</summary>
+    public bool HasNoteText => !string.IsNullOrWhiteSpace(NoteText);
+
+    /// <summary>Closes the note popup.</summary>
+    public void ClearNoteText() => NoteText = null;
     /// <summary>Label on the pen flyout, which doubles as the way out of drawing mode.</summary>
     public string InkModeLabel => _localization.T(IsInkMode ? "L.StopDrawing" : "L.StartDrawing");
     /// <summary>Turns freehand drawing on or off.</summary>
@@ -1121,7 +1130,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// rotated page is removed by clicking where it is drawn rather than where it would have
     /// been without rotation.
     /// </remarks>
-    public async Task<bool> RemoveHighlightsAtAsync(int pageNumber, double normalizedX, double normalizedY)
+    /// <summary>
+    /// Removes whatever markup sits under the point: a highlight, a stroke or a note. One action
+    /// and one undo step, because the reader pointed at one thing.
+    /// </summary>
+    public async Task<bool> RemoveMarkupAtAsync(int pageNumber, double normalizedX, double normalizedY)
     {
         if (!IsDocumentOpen)
         {
@@ -1143,18 +1156,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 page.HeightPoints,
                 rotation);
 
-            var removed = await _documentService.RemoveHighlightsAtAsync(FilePath, pageNumber, point);
+            var removed = await _documentService.RemoveMarkupAtAsync(FilePath, pageNumber, point.Left, point.Top);
             if (removed.Count == 0)
             {
-                ShowStatus(_localization.T("L.NoHighlightHere"));
+                ShowStatus(_localization.T("L.NoMarkupHere"));
                 return false;
             }
 
-            PushStep(HighlightRemovedStep(removed));
+            PushStep(MarkupRemovedStep(removed));
 
             page.RequestRender();
             HasUnsavedAnnotations = true;
-            ShowStatus(_localization.T("L.HighlightRemoved"));
+            ShowStatus(_localization.T("L.MarkupRemoved"));
             return true;
         }
         catch (PdfDocumentException failure)
@@ -1162,7 +1175,59 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SetError(_localization.GetPdfFailureMessage(failure.Failure));
             return false;
         }
+        catch (Exception unexpected)
+        {
+            CrashLog.Write("RemoveMarkup", unexpected);
+            SetError(_localization.T("L.ErrorEditFailed"));
+            return false;
+        }
     }
+
+    /// <summary>
+    /// Shows the text of the note under a point, if there is one. Notes are annotations rather
+    /// than part of the page, so nothing on the page itself can be clicked to read them.
+    /// </summary>
+    public async Task<bool> TryShowNoteAtAsync(int pageNumber, double normalizedX, double normalizedY)
+    {
+        if (!IsDocumentOpen)
+        {
+            return false;
+        }
+
+        var page = Pages.FirstOrDefault(candidate => candidate.Number == pageNumber);
+        if (page is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var rotation = await _documentService.GetPageRotationAsync(FilePath, pageNumber);
+            var point = PageGeometry.ToPageQuad(
+                new PdfSearchRect(normalizedX, normalizedY, 0, 0),
+                page.WidthPoints,
+                page.HeightPoints,
+                rotation);
+
+            var notes = await _documentService.GetNotesAsync(FilePath, pageNumber);
+            var hit = notes.FirstOrDefault(note =>
+                point.Left >= note.Position.X - 1 && point.Left <= note.Position.X + 24 &&
+                point.Top >= note.Position.Y - 1 && point.Top <= note.Position.Y + 24);
+
+            if (hit is null || string.IsNullOrWhiteSpace(hit.Text))
+            {
+                return false;
+            }
+
+            NoteText = hit.Text;
+            return true;
+        }
+        catch (PdfDocumentException)
+        {
+            return false;
+        }
+    }
+
     /// <summary>True when there is an annotation edit to take back.</summary>
     public bool CanUndoAnnotation => _annotationUndo.Count > 0;
 
@@ -1267,6 +1332,56 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         },
         Redo: async () => await AddInkAsync(ink));
 
+    /// <summary>Undo for a removal: each markup is added back the way it was taken out.</summary>
+    private UndoStep MarkupRemovedStep(IReadOnlyList<PdfMarkup> removed) => new(
+        Undo: async () =>
+        {
+            foreach (var markup in removed)
+            {
+                await RestoreMarkupAsync(markup);
+            }
+        },
+        Redo: async () =>
+        {
+            foreach (var markup in removed)
+            {
+                await RemoveMarkupAsync(markup);
+            }
+        });
+
+    private async Task RestoreMarkupAsync(PdfMarkup markup)
+    {
+        switch (markup.Kind)
+        {
+            case PdfMarkupKind.Highlight when markup.Highlight is { } highlight:
+                await AddHighlightAsync(highlight);
+                break;
+            case PdfMarkupKind.Ink when markup.Ink is { } ink:
+                await AddInkAsync(ink);
+                break;
+            case PdfMarkupKind.Note when markup.Note is { } note:
+                await AddNoteAsync(note);
+                break;
+        }
+    }
+
+    private async Task RemoveMarkupAsync(PdfMarkup markup)
+    {
+        switch (markup.Kind)
+        {
+            case PdfMarkupKind.Highlight when markup.Highlight is { } highlight:
+                await RemoveHighlightAsync(highlight);
+                break;
+            case PdfMarkupKind.Ink when markup.Ink is { } ink:
+                await _documentService.RemoveInkMatchingAsync(FilePath, ink);
+                RenderPage(ink.PageNumber);
+                break;
+            case PdfMarkupKind.Note when markup.Note is { } note:
+                await _documentService.RemoveNoteMatchingAsync(FilePath, note);
+                RenderPage(note.PageNumber);
+                break;
+        }
+    }
     private UndoStep NoteAddedStep(PdfNote note) => new(
         Undo: async () =>
         {
@@ -2575,6 +2690,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(HasStatusMessage));
 
     partial void OnIsInkModeChanged(bool value) => OnPropertyChanged(nameof(InkModeLabel));
+
+    partial void OnNoteTextChanged(string? value) => OnPropertyChanged(nameof(HasNoteText));
 
     partial void OnInkColorChanged(MarkupColor value)
     {

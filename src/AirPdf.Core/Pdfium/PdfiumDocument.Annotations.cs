@@ -299,6 +299,61 @@ public sealed partial class PdfiumDocument
         }
     }
 
+    /// <summary>
+    /// Removes every markup annotation under a page-space point - highlight, ink or note - and
+    /// returns what was removed so it can be put back.
+    /// </summary>
+    public IReadOnlyList<PdfMarkup> RemoveMarkupAt(int pageNumber, double x, double y)
+    {
+        ThrowIfDisposed();
+
+        var removed = new List<PdfMarkup>();
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            // Descending: removing an annotation shifts the indices after it.
+            for (var index = PdfiumNative.PageGetAnnotCount(page) - 1; index >= 0; index--)
+            {
+                var subtype = GetAnnotationSubtype(pageNumber, index);
+                PdfMarkup? markup = subtype switch
+                {
+                    PdfiumNative.AnnotHighlight when TryReadHighlight(pageNumber, index) is { } highlight &&
+                                                     highlight.Quads.Any(quad => Contains(quad, x, y)) =>
+                        new PdfMarkup(PdfMarkupKind.Highlight, Highlight: highlight),
+                    PdfiumNative.AnnotInk when TryReadInk(pageNumber, index) is { } ink &&
+                                               Contains(InkBounds(ink.Strokes), x, y) =>
+                        new PdfMarkup(PdfMarkupKind.Ink, Ink: ink),
+                    PdfiumNative.AnnotText when TryReadNote(pageNumber, index) is { } note &&
+                                                ContainsNote(note, x, y) =>
+                        new PdfMarkup(PdfMarkupKind.Note, Note: note),
+                    _ => null
+                };
+
+                if (markup is null)
+                {
+                    continue;
+                }
+
+                if (PdfiumNative.PageRemoveAnnot(page, index) != 0)
+                {
+                    removed.Add(markup);
+                }
+            }
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+
+        return removed;
+    }
+
+    private static bool Contains(PdfQuad quad, double x, double y) =>
+        x >= quad.Left - 0.5 && x <= quad.Right + 0.5 && y >= quad.Bottom - 0.5 && y <= quad.Top + 0.5;
+
+    private static bool ContainsNote(PdfNote note, double x, double y) =>
+        x >= note.Position.X - 0.5 && x <= note.Position.X + 22 &&
+        y >= note.Position.Y - 0.5 && y <= note.Position.Y + 22;
     /// <summary>Removes the ink annotation whose strokes match, so an addition can be taken back.</summary>
     public bool RemoveInkMatching(int pageNumber, PdfInk ink)
     {

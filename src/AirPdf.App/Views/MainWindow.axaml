@@ -31,7 +31,17 @@
         </ItemsControl>
       </StackPanel>
     </Flyout>
-    <Flyout x:Key="HighlightPalette" Placement="Pointer">
+    <Flyout x:Key="NotePopup" Placement="Pointer">
+      <Border MaxWidth="320" Padding="14,12"
+              Background="{DynamicResource SurfaceBrush}"
+              BorderBrush="{DynamicResource BorderStrongBrush}"
+              BorderThickness="1" CornerRadius="10">
+        <StackPanel Spacing="8">
+          <TextBlock Text="{DynamicResource L.NoteTextLabel}" Classes="eyebrow" />
+          <SelectableTextBlock Text="{Binding NoteText}" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+    </Flyout>    <Flyout x:Key="HighlightPalette" Placement="Pointer">
       <StackPanel Spacing="9" Width="176">
         <TextBlock Text="{DynamicResource L.HighlightColorLabel}" Classes="eyebrow" />
         <ItemsControl ItemsSource="{Binding Palette}">
@@ -575,8 +585,8 @@
                         Command="{Binding SelectAllTextCommand}" />
               <MenuItem Header="{DynamicResource L.HighlightSelection}"
                         Click="OnHighlightMenuClick" />
-              <MenuItem Header="{DynamicResource L.RemoveHighlight}"
-                        Click="OnRemoveHighlightClick"
+              <MenuItem Header="{DynamicResource L.RemoveMarkup}"
+                        Click="OnRemoveMarkupClick"
                         IsEnabled="{Binding IsDocumentOpen}" />              <MenuItem Header="{DynamicResource L.AddNote}"
                         Click="OnAddNoteClick"
                         IsEnabled="{Binding IsDocumentOpen}" />

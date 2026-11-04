@@ -8,6 +8,10 @@ semantic versioning once it reaches 1.0.
 
 ### Added
 
+- Removing markup: **Remove annotation** in the page menu takes away whatever sits under the
+  pointer - a highlight, a stroke or a note - as one action and one undo step.
+- Clicking a sticky note shows its text in a small popup. The text is an annotation, so
+  there was nothing on the page to click before this.
 - Ink annotations: `Ctrl+Shift+K` (or the pen button) turns on drawing, and a drag on the page
   becomes a freehand stroke stored as an ink annotation. The stroke is drawn under the pointer in
   the colour it will keep, and both ink and notes can be undone and redone like any other markup.
@@ -25,6 +29,9 @@ semantic versioning once it reaches 1.0.
 
 ### Fixed
 
+- A context menu still would not close when clicking elsewhere. Popups are their own visual root,
+  so walking the window for open menus found nothing; the menus are now looked up from the
+  controls that own them, and the note popup is dismissed on a press too.
 - A stroke was drawn in the theme colour rather than the chosen ink colour, and it disappeared for a
   moment between the pointer being released and its own render. It now uses the ink brush while
   being drawn and stays on screen until the page has been redrawn with it.

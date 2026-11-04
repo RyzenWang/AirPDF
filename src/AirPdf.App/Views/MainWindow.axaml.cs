@@ -1091,6 +1091,15 @@ public partial class MainWindow : Window
             return;
         }
 
+        // A note is an annotation, not part of the page, so nothing on the page can be clicked to
+        // read it. The click is checked against the notes before it becomes a selection.
+        if (await _viewModel.TryShowNoteAtAsync(pageNumber, x, y))
+        {
+            ShowNotePopup();
+            e.Handled = true;
+            return;
+        }
+
         bool began;
         _selectionPressInProgress = true;
         try
@@ -1336,21 +1345,52 @@ public partial class MainWindow : Window
     /// Closes any open context menu, including the ones inside list item templates.
     /// </summary>
     /// <returns>True when something was open and has been closed.</returns>
+    /// <remarks>
+    /// The menus cannot be found by walking the window: a popup is its own visual root, so the
+    /// menu object is not a descendant of the control it was attached to. They are looked up from
+    /// the controls that own them instead - the page list's menu and whatever each realised
+    /// bookmark item carries.
+    /// </remarks>
     private bool CloseOpenMenus()
     {
-        if (TopLevel.GetTopLevel(this) is not { } topLevel)
-        {
-            return false;
-        }
-
         var closed = false;
-        foreach (var menu in topLevel.GetVisualDescendants().OfType<ContextMenu>())
+
+        void Close(ContextMenu? menu)
         {
-            if (menu.IsOpen)
+            if (menu is { IsOpen: true })
             {
                 menu.Close();
                 closed = true;
             }
+        }
+
+        Close(PagesList.ContextMenu);
+
+        foreach (var container in BookmarkList.GetRealizedContainers())
+        {
+            if (container is not Control control)
+            {
+                continue;
+            }
+
+            Close(control.ContextMenu);
+            foreach (var descendant in control.GetVisualDescendants().OfType<Control>())
+            {
+                Close(descendant.ContextMenu);
+            }
+        }
+
+        foreach (var control in this.GetVisualDescendants().OfType<Control>())
+        {
+            Close(control.ContextMenu);
+        }
+
+        // The note text and the palettes are popups too, and a press is how they are dismissed.
+        if (Resources["NotePopup"] is Flyout note && note.IsOpen)
+        {
+            note.Hide();
+            _viewModel.ClearNoteText();
+            closed = true;
         }
 
         return closed;
@@ -1477,6 +1517,21 @@ public partial class MainWindow : Window
         flyout.ShowAt(InkButton);
     }
 
+    /// <summary>Shows the text of the note that was clicked.</summary>
+    private void ShowNotePopup()
+    {
+        if (Resources["NotePopup"] is not Flyout flyout)
+        {
+            return;
+        }
+
+        if (flyout.Content is Control content)
+        {
+            content.DataContext = _viewModel;
+        }
+
+        flyout.ShowAt(PagesList);
+    }
     private void HidePalettes()
     {
         if (InkButton.Flyout is { } ink)
@@ -1505,14 +1560,14 @@ public partial class MainWindow : Window
         _contextPoint = null;
     }
 
-    private async void OnRemoveHighlightClick(object? sender, RoutedEventArgs e)
+    private async void OnRemoveMarkupClick(object? sender, RoutedEventArgs e)
     {
         if (_contextPoint is not { } point)
         {
             return;
         }
 
-        await _viewModel.RemoveHighlightsAtAsync(point.Page, point.X, point.Y);
+        await _viewModel.RemoveMarkupAtAsync(point.Page, point.X, point.Y);
         _contextPoint = null;
     }
     private void OnPagesPointerWheel(object? sender, PointerWheelEventArgs e)

@@ -308,7 +308,7 @@ public sealed class MainWindowViewModelTests
     }
 
     [AvaloniaFact]
-    public async Task RemoveHighlightsAtAsync_RemovesTheHighlightUnderThePoint()
+    public async Task RemoveMarkupAtAsync_RemovesTheHighlightUnderThePoint()
     {
         using var context = new TestContext();
         await context.ViewModel.OpenPathAsync(SamplePath);
@@ -321,10 +321,10 @@ public sealed class MainWindowViewModelTests
         var x = rect.X + (rect.Width / 2);
         var y = rect.Y + (rect.Height / 2);
 
-        Assert.True(await context.ViewModel.RemoveHighlightsAtAsync(page.Number, x, y));
+        Assert.True(await context.ViewModel.RemoveMarkupAtAsync(page.Number, x, y));
 
         // Nothing left under that point the second time.
-        Assert.False(await context.ViewModel.RemoveHighlightsAtAsync(page.Number, x, y));
+        Assert.False(await context.ViewModel.RemoveMarkupAtAsync(page.Number, x, y));
     }
     [AvaloniaFact]
     public async Task SaveCopy_WhenThePickerIsCancelled_KeepsTheUnsavedMark()
@@ -373,7 +373,7 @@ public sealed class MainWindowViewModelTests
 
         var page = context.ViewModel.Pages[0];
         var rect = page.SelectionRects[0];
-        Assert.True(await context.ViewModel.RemoveHighlightsAtAsync(page.Number, rect.X + (rect.Width / 2), rect.Y + (rect.Height / 2)));
+        Assert.True(await context.ViewModel.RemoveMarkupAtAsync(page.Number, rect.X + (rect.Width / 2), rect.Y + (rect.Height / 2)));
 
         // Removing pushed its own undo entry on top of the addition.
         Assert.True(context.ViewModel.CanUndoAnnotation);
@@ -381,7 +381,7 @@ public sealed class MainWindowViewModelTests
         await context.ViewModel.UndoAnnotationCommand.ExecuteAsync(null);
 
         // The highlight is back, so removing it again at the same point works.
-        Assert.True(await context.ViewModel.RemoveHighlightsAtAsync(page.Number, rect.X + (rect.Width / 2), rect.Y + (rect.Height / 2)));
+        Assert.True(await context.ViewModel.RemoveMarkupAtAsync(page.Number, rect.X + (rect.Width / 2), rect.Y + (rect.Height / 2)));
     }
     [AvaloniaFact]
     public async Task Redo_AppliesTheUndoneHighlightAgain()
@@ -612,6 +612,50 @@ public sealed class MainWindowViewModelTests
         context.ViewModel.SetInkColor(blue);
 
         Assert.Same(blue.Brush, context.ViewModel.Pages[0].InkBrush);
+    }
+    [AvaloniaFact]
+    public async Task RemoveMarkupAtAsync_TakesTheInkBackAndUndoPutsItThere()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-remove-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var target = Path.Combine(directory, "remove.pdf");
+            File.Copy(SamplePath, target);
+
+            using var context = new TestContext();
+            await context.ViewModel.OpenPathAsync(target);
+            await context.ViewModel.AddInkAtAsync(1, [(0.2, 0.5), (0.5, 0.5)]);
+
+            var page = context.ViewModel.Pages[0];
+            var midX = 0.35;
+            var midY = 0.5;
+
+            Assert.True(await context.ViewModel.RemoveMarkupAtAsync(1, midX, midY));
+            Assert.True(context.ViewModel.CanUndoAnnotation);
+
+            await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+            using (var probe = new PdfDocumentService())
+            {
+                await probe.OpenAsync(target);
+                Assert.Empty(await probe.GetInksAsync(target, 1));
+            }
+
+            // Undo has to put the stroke back exactly, then redo has to take it away again.
+            await context.ViewModel.UndoAnnotationCommand.ExecuteAsync(null);
+            await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+
+            using (var probe = new PdfDocumentService())
+            {
+                await probe.OpenAsync(target);
+                Assert.Single(await probe.GetInksAsync(target, 1));
+            }
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
     [AvaloniaFact]
     public async Task HighlightSelection_WithoutASelection_CannotRun()

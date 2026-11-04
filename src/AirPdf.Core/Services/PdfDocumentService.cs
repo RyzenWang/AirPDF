@@ -437,6 +437,35 @@ public sealed class PdfDocumentService : IDisposable
             cancellationToken);
     }
 
+    /// <summary>Removes whatever markup is under a page-space point.</summary>
+    public Task<IReadOnlyList<PdfMarkup>> RemoveMarkupAtAsync(
+        string filePath,
+        int pageNumber,
+        double x,
+        double y,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return ResidentSession(fullPath).RemoveMarkupAt(pageNumber, x, y);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
     /// <summary>Removes the ink annotation matching the snapshot, for undo.</summary>
     public Task<bool> RemoveInkMatchingAsync(string filePath, PdfInk ink, CancellationToken cancellationToken = default)
     {

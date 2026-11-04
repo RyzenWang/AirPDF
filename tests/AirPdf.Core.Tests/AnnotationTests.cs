@@ -361,6 +361,36 @@ public sealed class AnnotationTests : IDisposable
         Assert.False(await service.RemoveNoteMatchingAsync(SamplePath, note));
     }
     [Fact]
+    public async Task RemoveMarkupAt_TakesWhateverSitsUnderThePoint()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var page = info.Pages[0];
+
+        // One of each, each at its own point.
+        await service.AddNoteAsync(SamplePath, 1, new PdfPoint(80, 500), "note text");
+        await service.AddInkAsync(
+            SamplePath,
+            1,
+            [new PdfInkStroke([new PdfPoint(80, 300), new PdfPoint(220, 300)])],
+            width: 4f);
+
+        var note = Assert.Single(await service.GetNotesAsync(SamplePath, 1), candidate => candidate.Text == "note text");
+        var noteX = note.Position.X + 5;
+        var noteY = note.Position.Y + 5;
+
+        var removedNote = await service.RemoveMarkupAtAsync(SamplePath, 1, noteX, noteY);
+        Assert.Equal(PdfMarkupKind.Note, Assert.Single(removedNote).Kind);
+        Assert.Empty(await service.GetNotesAsync(SamplePath, 1));
+
+        var removedInk = await service.RemoveMarkupAtAsync(SamplePath, 1, 150, 300);
+        Assert.Equal(PdfMarkupKind.Ink, Assert.Single(removedInk).Kind);
+        Assert.Empty(await service.GetInksAsync(SamplePath, 1));
+
+        // Nothing there any more.
+        Assert.Empty(await service.RemoveMarkupAtAsync(SamplePath, 1, 150, 300));
+    }
+    [Fact]
     public async Task AddHighlight_WithNoRectangles_ChangesNothing()
     {
         using var service = new PdfDocumentService();
