@@ -13,4 +13,9 @@ public interface IUserDialogService
 
     /// <summary>Asks for a single line of text; null means the reader cancelled.</summary>
     Task<string?> PromptTextAsync(string title, string heading, string fieldLabel, string initialValue);
+
+    /// <summary>
+    /// Asks what to do with unsaved annotations before closing or replacing a document.
+    /// </summary>
+    Task<UnsavedChangesChoice> ConfirmUnsavedChangesAsync(string fileName);
 }

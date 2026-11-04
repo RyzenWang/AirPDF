@@ -102,6 +102,28 @@ public sealed class WindowViewModelTests : IDisposable
         Assert.Same(host.HomeTab, host.SelectedTab);
     }
 
+    /// <summary>
+    /// Closing a tab inside the reading-position debounce window must still flush the last
+    /// position; otherwise reopening the file returns to where the reader was two seconds
+    /// before closing.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task CloseTab_FlushesTheReadingPosition()
+    {
+        var host = CreateHost();
+        var tab = host.AddTab();
+        await tab.OpenPathAsync(SamplePath);
+        tab.UpdateCurrentPageFromScroll(3, 0.42);
+
+        host.CloseTab(tab);
+
+        var entry = _services!.Settings.ReadingPositions.FirstOrDefault(
+            position => string.Equals(position.FilePath, SamplePath, StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(entry);
+        Assert.Equal(3, entry.Page);
+        Assert.Equal(0.42, entry.PageOffset, 3);
+    }
+
     [AvaloniaFact]
     public async Task GoHome_KeepsTheDocumentOpenInItsTab()
     {
@@ -329,6 +351,11 @@ public sealed class WindowViewModelTests : IDisposable
 
         public Task<string?> PromptTextAsync(string title, string heading, string fieldLabel, string initialValue) =>
             Task.FromResult<string?>(null);
+
+        public UnsavedChangesChoice NextUnsavedChoice { get; set; } = UnsavedChangesChoice.Cancel;
+
+        public Task<UnsavedChangesChoice> ConfirmUnsavedChangesAsync(string fileName) =>
+            Task.FromResult(NextUnsavedChoice);
     }
 
     private sealed class StubWindowService : IWindowService

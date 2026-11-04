@@ -29,11 +29,17 @@ public sealed class EndToEndTests : IDisposable
     private readonly AppServices _services;
     private readonly MainWindow _window;
     private readonly MainWindowViewModel _home;
+    private readonly StubDialogService _dialogs = new();
 
     public EndToEndTests()
     {
         _services = new AppServices(_settingsDirectory);
-        _window = new MainWindow(_services, new StubWindowService(), null, restoreWindowPosition: false);
+        _window = new MainWindow(
+            _services,
+            new StubWindowService(),
+            null,
+            restoreWindowPosition: false,
+            _dialogs);
         _window.Show();
 
         _home = Assert.IsType<MainWindowViewModel>(_window.DataContext);
@@ -91,7 +97,8 @@ public sealed class EndToEndTests : IDisposable
     public async Task SearchShortcut_TypesIntoThePanelAndFindsTextOnThePage()
     {
         var document = await OpenSampleAsync();
-        await WaitAsync(() => document.Pages[0].HasTextLayer);
+        Assert.True(await document.EnsureTextLayerAsync(1));
+        await WaitAsync(() => document.Pages.Count > 0);
 
         var word = document.Pages[0].Words
             .Select(entry => entry.Text.Trim())
@@ -121,6 +128,21 @@ public sealed class EndToEndTests : IDisposable
         var before = document.CurrentPage;
         _window.KeyPressQwerty(PhysicalKey.F3, RawInputModifiers.None);
         await WaitAsync(() => document.CurrentPage != before || document.SearchResults.Count == 1);
+    }
+
+    [AvaloniaFact]
+    public async Task ClosingTheWindow_WithUnsavedMarkup_AsksFirst()
+    {
+        var document = await OpenSampleAsync();
+        await document.AddInkAtAsync(1, [(0.2, 0.5), (0.8, 0.5)]);
+        Assert.True(document.HasUnsavedAnnotations);
+        _dialogs.NextUnsavedChoice = UnsavedChangesChoice.Discard;
+
+        _window.Close();
+        await WaitAsync(() => !_window.IsVisible, 10_000);
+
+        Assert.Equal(1, _dialogs.UnsavedPrompts);
+        Assert.False(_window.IsVisible);
     }
 
     [AvaloniaFact]
@@ -160,7 +182,7 @@ public sealed class EndToEndTests : IDisposable
     public async Task HighlightShortcut_RendersTheHighlightWithoutSavingACopy()
     {
         var document = await OpenSampleAsync();
-        await WaitAsync(() => document.Pages[0].Image is not null && document.Pages[0].HasTextLayer);
+        await WaitAsync(() => document.Pages[0].Image is not null);
 
         _window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Control);
         await WaitAsync(() => document.HasSelection);
@@ -181,7 +203,7 @@ public sealed class EndToEndTests : IDisposable
     public async Task UndoShortcut_TakesBackTheHighlightAndReRenders()
     {
         var document = await OpenSampleAsync();
-        await WaitAsync(() => document.Pages[0].Image is not null && document.Pages[0].HasTextLayer);
+        await WaitAsync(() => document.Pages[0].Image is not null);
 
         _window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Control);
         await WaitAsync(() => document.HasSelection);
@@ -208,7 +230,7 @@ public sealed class EndToEndTests : IDisposable
     public async Task RedoShortcut_AppliesTheHighlightAgain()
     {
         var document = await OpenSampleAsync();
-        await WaitAsync(() => document.Pages[0].HasTextLayer);
+        await WaitAsync(() => document.Pages.Count > 0);
 
         _window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Control);
         await WaitAsync(() => document.HasSelection);
@@ -229,7 +251,7 @@ public sealed class EndToEndTests : IDisposable
     public async Task EscapeAfterSelectAll_ClearsTheSelection()
     {
         var document = await OpenSampleAsync();
-        await WaitAsync(() => document.Pages.Count > 0 && document.Pages[0].HasTextLayer);
+        await WaitAsync(() => document.Pages.Count > 0);
 
         _window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Control);
         await WaitAsync(() => document.HasSelection);
@@ -566,6 +588,31 @@ public sealed class EndToEndTests : IDisposable
             }
 
             await Task.Delay(50);
+        }
+    }
+
+    private sealed class StubDialogService : IUserDialogService
+    {
+        public Task<string?> PickPdfAsync() => Task.FromResult<string?>(null);
+
+        public Task<string?> PromptPasswordAsync(string fileName, bool isRetry) =>
+            Task.FromResult<string?>(null);
+
+        public Task ShowErrorAsync(string title, string message) => Task.CompletedTask;
+
+        public Task<string?> PickSavePathAsync(string suggestedName) => Task.FromResult<string?>(null);
+
+        public Task<string?> PromptTextAsync(string title, string heading, string fieldLabel, string initialValue) =>
+            Task.FromResult<string?>(null);
+
+        public UnsavedChangesChoice NextUnsavedChoice { get; set; } = UnsavedChangesChoice.Discard;
+
+        public int UnsavedPrompts { get; private set; }
+
+        public Task<UnsavedChangesChoice> ConfirmUnsavedChangesAsync(string fileName)
+        {
+            UnsavedPrompts++;
+            return Task.FromResult(NextUnsavedChoice);
         }
     }
 

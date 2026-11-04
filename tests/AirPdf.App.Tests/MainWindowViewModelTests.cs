@@ -962,6 +962,166 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.False(context.ViewModel.HasUnsavedAnnotations);
     }
 
+    [AvaloniaFact]
+    public async Task SaveDocument_WhenTheFileIsLocked_KeepsTheEditsAndReportsTheRecovery()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        await context.ViewModel.AddInkAtAsync(1, [(0.2, 0.5), (0.8, 0.5)]);
+
+        using (var blocker = new FileStream(
+                   SamplePath, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite))
+        {
+            await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+        }
+
+        Assert.True(context.ViewModel.HasError);
+        Assert.Contains(".airpdf-recovered", context.ViewModel.ErrorMessage);
+        Assert.True(context.ViewModel.HasUnsavedAnnotations);
+
+        await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+
+        Assert.False(context.ViewModel.HasError);
+        Assert.False(context.ViewModel.HasUnsavedAnnotations);
+
+        using var probe = new PdfDocumentService();
+        await probe.OpenAsync(SamplePath);
+        Assert.Single(await probe.GetInksAsync(SamplePath, 1));
+    }
+
+    [AvaloniaFact]
+    public async Task ConfirmCloseAsync_WhenSaveChosen_WritesTheDocument()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        await context.ViewModel.AddInkAtAsync(1, [(0.2, 0.5), (0.8, 0.5)]);
+        context.Dialog.NextUnsavedChoice = UnsavedChangesChoice.Save;
+
+        Assert.True(await context.ViewModel.ConfirmCloseAsync());
+        Assert.False(context.ViewModel.HasUnsavedAnnotations);
+
+        using var probe = new PdfDocumentService();
+        var path = context.ViewModel.FilePath;
+        await probe.OpenAsync(path);
+        Assert.Single(await probe.GetInksAsync(path, 1));
+    }
+
+    [AvaloniaFact]
+    public async Task ConfirmCloseAsync_WhenCancelled_KeepsTheDocumentUnsaved()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        await context.ViewModel.AddInkAtAsync(1, [(0.2, 0.5), (0.8, 0.5)]);
+        context.Dialog.NextUnsavedChoice = UnsavedChangesChoice.Cancel;
+
+        Assert.False(await context.ViewModel.ConfirmCloseAsync());
+        Assert.True(context.ViewModel.HasUnsavedAnnotations);
+        Assert.Equal(1, context.Dialog.UnsavedPrompts);
+    }
+
+    [AvaloniaFact]
+    public async Task OpeningAnotherFile_WithUnsavedChanges_CanBeCancelled()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        await context.ViewModel.AddInkAtAsync(1, [(0.2, 0.5), (0.8, 0.5)]);
+        context.Dialog.NextUnsavedChoice = UnsavedChangesChoice.Cancel;
+
+        await context.ViewModel.OpenPathAsync(LinksPath);
+
+        Assert.Equal(SamplePath, context.ViewModel.FilePath);
+        Assert.True(context.ViewModel.HasUnsavedAnnotations);
+        Assert.Equal(1, context.Dialog.UnsavedPrompts);
+    }
+
+    [AvaloniaFact]
+    public async Task OpeningAnotherFile_WithUnsavedChanges_SavesBeforeReplacing()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        await context.ViewModel.AddInkAtAsync(1, [(0.2, 0.5), (0.8, 0.5)]);
+        context.Dialog.NextUnsavedChoice = UnsavedChangesChoice.Save;
+
+        await context.ViewModel.OpenPathAsync(LinksPath);
+
+        Assert.Equal(LinksPath, context.ViewModel.FilePath);
+        Assert.False(context.ViewModel.HasUnsavedAnnotations);
+
+        using var probe = new PdfDocumentService();
+        await probe.OpenAsync(SamplePath);
+        Assert.Single(await probe.GetInksAsync(SamplePath, 1));
+    }
+
+    [AvaloniaFact]
+    public async Task SelectAllText_OnAHugeDocument_IsRefusedInsteadOfLoadingEveryPage()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        context.ViewModel.PageCount = MainWindowViewModel.MaxSelectAllPages + 1;
+
+        await context.ViewModel.SelectAllTextCommand.ExecuteAsync(null);
+
+        Assert.False(context.ViewModel.HasSelection);
+        Assert.Equal(
+            context.Services.Localization.T("L.SelectAllTooLarge"),
+            context.ViewModel.StatusMessage);
+    }
+
+    [AvaloniaFact]
+    public async Task TextLayer_IsReleasedForPagesFarFromTheCurrentPage()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        Assert.True(await context.ViewModel.EnsureTextLayerAsync(1));
+        var page = context.ViewModel.Pages[0];
+        Assert.True(page.HasTextLayer);
+
+        context.ViewModel.UpdateCurrentPageFromScroll(8, 0.1);
+
+        Assert.False(page.HasTextLayer);
+    }
+
+    [AvaloniaFact]
+    public async Task TextLayer_IsKeptForPagesInTheCurrentSelection()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        Assert.True(await context.ViewModel.EnsureTextLayerAsync(1));
+        var page = context.ViewModel.Pages[0];
+        var word = page.Words[0];
+        Assert.True(await context.ViewModel.BeginTextSelectionAsync(
+            1,
+            word.Bounds.X + (word.Bounds.Width / 2),
+            word.Bounds.Y + (word.Bounds.Height / 2),
+            clickCount: 2));
+        context.ViewModel.CompleteTextSelection();
+
+        context.ViewModel.UpdateCurrentPageFromScroll(8, 0.1);
+
+        Assert.True(page.HasTextLayer);
+    }
+
+    [AvaloniaFact]
+    public async Task Thumbnails_ReleaseTheirBitmapsWhenFarFromTheCurrentPage()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        var thumbnail = context.ViewModel.Thumbnails[0];
+        thumbnail.Activate();
+        await WaitForAsync(() => thumbnail.Image is not null, 20_000);
+        Assert.NotNull(thumbnail.Image);
+
+        thumbnail.Deactivate();
+        context.ViewModel.UpdateCurrentPageFromScroll(8, 0.1);
+
+        Assert.Null(thumbnail.Image);
+    }
+
     private static async Task WaitForAsync(Func<bool> condition, int timeoutMs = 30_000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
@@ -1313,5 +1473,16 @@ public sealed class MainWindowViewModelTests : IDisposable
 
         public Task<string?> PromptTextAsync(string title, string heading, string fieldLabel, string initialValue) =>
             Task.FromResult(NextText);
+
+        /// <summary>What the unsaved-changes prompt returns.</summary>
+        public UnsavedChangesChoice NextUnsavedChoice { get; set; } = UnsavedChangesChoice.Cancel;
+
+        public int UnsavedPrompts { get; private set; }
+
+        public Task<UnsavedChangesChoice> ConfirmUnsavedChangesAsync(string fileName)
+        {
+            UnsavedPrompts++;
+            return Task.FromResult(NextUnsavedChoice);
+        }
     }
 }

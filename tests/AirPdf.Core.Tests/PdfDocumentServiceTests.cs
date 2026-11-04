@@ -98,6 +98,75 @@ public sealed class PdfDocumentServiceTests
         await Assert.ThrowsAsync<ObjectDisposedException>(() => service.OpenAsync(SamplePath));
     }
 
+    /// <summary>
+    /// When another handle prevents the temporary file from replacing the original, the edits
+    /// must survive. The service keeps the saved copy, opens it so the document is still
+    /// editable, and a retry after the lock is gone writes it through.
+    /// </summary>
+    [Fact]
+    public async Task SaveInPlace_WhenTheFileIsLocked_PreservesTheEditsAndRetries()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            // Replacing an open file is allowed on Unix; the lock scenario is Windows-specific.
+            return;
+        }
+
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-recovery-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, "locked.pdf");
+        File.Copy(SamplePath, path);
+
+        try
+        {
+            using var service = new PdfDocumentService();
+            await service.OpenAsync(path);
+            await service.AddInkAsync(
+                path,
+                1,
+                [new PdfInkStroke([new PdfPoint(60, 420), new PdfPoint(180, 440)])],
+                41,
+                98,
+                255,
+                3f);
+
+            using (var blocker = new FileStream(
+                       path, FileMode.Open, FileAccess.ReadWrite, FileShare.ReadWrite))
+            {
+                await Assert.ThrowsAsync<UnauthorizedAccessException>(
+                    () => service.SaveInPlaceAsync(path));
+            }
+
+            Assert.NotNull(service.RecoveryPath);
+            Assert.True(File.Exists(service.RecoveryPath));
+
+            // The recovered session still has the annotation, even though the original lacks it.
+            Assert.Single(await service.GetInksAsync(path, 1));
+
+            await service.SaveInPlaceAsync(path);
+
+            Assert.Null(service.RecoveryPath);
+            Assert.False(File.Exists(path + ".airpdf-recovered"));
+
+            using var probe = new PdfDocumentService();
+            await probe.OpenAsync(path);
+            var ink = Assert.Single(await probe.GetInksAsync(path, 1));
+            Assert.Equal(41, ink.Red);
+            Assert.Equal(98, ink.Green);
+            Assert.Equal(255, ink.Blue);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
     private static async Task<byte[]> RenderPixelsAsync(PdfDocumentService service, int pageNumber)
     {
         using var bitmap = await service.RenderPageAsync(SamplePath, pageNumber, 400);

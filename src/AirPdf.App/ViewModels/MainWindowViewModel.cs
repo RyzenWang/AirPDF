@@ -31,6 +31,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     public const int MaxUndoSteps = 100;
 
+    /// <summary>
+    /// Ctrl+A has to parse every page before it can select the whole document. Beyond this
+    /// many pages that is a multi-second, hundreds-of-megabytes operation, so it is refused
+    /// with a status message instead of freezing the window.
+    /// </summary>
+    public const int MaxSelectAllPages = 1000;
+
+    /// <summary>Pages within this distance of the current page keep their parsed words.</summary>
+    private const int TextCacheRadius = 4;
+
     /// <summary>Must match <c>SettingsService.MaxRecentFiles</c> so nothing stored is unreachable.</summary>
     private const int MaxRecentFilesShown = 10;
 
@@ -131,6 +141,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private PdfPageRenderer? _pageRenderer;
     private string? _password;
     private bool _disposed;
+    private bool _selectingAllText;
     private double _zoom = 1.0;
     private string _zoomMode = ZoomModes.FitWidth;
     private double? _restoreZoom;
@@ -742,7 +753,27 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task SelectAllTextAsync() => await _selection.SelectAllAsync();
+    private async Task SelectAllTextAsync()
+    {
+        if (PageCount > MaxSelectAllPages)
+        {
+            ShowStatus(_localization.T("L.SelectAllTooLarge"));
+            return;
+        }
+
+        // While every page is being parsed, a scroll must not release the pages that have
+        // already arrived; SelectAll populates the selected-page set only at the end.
+        _selectingAllText = true;
+        try
+        {
+            await _selection.SelectAllAsync();
+        }
+        finally
+        {
+            _selectingAllText = false;
+            TrimTextLayers();
+        }
+    }
 
     [RelayCommand]
     private void ShowPagesTab()
@@ -1826,28 +1857,75 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             await _documentService.SaveInPlaceAsync(FilePath);
             HasUnsavedAnnotations = false;
+            ClearError();
             ShowStatus(_localization.T("L.Saved"));
         }
         catch (PdfDocumentException failure)
         {
-            SetError(failure.Failure == PdfFailure.AccessDenied
-                ? _localization.T("L.ErrorSaveDenied")
-                : _localization.GetPdfFailureMessage(failure.Failure));
+            if (failure.Failure == PdfFailure.AccessDenied)
+            {
+                SetSaveFailure("L.ErrorSaveDenied");
+            }
+            else
+            {
+                SetError(_localization.GetPdfFailureMessage(failure.Failure));
+            }
         }
         catch (IOException)
         {
-            SetError(_localization.T("L.ErrorSaveFailed"));
+            SetSaveFailure("L.ErrorSaveFailed");
         }
         catch (UnauthorizedAccessException)
         {
             // Another tab or window in this process still has the file open, or another
             // program locks it. The replace cannot land until that handle is gone.
-            SetError(_localization.T("L.ErrorSaveInUse"));
+            SetSaveFailure("L.ErrorSaveInUse");
         }
         catch (Exception unexpected)
         {
             CrashLog.Write("SaveCopy", unexpected);
-            SetError(_localization.T("L.ErrorEditFailed"));
+            SetSaveFailure("L.ErrorEditFailed");
+        }
+    }
+
+    /// <summary>
+    /// Reports a failed save. When the service preserved the saved copy, the message names
+    /// that file so the reader can retry saving or open the recovered document instead of
+    /// losing the annotations.
+    /// </summary>
+    private void SetSaveFailure(string fallbackKey)
+    {
+        if (_documentService.RecoveryPath is { } recovery)
+        {
+            _errorKey = null;
+            ErrorMessage = _localization.Format("L.ErrorSaveRecovered", recovery);
+            return;
+        }
+
+        SetError(fallbackKey);
+    }
+
+    /// <summary>
+    /// Returns true when the document can be closed or replaced. A document with unsaved
+    /// annotations asks first; Save must actually succeed, or the tab stays open.
+    /// </summary>
+    public async Task<bool> ConfirmCloseAsync()
+    {
+        if (!HasUnsavedAnnotations)
+        {
+            return true;
+        }
+
+        var choice = await _dialogs.ConfirmUnsavedChangesAsync(FileName);
+        switch (choice)
+        {
+            case UnsavedChangesChoice.Save:
+                await SaveDocumentAsync();
+                return !HasUnsavedAnnotations;
+            case UnsavedChangesChoice.Discard:
+                return true;
+            default:
+                return false;
         }
     }
 
@@ -2243,6 +2321,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
+        if (IsDocumentOpen && !await ConfirmCloseAsync())
+        {
+            return;
+        }
+
         OpeningPath = filePath;
         SaveReadingPositionNow();
         CancelSafely(_loadCancellation);
@@ -2465,7 +2548,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void CompleteTextSelection() => _selection.Complete();
 
-    public void ClearTextSelection() => _selection.Clear();
+    public void ClearTextSelection()
+    {
+        _selection.Clear();
+        TrimTextLayers();
+    }
 
     public string GetSelectedText() => _selection.SelectedText;
 
@@ -2597,7 +2684,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             info.PageCount,
             page => OnTextPageLoadedAsync(page, loader!));
         _textLoader = loader;
-        loader.Request(pageNumber: 1, radius: 1);
 
         FileName = info.FileName;
         FilePath = info.FilePath;
@@ -2685,6 +2771,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         FileSizeText = string.Empty;
         DocumentSubtitle = _localization.T("L.Ready");
         WindowTitle = "AirPDF";
+        HasUnsavedAnnotations = false;
         ClearError();
         OnPropertyChanged(nameof(HasOutlineItems));
         OnPropertyChanged(nameof(HasBookmarks));
@@ -2722,7 +2809,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         _currentPage = clamped;
-        _textLoader?.Request(clamped, radius: 1);
         OnPropertyChanged(nameof(CurrentPage));
         OnPropertyChanged(nameof(PageStatusText));
         OnPropertyChanged(nameof(ReadingProgress));
@@ -2736,6 +2822,45 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         TrimPageImages();
+        TrimTextLayers();
+        TrimThumbnails();
+    }
+
+    /// <summary>
+    /// Keeps parsed text only around the page being read. A selection keeps its pages until
+    /// the selection is cleared, because copying and redrawing use the same word geometry.
+    /// </summary>
+    private void TrimTextLayers()
+    {
+        var loader = _textLoader;
+        if (loader is null || _selectingAllText)
+        {
+            return;
+        }
+
+        foreach (var page in Pages)
+        {
+            if (Math.Abs(page.Number - _currentPage) <= TextCacheRadius ||
+                _selection.IsPageSelected(page.Number) ||
+                !page.HasTextLayer)
+            {
+                continue;
+            }
+
+            page.ReleaseTextLayout();
+            loader.Release(page.Number);
+        }
+    }
+
+    private void TrimThumbnails()
+    {
+        foreach (var thumbnail in Thumbnails)
+        {
+            if (Math.Abs(thumbnail.Number - _currentPage) > 4)
+            {
+                thumbnail.TrimImage();
+            }
+        }
     }
 
     private void TrimPageImages()

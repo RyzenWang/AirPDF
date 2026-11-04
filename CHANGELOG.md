@@ -4,6 +4,24 @@ All notable changes to AirPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning once it reaches 1.0.
 
+## [Unreleased]
+
+### Fixed
+
+- Closing a tab or window, or replacing the open file from a bookmark, now asks before
+  discarding unsaved highlights, ink or notes. **Save** must succeed before the document is
+  closed; **Discard** and **Cancel** are explicit choices.
+- When an in-place save cannot replace the original file, the saved copy is kept and opened
+  as the recovery session instead of being deleted. The error message names the recovery
+  file, and a retry after the other handle is gone writes the changes through.
+- Closing a tab now flushes its reading position before the stream is disposed, and closed
+  tabs are removed from the window's tab list instead of being retained until exit.
+- The text layer is no longer parsed for every page that scrolls past. Parsed words are kept
+  only around the current page (or pages in the active selection), and `Ctrl+A` refuses
+  documents above 1,000 pages rather than loading every page at once.
+- Thumbnail rail items release their bitmaps once they are far from the current page, and a
+  reused rail container deactivates its previous thumbnail.
+
 ## [0.5.0] - 2026-11-04
 
 ### Added

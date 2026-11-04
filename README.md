@@ -52,7 +52,7 @@ small .NET application with a hand-built Avalonia interface.
 - **Thumbnail rail and document outline** for fast navigation.
 - **Full-text search** with page-grouped results and in-page match highlights.
 - **Text selection and copy** — drag across words and pages, double-click a
-  word, `Ctrl+A` selects the document, and `Ctrl+C` copies the result.
+  word, `Ctrl+A` selects the document (up to 1,000 pages), and `Ctrl+C` copies the result.
 - **Remembers your place** in every document, including the offset within the
   page; the position is restored on the next open.
 - **Remembers your zoom** too — fit width, fit page, or an exact factor, per
@@ -221,7 +221,7 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | Shortcut | Action |
 | --- | --- |
 | `Ctrl+O` / `Cmd+O` | Open a PDF |
-| `Ctrl+W` / `Cmd+W` | Close the document |
+| `Ctrl+W` / `Cmd+W` | Close the tab (asks before discarding unsaved markup) |
 | `Ctrl+N` / `Cmd+N` | Open a new window |
 | `Ctrl+T` / `Cmd+T` | Open a new tab |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
@@ -238,7 +238,7 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | Drag on text | Select words |
 | Double-click | Select a word |
 | `Ctrl+C` / `Cmd+C` | Copy the selected text |
-| `Ctrl+A` / `Cmd+A` | Select all document text |
+| `Ctrl+A` / `Cmd+A` | Select all document text (up to 1,000 pages) |
 | `Enter` | Jump to the typed page, or run a search |
 | `Esc` | Leave drawing or erasing mode, clear the selection, close search, dismiss an error, or leave full screen |
 | `Ctrl++` / `Ctrl+-` | Zoom in / out |

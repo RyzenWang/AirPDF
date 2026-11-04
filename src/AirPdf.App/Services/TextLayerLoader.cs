@@ -46,6 +46,18 @@ public sealed class TextLayerLoader : IDisposable
         }
     }
 
+    /// <summary>
+    /// Forgets a page's text layer so it can be loaded again later. The caller owns the
+    /// parsed words and is responsible for dropping them too.
+    /// </summary>
+    public void Release(int pageNumber)
+    {
+        lock (_gate)
+        {
+            _loaded.Remove(pageNumber);
+        }
+    }
+
     public int LoadedCount
     {
         get

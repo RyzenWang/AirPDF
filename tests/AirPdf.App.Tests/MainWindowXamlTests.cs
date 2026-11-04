@@ -43,6 +43,15 @@ public sealed class MainWindowXamlTests : IDisposable
         Assert.NotNull(window.DataContext);
     }
 
+    [AvaloniaFact]
+    public void UnsavedChangesDialog_BuildsItsXaml()
+    {
+        var dialog = new UnsavedChangesDialog("sample.pdf", new LocalizationService());
+
+        Assert.NotNull(dialog.Content);
+        Assert.False(string.IsNullOrWhiteSpace(dialog.Title));
+    }
+
     /// <summary>
     /// Two windows over one <see cref="AppServices"/> is what the app does. They must build
     /// independently and share the settings instance.
@@ -229,6 +238,41 @@ public sealed class MainWindowXamlTests : IDisposable
             second.Dispose();
         }
     }
+    /// <summary>
+    /// The thumbnail rail reuses containers too. The old thumbnail must be deactivated when the
+    /// container is rebound, or it keeps its bitmap and can keep rendering off-screen.
+    /// </summary>
+    [AvaloniaFact]
+    public void ThumbnailView_ReleasesThePreviousThumbnailWhenItsDataContextChanges()
+    {
+        using var documents = new PdfDocumentService();
+        var localization = new LocalizationService();
+        var sample = Path.Combine(AppContext.BaseDirectory, "Assets", "sample.pdf");
+        var renderer = new PdfPageRenderer(documents, sample, null);
+        var first = new ThumbnailViewModel(renderer, new PdfPageInfo(1, 612, 792));
+        var second = new ThumbnailViewModel(renderer, new PdfPageInfo(2, 612, 792));
+
+        var view = new ThumbnailView { DataContext = first };
+        var window = new Window { Content = view, Width = 420, Height = 620 };
+
+        try
+        {
+            window.Show();
+            Assert.True(first.IsActive);
+
+            view.DataContext = second;
+
+            Assert.False(first.IsActive);
+            Assert.True(second.IsActive);
+        }
+        finally
+        {
+            window.Close();
+            first.Dispose();
+            second.Dispose();
+        }
+    }
+
     /// <summary>
     /// The pen and its palette arrow have to read as one control: the arrow used to be a tiny
     /// separate button with its own hover and height, which is what made the pair look unrelated.

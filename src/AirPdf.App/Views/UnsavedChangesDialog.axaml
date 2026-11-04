@@ -1,0 +1,59 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="AirPdf.App.Views.UnsavedChangesDialog"
+        x:CompileBindings="False"
+        Title="AirPDF"
+        Width="470"
+        SizeToContent="Height"
+        CanResize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource SurfaceBrush}">
+  <Grid Margin="28,24,28,24" RowDefinitions="Auto,Auto,Auto,Auto">
+    <Border Width="38" Height="38"
+            CornerRadius="10"
+            Background="{DynamicResource AccentSoftBrush}"
+            HorizontalAlignment="Left">
+      <Path Width="19" Height="19"
+            Data="{StaticResource IconHighlighter}"
+            Stroke="{DynamicResource AccentBrush}"
+            StrokeThickness="1.8"
+            StrokeLineCap="Round"
+            StrokeJoin="Round"
+            Stretch="Uniform" />
+    </Border>
+
+    <TextBlock x:Name="TitleText"
+               Grid.Row="1"
+               Margin="0,15,0,0"
+               Classes="h2"
+               TextWrapping="Wrap" />
+
+    <TextBlock x:Name="MessageText"
+               Grid.Row="2"
+               Margin="0,8,0,22"
+               Foreground="{DynamicResource TextSecondaryBrush}"
+               FontSize="13"
+               LineHeight="20"
+               TextWrapping="Wrap" />
+
+    <StackPanel Grid.Row="3"
+                Orientation="Horizontal"
+                HorizontalAlignment="Right"
+                Spacing="8">
+      <Button Content="{DynamicResource L.Cancel}"
+              MinWidth="88"
+              IsCancel="True"
+              Click="OnCancelClick" />
+      <Button Content="{DynamicResource L.Discard}"
+              Classes="soft"
+              MinWidth="88"
+              Click="OnDiscardClick" />
+      <Button Content="{DynamicResource L.Save}"
+              Classes="primary"
+              MinWidth="88"
+              IsDefault="True"
+              Click="OnSaveClick" />
+    </StackPanel>
+  </Grid>
+</Window>

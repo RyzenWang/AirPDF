@@ -25,7 +25,15 @@ public sealed class PdfDocumentService : IDisposable
     private PdfiumDocument? _session;
     private string? _sessionPath;
     private string? _sessionPassword;
+    private string? _sessionRecoveryPath;
     private bool _disposed;
+
+    /// <summary>
+    /// When an in-place save cannot replace the original file, the complete saved copy is
+    /// kept here (and opened as the resident session) so the edits are not lost. Null when
+    /// the last save succeeded or no save has failed.
+    /// </summary>
+    public string? RecoveryPath { get; private set; }
 
     public Task<PdfDocumentInfo> OpenAsync(
         string filePath,
@@ -307,6 +315,8 @@ public sealed class PdfDocumentService : IDisposable
                     var session = ResidentSession(fullPath);
                     var password = _sessionPassword;
                     var temporary = fullPath + ".airpdf-save";
+                    var previousRecovery = _sessionRecoveryPath ?? RecoveryPath;
+                    var keepTemporary = false;
 
                     // Check that the target can be written *before* giving up the session: a save
                     // that is going to fail anyway must not leave the document unusable.
@@ -319,6 +329,7 @@ public sealed class PdfDocumentService : IDisposable
                         _session = null;
                         _sessionPath = null;
                         _sessionPassword = null;
+                        _sessionRecoveryPath = null;
                         session.Dispose();
 
                         File.Move(temporary, fullPath, overwrite: true);
@@ -326,10 +337,44 @@ public sealed class PdfDocumentService : IDisposable
                         _session = PdfiumDocument.Open(fullPath, password);
                         _sessionPath = fullPath;
                         _sessionPassword = password;
+                        RecoveryPath = null;
+                        TryDeleteFile(previousRecovery);
                     }
                     catch
                     {
-                        // Put the document back so the reader can keep working, then report.
+                        // The replacement failed. The temporary file is the only copy that has
+                        // the reader's edits, so it must never be deleted in this path. Opening
+                        // it as the session keeps those edits visible and retryable.
+                        if (_session is null && File.Exists(temporary))
+                        {
+                            keepTemporary = true;
+                            var recovery = fullPath + ".airpdf-recovered";
+
+                            try
+                            {
+                                File.Move(temporary, recovery, overwrite: true);
+                                keepTemporary = false;
+                                RecoveryPath = recovery;
+
+                                try
+                                {
+                                    _session = PdfiumDocument.Open(recovery, password);
+                                    _sessionPath = fullPath;
+                                    _sessionPassword = password;
+                                    _sessionRecoveryPath = recovery;
+                                }
+                                catch
+                                {
+                                    // The recovery copy remains on disk; fall back below.
+                                }
+                            }
+                            catch
+                            {
+                                // Keep the temporary file where it is rather than losing it.
+                                RecoveryPath = temporary;
+                            }
+                        }
+
                         if (_session is null && File.Exists(fullPath))
                         {
                             try
@@ -348,16 +393,9 @@ public sealed class PdfDocumentService : IDisposable
                     }
                     finally
                     {
-                        if (File.Exists(temporary))
+                        if (!keepTemporary)
                         {
-                            try
-                            {
-                                File.Delete(temporary);
-                            }
-                            catch
-                            {
-                                // A leftover temporary file must not mask the real failure.
-                            }
+                            TryDeleteFile(temporary);
                         }
                     }
                 }
@@ -368,6 +406,27 @@ public sealed class PdfDocumentService : IDisposable
             },
             cancellationToken);
     }
+
+    private static void TryDeleteFile(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+            // A leftover recovery file must not mask the real result.
+        }
+    }
+
     /// <summary>Every highlight on a page, read from the resident document.</summary>
     public Task<IReadOnlyList<PdfHighlight>> GetHighlightsAsync(
         string filePath,
@@ -783,10 +842,14 @@ public sealed class PdfDocumentService : IDisposable
         try
         {
             var session = _session;
+            var recovery = _sessionRecoveryPath;
             _session = null;
             _sessionPath = null;
             _sessionPassword = null;
+            _sessionRecoveryPath = null;
+            RecoveryPath = null;
             session?.Dispose();
+            TryDeleteFile(recovery);
         }
         finally
         {
@@ -858,10 +921,14 @@ public sealed class PdfDocumentService : IDisposable
             }
 
             var previous = _session;
+            var previousRecovery = _sessionRecoveryPath;
             _session = session;
             _sessionPath = fullPath;
             _sessionPassword = password;
+            _sessionRecoveryPath = null;
+            RecoveryPath = null;
             previous?.Dispose();
+            TryDeleteFile(previousRecovery);
         }
         finally
         {

@@ -47,6 +47,9 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
 
     public bool ShowPlaceholder => Image is null;
 
+    /// <summary>True while a realized rail item is showing this thumbnail.</summary>
+    public bool IsActive => _isActive;
+
     public bool IsRendering
     {
         get => _isRendering;
@@ -69,6 +72,28 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
         _isActive = false;
         CancelRender();
         IsRendering = false;
+    }
+
+    /// <summary>
+    /// Drops the preview bitmap of a thumbnail that has scrolled far from the current page.
+    /// The rail follows the reader page by page, so without this every thumbnail ever shown
+    /// would keep its bitmap for the lifetime of the document.
+    /// </summary>
+    public void TrimImage()
+    {
+        if (_isActive)
+        {
+            return;
+        }
+
+        var image = Image;
+        if (image is null)
+        {
+            return;
+        }
+
+        Image = null;
+        DisposeBitmapLater(image);
     }
 
     public void Dispose()

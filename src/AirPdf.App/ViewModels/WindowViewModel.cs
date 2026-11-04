@@ -85,6 +85,11 @@ public sealed partial class WindowViewModel : ObservableObject, ITabService, IDi
             return;
         }
 
+        // Save the logical position before the window switches to Home: ShowTab captures the
+        // outgoing scroll viewer, which can overwrite a position the reader set while the
+        // page list was between layout passes.
+        tab.SaveReadingPositionNow();
+
         // Leave the tab before the strip removes it. Removing the selected item makes the
         // ListBox write null back through the two-way SelectedTab binding, and a selection
         // checked after the removal is already gone: the window then kept the closed tab as
@@ -107,7 +112,9 @@ public sealed partial class WindowViewModel : ObservableObject, ITabService, IDi
         }
 
         OnPropertyChanged(nameof(HasTabs));
+
         tab.Dispose();
+        _owned.Remove(tab);
     }
 
     /// <summary>

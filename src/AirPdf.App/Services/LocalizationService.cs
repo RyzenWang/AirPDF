@@ -84,6 +84,11 @@ public sealed class LocalizationService : IDisposable
 
             ["L.SavedAs"] = ("Saved as {0}", "已另存为 {0}"),
             ["L.UnsavedAnnotations"] = ("Unsaved highlights", "有未保存的高亮"),
+            ["L.UnsavedChangesTitle"] = ("Unsaved changes", "有未保存的更改"),
+            ["L.UnsavedChangesMessage"] = ("{0} has unsaved highlights or ink. Save before closing?", "「{0}」有未保存的高亮或墨迹。关闭前要保存吗？"),
+            ["L.Discard"] = ("Discard", "放弃"),
+            ["L.SelectAllTooLarge"] = ("This document is too large to select all at once.", "文档过大，无法一次全选。"),
+            ["L.ErrorSaveRecovered"] = ("The file could not be replaced because it is in use. Your changes are kept in {0}. Close whatever is using the file, then press Ctrl+S again.", "文件被占用，无法替换。修改已保留在 {0}；关闭占用程序后再按 Ctrl+S 重试。"),
             ["L.Markup"] = ("Markup", "标注"),
 
             ["L.AddBookmark"] = ("Add bookmark (Ctrl+D)", "添加书签（Ctrl+D）"),

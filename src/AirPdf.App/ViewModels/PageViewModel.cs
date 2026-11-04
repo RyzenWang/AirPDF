@@ -150,6 +150,22 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasTextLayer));
     }
 
+    /// <summary>
+    /// Drops the parsed words for a page that is far from the viewport. The text layer is
+    /// reparsed on demand if the page is selected or searched again.
+    /// </summary>
+    public void ReleaseTextLayout()
+    {
+        if (_words.Count == 0)
+        {
+            return;
+        }
+
+        _words = [];
+        OnPropertyChanged(nameof(Words));
+        OnPropertyChanged(nameof(HasTextLayer));
+    }
+
     /// <summary>Link annotations of this page, normalized to the page. Empty until
     /// <see cref="EnsureLinksAsync"/> has run.</summary>
     public IReadOnlyList<PdfLink> Links => _links;

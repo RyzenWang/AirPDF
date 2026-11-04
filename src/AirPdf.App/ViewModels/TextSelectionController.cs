@@ -31,6 +31,9 @@ public sealed class TextSelectionController
 
     public bool HasSelection => _selectedText.Length > 0;
 
+    /// <summary>True when this page is part of the current selection.</summary>
+    public bool IsPageSelected(int pageNumber) => _selectedPages.Contains(pageNumber);
+
     public string SelectedText => _selectedText;
 
     public async Task<bool> BeginAsync(int pageNumber, double x, double y, int clickCount)

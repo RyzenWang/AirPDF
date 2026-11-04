@@ -20,6 +20,7 @@ public partial class MainWindow : Window
 {
     private readonly AppServices _services;
     private readonly IWindowService _windows;
+    private readonly IUserDialogService _dialogs;
     private readonly WindowViewModel _tabs;
     private readonly SettingsService _settingsService;
     private readonly string? _initialFile;
@@ -36,6 +37,8 @@ public partial class MainWindow : Window
     private bool _selectionMoved;
     private bool _restoringDocument;
     private bool _linkCursorActive;
+    private bool _closeConfirmed;
+    private bool _closePromptInProgress;
     private PixelPoint? _pendingPosition;
     private PageLayout _pageLayout = PageLayout.Empty;
     private const string BookmarkDragFormat = "airpdf/bookmark";
@@ -56,12 +59,14 @@ public partial class MainWindow : Window
         AppServices services,
         IWindowService windows,
         string? initialFile,
-        bool restoreWindowPosition)
+        bool restoreWindowPosition,
+        IUserDialogService? dialogs = null)
     {
         InitializeComponent();
 
         _services = services;
         _windows = windows;
+        _dialogs = dialogs ?? new DialogService(() => this, services.Localization);
         _settingsService = services.SettingsService;
         var settings = services.Settings;
 
@@ -123,7 +128,7 @@ public partial class MainWindow : Window
             documents,
             new PdfSearchService(documents),
             new PdfTextService(documents),
-            new DialogService(() => this, _services.Localization),
+            _dialogs,
             _windows,
             host,
             isHome);
@@ -260,13 +265,27 @@ public partial class MainWindow : Window
 
     private void OnNewTabClick(object? sender, RoutedEventArgs e) => _tabs.AddTab();
 
-    private void OnCloseTabClick(object? sender, RoutedEventArgs e)
+    private async void OnCloseTabClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Control { DataContext: MainWindowViewModel tab })
         {
             e.Handled = true;
-            _tabs.CloseTab(tab);
+            await CloseTabAsync(tab);
         }
+    }
+
+    /// <summary>
+    /// Closing a tab with unsaved annotations asks first. Save is attempted before the tab is
+    /// disposed; if it fails, the tab stays open with its edits and the error on screen.
+    /// </summary>
+    private async Task CloseTabAsync(MainWindowViewModel tab)
+    {
+        if (!await tab.ConfirmCloseAsync())
+        {
+            return;
+        }
+
+        _tabs.CloseTab(tab);
     }
 
     private void OnTabSelectionChanged(object? sender, SelectionChangedEventArgs e)
@@ -1893,8 +1912,8 @@ public partial class MainWindow : Window
         if (ctrl && e.Key == Key.W)
         {
             // Closing the last tab closes its document and leaves the window open, which is
-            // what Ctrl+W did before tabs existed.
-            _tabs.CloseTab(_viewModel);
+            // what Ctrl+W did before tabs existed. Unsaved annotations are confirmed first.
+            _ = CloseTabAsync(_viewModel);
             e.Handled = true;
             return;
         }
@@ -2059,7 +2078,56 @@ public partial class MainWindow : Window
         {
         }
     }
-    private void OnClosing(object? sender, WindowClosingEventArgs e)
+    private async void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        // A close that arrives while the unsaved-changes prompt is open belongs to that prompt.
+        if (_closePromptInProgress)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        if (!_closeConfirmed)
+        {
+            var unsaved = _tabs.Tabs.Where(tab => tab.HasUnsavedAnnotations).ToList();
+            if (unsaved.Count > 0)
+            {
+                e.Cancel = true;
+                _closePromptInProgress = true;
+                var canClose = false;
+
+                try
+                {
+                    foreach (var tab in unsaved)
+                    {
+                        _tabs.SelectedTab = tab;
+                        if (!await tab.ConfirmCloseAsync())
+                        {
+                            return;
+                        }
+                    }
+
+                    canClose = true;
+                }
+                finally
+                {
+                    _closePromptInProgress = false;
+                }
+
+                if (canClose)
+                {
+                    _closeConfirmed = true;
+                    Close();
+                }
+
+                return;
+            }
+        }
+
+        PersistWindowState();
+    }
+
+    private void PersistWindowState()
     {
         foreach (var tab in _tabs.Tabs)
         {
