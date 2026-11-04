@@ -73,6 +73,333 @@ public sealed partial class PdfiumDocument
         }
     }
 
+    /// <summary>Draws freehand strokes as one ink annotation.</summary>
+    /// <remarks>
+    /// PDFium stores ink as a list of paths in page space, which is exactly what the pointer
+    /// produced, so nothing has to be flattened or approximated.
+    /// </remarks>
+    public void AddInk(int pageNumber, IReadOnlyList<PdfInkStroke> strokes, byte red, byte green, byte blue, float width)
+    {
+        ThrowIfDisposed();
+
+        var usable = strokes.Where(stroke => stroke.Points.Count >= 2).ToList();
+        if (usable.Count == 0)
+        {
+            return;
+        }
+
+        var page = LoadPageOrThrow(pageNumber);
+        var annot = IntPtr.Zero;
+        try
+        {
+            annot = PdfiumNative.PageCreateAnnot(page, PdfiumNative.AnnotInk);
+            if (annot == IntPtr.Zero)
+            {
+                throw new PdfDocumentException(PdfFailure.Unsupported, "This page does not accept annotations.");
+            }
+
+            foreach (var stroke in usable)
+            {
+                var points = stroke.Points
+                    .Select(point => new PdfiumNative.FsPointF { X = (float)point.X, Y = (float)point.Y })
+                    .ToArray();
+
+                PdfiumNative.AnnotAddInkStroke(annot, points, (UIntPtr)(uint)points.Length);
+            }
+
+            var bounds = InkBounds(usable);
+            var rect = new PdfiumNative.FsRectF
+            {
+                Left = (float)bounds.Left,
+                Top = (float)bounds.Top,
+                Right = (float)bounds.Right,
+                Bottom = (float)bounds.Bottom
+            };
+
+            PdfiumNative.AnnotSetRect(annot, ref rect);
+            PdfiumNative.AnnotSetColor(annot, PdfiumNative.AnnotColorStroke, red, green, blue, 255);
+            PdfiumNative.AnnotSetBorder(annot, width, width, width);
+            PdfiumNative.AnnotSetFlags(annot, PdfiumNative.AnnotFlagPrint);
+        }
+        finally
+        {
+            if (annot != IntPtr.Zero)
+            {
+                PdfiumNative.PageCloseAnnot(annot);
+            }
+
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
+    /// <summary>Reads an ink annotation back, so a removal can be undone.</summary>
+    public PdfInk? TryReadInk(int pageNumber, int index)
+    {
+        ThrowIfDisposed();
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            var annot = PdfiumNative.PageGetAnnot(page, index);
+            if (annot == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            try
+            {
+                if (PdfiumNative.AnnotGetSubtype(annot) != PdfiumNative.AnnotInk)
+                {
+                    return null;
+                }
+
+                var count = (int)PdfiumNative.AnnotGetInkListCount(annot).ToUInt32();
+                var strokes = new List<PdfInkStroke>(count);
+                for (var path = 0; path < count; path++)
+                {
+                    var pointsNeeded = (int)PdfiumNative.AnnotGetInkListPath(annot, (UIntPtr)(uint)path, null, 0);
+                    if (pointsNeeded <= 0)
+                    {
+                        continue;
+                    }
+
+                    var buffer = new PdfiumNative.FsPointF[pointsNeeded];
+                    var written = (int)PdfiumNative.AnnotGetInkListPath(annot, (UIntPtr)(uint)path, buffer, (uint)pointsNeeded);
+                    if (written <= 0)
+                    {
+                        continue;
+                    }
+
+                    var points = new List<PdfPoint>(written);
+                    for (var point = 0; point < written && point < buffer.Length; point++)
+                    {
+                        points.Add(new PdfPoint(buffer[point].X, buffer[point].Y));
+                    }
+
+                    strokes.Add(new PdfInkStroke(points));
+                }
+
+                byte red = 0;
+                byte green = 0;
+                byte blue = 0;
+                if (PdfiumNative.AnnotGetColor(annot, PdfiumNative.AnnotColorStroke, out var r, out var g, out var b, out _) != 0)
+                {
+                    red = (byte)Math.Min(r, 255);
+                    green = (byte)Math.Min(g, 255);
+                    blue = (byte)Math.Min(b, 255);
+                }
+
+                return new PdfInk(pageNumber, strokes, red, green, blue, 1.5f);
+            }
+            finally
+            {
+                PdfiumNative.PageCloseAnnot(annot);
+            }
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
+    /// <summary>Adds a sticky note carrying <paramref name="text"/> at a page-space point.</summary>
+    public void AddNote(int pageNumber, PdfPoint position, string text)
+    {
+        ThrowIfDisposed();
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        var page = LoadPageOrThrow(pageNumber);
+        var annot = IntPtr.Zero;
+        try
+        {
+            annot = PdfiumNative.PageCreateAnnot(page, PdfiumNative.AnnotText);
+            if (annot == IntPtr.Zero)
+            {
+                throw new PdfDocumentException(PdfFailure.Unsupported, "This page does not accept annotations.");
+            }
+
+            // The note icon is a fixed size; the position is its lower-left corner.
+            const double size = 20;
+            var rect = new PdfiumNative.FsRectF
+            {
+                Left = (float)position.X,
+                Top = (float)(position.Y + size),
+                Right = (float)(position.X + size),
+                Bottom = (float)position.Y
+            };
+
+            PdfiumNative.AnnotSetRect(annot, ref rect);
+            PdfiumNative.AnnotSetColor(annot, PdfiumNative.AnnotColorStroke, 255, 214, 79, 255);
+            PdfiumNative.AnnotSetStringValue(annot, "Contents", text);
+            PdfiumNative.AnnotSetFlags(annot, PdfiumNative.AnnotFlagPrint);
+        }
+        finally
+        {
+            if (annot != IntPtr.Zero)
+            {
+                PdfiumNative.PageCloseAnnot(annot);
+            }
+
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
+    /// <summary>Reads a sticky note back: position and text.</summary>
+    public PdfNote? TryReadNote(int pageNumber, int index)
+    {
+        ThrowIfDisposed();
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            var annot = PdfiumNative.PageGetAnnot(page, index);
+            if (annot == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            try
+            {
+                if (PdfiumNative.AnnotGetSubtype(annot) != PdfiumNative.AnnotText)
+                {
+                    return null;
+                }
+
+                if (PdfiumNative.AnnotGetRect(annot, out var rect) == 0)
+                {
+                    return null;
+                }
+
+                var bytes = (int)PdfiumNative.AnnotGetStringValue(annot, "Contents", null, 0);
+                var text = string.Empty;
+                if (bytes > 0)
+                {
+                    var buffer = new byte[bytes];
+                    var written = (int)PdfiumNative.AnnotGetStringValue(annot, "Contents", buffer, (uint)bytes);
+                    if (written > 0)
+                    {
+                        text = System.Text.Encoding.Unicode.GetString(buffer, 0, Math.Min(written, buffer.Length)).TrimEnd('\0');
+                    }
+                }
+
+                return new PdfNote(pageNumber, new PdfPoint(rect.Left, rect.Bottom), text);
+            }
+            finally
+            {
+                PdfiumNative.PageCloseAnnot(annot);
+            }
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
+    /// <summary>Removes the ink annotation whose strokes match, so an addition can be taken back.</summary>
+    public bool RemoveInkMatching(int pageNumber, PdfInk ink)
+    {
+        ThrowIfDisposed();
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            for (var index = PdfiumNative.PageGetAnnotCount(page) - 1; index >= 0; index--)
+            {
+                var existing = TryReadInk(pageNumber, index);
+                if (existing is null || !SameStrokes(existing.Strokes, ink.Strokes))
+                {
+                    continue;
+                }
+
+                return PdfiumNative.PageRemoveAnnot(page, index) != 0;
+            }
+
+            return false;
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
+    /// <summary>Removes the note whose rectangle and text match.</summary>
+    public bool RemoveNoteMatching(int pageNumber, PdfNote note)
+    {
+        ThrowIfDisposed();
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            for (var index = PdfiumNative.PageGetAnnotCount(page) - 1; index >= 0; index--)
+            {
+                var existing = TryReadNote(pageNumber, index);
+                if (existing is null ||
+                    !string.Equals(existing.Text, note.Text, StringComparison.Ordinal) ||
+                    Math.Abs(existing.Position.X - note.Position.X) > 0.5 ||
+                    Math.Abs(existing.Position.Y - note.Position.Y) > 0.5)
+                {
+                    continue;
+                }
+
+                return PdfiumNative.PageRemoveAnnot(page, index) != 0;
+            }
+
+            return false;
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
+    private static bool SameStrokes(IReadOnlyList<PdfInkStroke> left, IReadOnlyList<PdfInkStroke> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        for (var stroke = 0; stroke < left.Count; stroke++)
+        {
+            if (left[stroke].Points.Count != right[stroke].Points.Count)
+            {
+                return false;
+            }
+
+            for (var point = 0; point < left[stroke].Points.Count; point++)
+            {
+                if (Math.Abs(left[stroke].Points[point].X - right[stroke].Points[point].X) > 0.01 ||
+                    Math.Abs(left[stroke].Points[point].Y - right[stroke].Points[point].Y) > 0.01)
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+    private static PdfQuad InkBounds(IReadOnlyList<PdfInkStroke> strokes)
+    {
+        double left = double.MaxValue, right = double.MinValue, top = double.MinValue, bottom = double.MaxValue;
+
+        foreach (var point in strokes.SelectMany(stroke => stroke.Points))
+        {
+            left = Math.Min(left, point.X);
+            right = Math.Max(right, point.X);
+            top = Math.Max(top, point.Y);
+            bottom = Math.Min(bottom, point.Y);
+        }
+
+        // Give a flat stroke a little height, or the rectangle is degenerate.
+        if (top - bottom < 1) { top += 1; bottom -= 1; }
+        if (right - left < 1) { right += 1; left -= 1; }
+
+        return new PdfQuad(left, top, right, bottom);
+    }
     /// <summary>
     /// Reads a highlight back out of the document: the rectangles it covers and its colour.
     /// This is what makes a removal undoable.

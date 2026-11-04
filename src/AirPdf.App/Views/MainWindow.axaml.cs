@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private bool _isSelectingText;
     private bool _selectionPressInProgress;
     private (int Page, double X, double Y)? _contextPoint;
+    private (PageViewModel Page, Control View, List<(double X, double Y)> Points)? _inkStroke;
     private bool _selectionMoved;
     private bool _restoringDocument;
     private bool _linkCursorActive;
@@ -1031,6 +1032,27 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_viewModel.IsInkMode)
+        {
+            var inkView = FindPageView(e.Source) ?? FindPageViewAt(e.GetPosition(this));
+            if (inkView?.DataContext is PageViewModel inkPage)
+            {
+                var start = e.GetPosition(inkView);
+                if (new Rect(inkView.Bounds.Size).Contains(start))
+                {
+                    var normalized = (
+                        Math.Clamp(start.X / Math.Max(1, inkView.Bounds.Width), 0, 1),
+                        Math.Clamp(start.Y / Math.Max(1, inkView.Bounds.Height), 0, 1));
+
+                    _inkStroke = (inkPage, inkView, [normalized]);
+                    inkPage.SetLiveInk(_inkStroke.Value.Points);
+                    e.Pointer.Capture(PagesList);
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
+
         var pageView = FindPageView(e.Source) ?? FindPageViewAt(e.GetPosition(this));
         if (pageView?.DataContext is not PageViewModel page)
         {
@@ -1104,6 +1126,24 @@ public partial class MainWindow : Window
 
     private void OnSelectionPointerMoved(object? sender, PointerEventArgs e)
     {
+        if (_inkStroke is { } drawing)
+        {
+            var point = e.GetPosition(drawing.View);
+            var x = Math.Clamp(point.X / Math.Max(1, drawing.View.Bounds.Width), 0, 1);
+            var y = Math.Clamp(point.Y / Math.Max(1, drawing.View.Bounds.Height), 0, 1);
+            var last = drawing.Points[^1];
+
+            // Skip points that would not show up anyway; a stroke can collect hundreds.
+            if (Math.Abs(x - last.X) + Math.Abs(y - last.Y) >= 0.002)
+            {
+                drawing.Points.Add((x, y));
+                drawing.Page.SetLiveInk(drawing.Points);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
         if (!_isSelectingText)
         {
             UpdateLinkCursor(e.GetPosition(this));
@@ -1151,6 +1191,21 @@ public partial class MainWindow : Window
 
     private void OnSelectionPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
+        if (_inkStroke is { } drawing)
+        {
+            _inkStroke = null;
+            drawing.Page.ClearLiveInk();
+            e.Pointer.Capture(null);
+            e.Handled = true;
+
+            if (drawing.Points.Count >= 2)
+            {
+                _ = _viewModel.AddInkAtAsync(drawing.Page.Number, drawing.Points);
+            }
+
+            return;
+        }
+
         if (!_isSelectingText)
         {
             return;
@@ -1281,6 +1336,17 @@ public partial class MainWindow : Window
             point.Y / Math.Max(1, pageView.Bounds.Height));
     }
 
+    private async void OnAddNoteClick(object? sender, RoutedEventArgs e)
+    {
+        if (_contextPoint is not { } point)
+        {
+            return;
+        }
+
+        await _viewModel.AddNoteAtAsync(point.Page, point.X, point.Y);
+        _contextPoint = null;
+    }
+
     private async void OnRemoveHighlightClick(object? sender, RoutedEventArgs e)
     {
         if (_contextPoint is not { } point)
@@ -1384,6 +1450,13 @@ public partial class MainWindow : Window
         if (ctrl && e.Key == Key.Tab)
         {
             _tabs.SelectNext(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1);
+            e.Handled = true;
+            return;
+        }
+
+        if (ctrl && e.KeyModifiers.HasFlag(KeyModifiers.Shift) && e.Key == Key.K)
+        {
+            _viewModel.ToggleInkModeCommand.Execute(null);
             e.Handled = true;
             return;
         }

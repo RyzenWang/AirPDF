@@ -61,7 +61,9 @@ small .NET application with a hand-built Avalonia interface.
 - **Password-protected PDFs** with a proper unlock prompt.
 - **Light, dark, and high-contrast themes**, following the system on first launch.
 - **Status bar** with the page position and a reading-progress percentage.
-- **Highlights** — select text and press `Ctrl+Shift+H`; right-click a highlight to remove it.
+- **Highlights, ink, and notes** — select text and press `Ctrl+Shift+H` to highlight it, turn on
+  drawing with `Ctrl+Shift+K` to write on the page, and add a sticky note from the page menu.
+  Right-click a highlight to remove it.
   Every markup change can be undone and redone, from the toolbar or with `Ctrl+Z` and `Ctrl+Y`,
   and `Ctrl+S` writes them into the document itself.
 - **Per-document bookmarks** — `Ctrl+D` marks the current spot and the sidebar keeps them
@@ -224,6 +226,7 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl+F` / `Cmd+F` | Find in document |
 | `Ctrl+D` / `Cmd+D` | Add a bookmark at the current position |
 | `Ctrl+Shift+H` / `Cmd+Shift+H` | Highlight the selected text |
+| `Ctrl+Shift+K` / `Cmd+Shift+K` | Turn drawing on or off (freehand ink) |
 | `Ctrl+S` / `Cmd+S` | Save the document, highlights included |
 | `Ctrl+Shift+S` / `Cmd+Shift+S` | Save as… |
 | `Ctrl+Z` / `Cmd+Z` | Undo the last markup change |
@@ -310,7 +313,7 @@ docs/                   Screenshots and architecture notes
 - [x] Per-document bookmarks
 - [x] Rotated pages (links, search highlights, text selection)
 - [x] Highlight annotations, saved with "Save a copy"
-- [ ] Ink and sticky-note annotations
+- [x] Ink and sticky-note annotations
 - [x] Multiple windows
 - [x] Tabs
 - [ ] Additional UI languages (English and Simplified Chinese are available)

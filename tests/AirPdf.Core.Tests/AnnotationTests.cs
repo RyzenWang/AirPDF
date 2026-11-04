@@ -319,6 +319,48 @@ public sealed class AnnotationTests : IDisposable
         }
     }
     [Fact]
+    public async Task RemoveInkMatching_TakesBackExactlyThatStroke()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var page = info.Pages[0];
+        var before = await service.GetAnnotationCountAsync(SamplePath, 1);
+
+        var ink = new PdfInk(
+            1,
+            [new PdfInkStroke([new PdfPoint(50, 300), new PdfPoint(150, 320), new PdfPoint(250, 300)])],
+            32,
+            33,
+            36,
+            2f);
+
+        await service.AddInkAsync(SamplePath, 1, ink.Strokes, ink.Red, ink.Green, ink.Blue, ink.Width);
+        Assert.Equal(before + 1, await service.GetAnnotationCountAsync(SamplePath, 1));
+
+        Assert.True(await service.RemoveInkMatchingAsync(SamplePath, ink));
+        Assert.Equal(before, await service.GetAnnotationCountAsync(SamplePath, 1));
+
+        // Nothing left to match a second time.
+        Assert.False(await service.RemoveInkMatchingAsync(SamplePath, ink));
+    }
+
+    [Fact]
+    public async Task RemoveNoteMatching_TakesBackExactlyThatNote()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var page = info.Pages[0];
+        var before = await service.GetAnnotationCountAsync(SamplePath, 1);
+        var note = new PdfNote(1, new PdfPoint(page.Width * 0.5, page.Height * 0.5), "check this");
+
+        await service.AddNoteAsync(SamplePath, 1, note.Position, note.Text);
+        Assert.Equal(before + 1, await service.GetAnnotationCountAsync(SamplePath, 1));
+
+        Assert.True(await service.RemoveNoteMatchingAsync(SamplePath, note));
+        Assert.Equal(before, await service.GetAnnotationCountAsync(SamplePath, 1));
+        Assert.False(await service.RemoveNoteMatchingAsync(SamplePath, note));
+    }
+    [Fact]
     public async Task AddHighlight_WithNoRectangles_ChangesNothing()
     {
         using var service = new PdfDocumentService();
@@ -359,6 +401,24 @@ public sealed class AnnotationTests : IDisposable
         var px = Math.Clamp((int)(x * bitmap.Width), 0, bitmap.Width - 1);
         var py = Math.Clamp((int)(y * bitmap.Height), 0, bitmap.Height - 1);
         return bitmap.GetPixel(px, py);
+    }
+    /// <summary>Counts samples that are clearly not paper, on a coarse grid.</summary>
+    private static int CountDark(SKBitmap bitmap)
+    {
+        var dark = 0;
+        for (var y = 0; y < bitmap.Height; y += 4)
+        {
+            for (var x = 0; x < bitmap.Width; x += 4)
+            {
+                var colour = bitmap.GetPixel(x, y);
+                if (colour.Red < 200 || colour.Green < 200 || colour.Blue < 200)
+                {
+                    dark++;
+                }
+            }
+        }
+
+        return dark;
     }
     private static string HashOf(string path)
     {

@@ -276,6 +276,36 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     /// Re-renders the page even though it already has a bitmap, for example after an annotation
     /// was added to it.
     /// </summary>
+    private IReadOnlyList<PdfSearchRect> _liveInk = [];
+
+    /// <summary>
+    /// The stroke being drawn right now, as normalized points, so the reader sees the line under
+    /// the pointer before it becomes an annotation.
+    /// </summary>
+    public IReadOnlyList<PdfSearchRect> LiveInk
+    {
+        get => _liveInk;
+        private set
+        {
+            if (SetProperty(ref _liveInk, value))
+            {
+                OnPropertyChanged(nameof(HasLiveInk));
+            }
+        }
+    }
+
+    public bool HasLiveInk => _liveInk.Count > 0;
+
+    public void SetLiveInk(IReadOnlyList<(double X, double Y)> points) =>
+        LiveInk = points.Select(point => new PdfSearchRect(point.X, point.Y, 0, 0)).ToList();
+
+    public void ClearLiveInk()
+    {
+        if (_liveInk.Count > 0)
+        {
+            LiveInk = [];
+        }
+    }
     public void RequestRender()
     {
         _forceRender = true;

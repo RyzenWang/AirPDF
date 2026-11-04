@@ -11,6 +11,12 @@ internal static partial class PdfiumNative
     /// <summary>Highlight annotation, as numbered by the PDFium public API.</summary>
     internal const int AnnotHighlight = 9;
 
+    /// <summary>Sticky-note annotation.</summary>
+    internal const int AnnotText = 1;
+
+    /// <summary>Freehand ink annotation.</summary>
+    internal const int AnnotInk = 15;
+
     /// <summary>
     /// Colour slots on an annotation. A highlight keeps its colour in <c>/C</c>, which is the
     /// stroke slot; the fill slot is set as well so viewers that prefer <c>/IC</c> agree.
@@ -25,6 +31,12 @@ internal static partial class PdfiumNative
     /// <summary>Write a complete new file instead of appending to the original.</summary>
     internal const uint SaveNoIncremental = 2;
 
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct FsPointF
+    {
+        public float X;
+        public float Y;
+    }
     [StructLayout(LayoutKind.Sequential)]
     internal struct FsRectF
     {
@@ -116,6 +128,30 @@ internal static partial class PdfiumNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_AppendAttachmentPoints")]
     internal static extern int AnnotAppendAttachmentPoints(IntPtr annot, ref FsQuadPointsF quadPoints);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_AddInkStroke")]
+    internal static extern int AnnotAddInkStroke(IntPtr annot, [In] FsPointF[] points, UIntPtr pointCount);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_GetInkListCount")]
+    internal static extern UIntPtr AnnotGetInkListCount(IntPtr annot);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_GetInkListPath")]
+    internal static extern uint AnnotGetInkListPath(IntPtr annot, UIntPtr pathIndex, [Out] FsPointF[]? buffer, uint length);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_SetBorder")]
+    internal static extern int AnnotSetBorder(IntPtr annot, float horizontalRadius, float verticalRadius, float borderWidth);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_SetStringValue")]
+    internal static extern int AnnotSetStringValue(
+        IntPtr annot,
+        [MarshalAs(UnmanagedType.LPStr)] string key,
+        [MarshalAs(UnmanagedType.LPWStr)] string value);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_GetStringValue")]
+    internal static extern uint AnnotGetStringValue(
+        IntPtr annot,
+        [MarshalAs(UnmanagedType.LPStr)] string key,
+        [Out] byte[]? buffer,
+        uint length);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDF_SaveAsCopy")]
     internal static extern int SaveAsCopy(IntPtr document, ref FpdfFileWrite writer, uint flags);
 }

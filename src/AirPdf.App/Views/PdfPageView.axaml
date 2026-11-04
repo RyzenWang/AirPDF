@@ -19,6 +19,11 @@
         <controls:TextSelectionOverlay Rects="{Binding SelectionRects}"
                                        IsVisible="{Binding HasSelection}" />
 
+        <controls:InkOverlay Points="{Binding LiveInk}"
+                               Stroke="{DynamicResource TextPrimaryBrush}"
+                               StrokeThickness="2"
+                               IsHitTestVisible="False" />
+
         <controls:SearchHighlightOverlay Rects="{Binding HighlightRects}"
                                          ActiveRects="{Binding ActiveHighlightRects}"
                                          IsVisible="{Binding HasHighlights}" />

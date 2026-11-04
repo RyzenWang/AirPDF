@@ -189,6 +189,12 @@
             <Path Classes="icon" Data="{StaticResource IconUndo}" />
           </Button>
           <Button Classes="icon"
+                  Classes.inkOn="{Binding IsInkMode}"
+                  Command="{Binding ToggleInkModeCommand}"
+                  AutomationProperties.Name="{DynamicResource L.InkMode}"
+                  ToolTip.Tip="{DynamicResource L.InkMode}">
+            <Path Classes="icon" Data="{StaticResource IconPen}" />
+          </Button>          <Button Classes="icon"
                   Command="{Binding RedoAnnotationCommand}"
                   IsVisible="{Binding IsDocumentOpen}"
                   AutomationProperties.Name="{DynamicResource L.Redo}"
@@ -531,6 +537,8 @@
                         Command="{Binding HighlightSelectionCommand}" />
               <MenuItem Header="{DynamicResource L.RemoveHighlight}"
                         Click="OnRemoveHighlightClick"
+                        IsEnabled="{Binding IsDocumentOpen}" />              <MenuItem Header="{DynamicResource L.AddNote}"
+                        Click="OnAddNoteClick"
                         IsEnabled="{Binding IsDocumentOpen}" />
               <MenuItem Header="{DynamicResource L.Undo}"
                         Command="{Binding UndoAnnotationCommand}" />

@@ -460,6 +460,87 @@ public sealed class MainWindowViewModelTests
         }
     }
     [AvaloniaFact]
+    public async Task AddInkAtAsync_DrawsAStrokeThatSurvivesSaving()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-ink-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var target = Path.Combine(directory, "ink.pdf");
+            File.Copy(SamplePath, target);
+
+            using var context = new TestContext();
+            await context.ViewModel.OpenPathAsync(target);
+
+            var drawn = await context.ViewModel.AddInkAtAsync(
+                1,
+                [(0.2, 0.3), (0.4, 0.35), (0.6, 0.3)]);
+
+            Assert.True(drawn);
+            Assert.True(context.ViewModel.HasUnsavedAnnotations);
+            Assert.True(context.ViewModel.CanUndoAnnotation);
+
+            await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+
+            using var probe = new PdfDocumentService();
+            await probe.OpenAsync(target);
+            var inks = await probe.GetInksAsync(target, 1);
+
+            var ink = Assert.Single(inks);
+            Assert.Single(ink.Strokes);
+            Assert.Equal(3, ink.Strokes[0].Points.Count);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task AddNoteAtAsync_AsksForTheTextAndStoresIt()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-note-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var target = Path.Combine(directory, "note.pdf");
+            File.Copy(SamplePath, target);
+
+            using var context = new TestContext();
+            await context.ViewModel.OpenPathAsync(target);
+            context.Dialog.NextText = "See chapter 4";
+
+            Assert.True(await context.ViewModel.AddNoteAtAsync(1, 0.5, 0.5));
+            Assert.True(context.ViewModel.HasUnsavedAnnotations);
+
+            await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+
+            using var probe = new PdfDocumentService();
+            await probe.OpenAsync(target);
+            var note = Assert.Single(await probe.GetNotesAsync(target, 1), candidate => candidate.Text == "See chapter 4");
+            Assert.Equal(1, note.PageNumber);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task ToggleInkMode_FlipsTheMode()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        Assert.False(context.ViewModel.IsInkMode);
+        context.ViewModel.ToggleInkModeCommand.Execute(null);
+        Assert.True(context.ViewModel.IsInkMode);
+        context.ViewModel.ToggleInkModeCommand.Execute(null);
+        Assert.False(context.ViewModel.IsInkMode);
+    }
+    [AvaloniaFact]
     public async Task HighlightSelection_WithoutASelection_CannotRun()
     {
         using var context = new TestContext();

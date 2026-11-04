@@ -43,15 +43,27 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>The highlight colour, kept in one place so undo can restore it exactly.</summary>
     private static readonly (byte Red, byte Green, byte Blue) HighlightColor = (255, 221, 71);
 
-    /// <summary>
-    /// One reader action, and what it takes to take that action back. A highlight that spans
-    /// eight pages is one action, so one Ctrl+Z has to undo all of it rather than one page at a
-    /// time.
-    /// </summary>
-    private sealed record AnnotationUndoStep(bool WasAddition, IReadOnlyList<PdfHighlight> Highlights);
+    /// <summary>Ink colour and width; fixed until the reader can pick them.</summary>
+    private static readonly (byte Red, byte Green, byte Blue) InkColor = (32, 33, 36);
 
-    private readonly Stack<AnnotationUndoStep> _annotationUndo = new();
-    private readonly Stack<AnnotationUndoStep> _annotationRedo = new();
+    private const float InkWidth = 2f;
+
+    /// <summary>
+    /// While this is on, dragging on a page draws instead of selecting text. It is a mode rather
+    /// than a modifier because a stroke is a drag, and a drag already means selection.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isInkMode;
+
+    /// <summary>
+    /// One reader action as a pair of closures: what it takes to undo it, and what it takes to
+    /// apply it again. Highlights, ink and notes all go through it, so Ctrl+Z behaves the same
+    /// whatever was drawn, and a new kind of edit only has to describe its own two directions.
+    /// </summary>
+    private sealed record UndoStep(Func<Task> Undo, Func<Task> Redo);
+
+    private readonly Stack<UndoStep> _annotationUndo = new();
+    private readonly Stack<UndoStep> _annotationRedo = new();
     private NavigationPoint? _pendingOpenPosition;
     private CancellationTokenSource? _loadCancellation;
     private CancellationTokenSource? _searchCancellation;
@@ -873,7 +885,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 page.RequestRender();
             }
 
-            PushUndo(wasAddition: true, added);
+            PushStep(HighlightAddedStep(added));
             HasUnsavedAnnotations = true;
             ShowStatus(_localization.T("L.HighlightAdded"));
         }
@@ -888,6 +900,129 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Turns freehand drawing on or off.</summary>
+    [RelayCommand]
+    private void ToggleInkMode()
+    {
+        if (!IsDocumentOpen)
+        {
+            return;
+        }
+
+        IsInkMode = !IsInkMode;
+        ShowStatus(_localization.T(IsInkMode ? "L.InkModeOn" : "L.InkModeOff"));
+    }
+
+    /// <summary>
+    /// Commits one freehand stroke. The points arrive in normalized display coordinates, as the
+    /// pointer reports them, and are mapped back to page space with the page's own rotation.
+    /// </summary>
+    public async Task<bool> AddInkAtAsync(int pageNumber, IReadOnlyList<(double X, double Y)> points)
+    {
+        if (!IsDocumentOpen || points.Count < 2)
+        {
+            return false;
+        }
+
+        var page = Pages.FirstOrDefault(candidate => candidate.Number == pageNumber);
+        if (page is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var rotation = await _documentService.GetPageRotationAsync(FilePath, pageNumber);
+            var converted = points
+                .Select(point => PageGeometry.ToPageQuad(
+                    new PdfSearchRect(point.X, point.Y, 0, 0),
+                    page.WidthPoints,
+                    page.HeightPoints,
+                    rotation))
+                .Select(quad => new PdfPoint(quad.Left, quad.Top))
+                .ToList();
+
+            var ink = new PdfInk(
+                pageNumber,
+                [new PdfInkStroke(converted)],
+                InkColor.Red,
+                InkColor.Green,
+                InkColor.Blue,
+                InkWidth);
+
+            await AddInkAsync(ink);
+            PushStep(InkAddedStep(ink));
+            HasUnsavedAnnotations = true;
+            ShowStatus(_localization.T("L.InkAdded"));
+            return true;
+        }
+        catch (PdfDocumentException failure)
+        {
+            SetError(_localization.GetPdfFailureMessage(failure.Failure));
+            return false;
+        }
+        catch (Exception unexpected)
+        {
+            CrashLog.Write("AddInk", unexpected);
+            SetError(_localization.T("L.ErrorEditFailed"));
+            return false;
+        }
+    }
+
+    /// <summary>Asks for the text of a sticky note and places it at a point on the page.</summary>
+    public async Task<bool> AddNoteAtAsync(int pageNumber, double normalizedX, double normalizedY)
+    {
+        if (!IsDocumentOpen)
+        {
+            return false;
+        }
+
+        var page = Pages.FirstOrDefault(candidate => candidate.Number == pageNumber);
+        if (page is null)
+        {
+            return false;
+        }
+
+        var title = _localization.T("L.AddNote");
+        var text = await _dialogs.PromptTextAsync(
+            title,
+            title,
+            _localization.T("L.NoteTextLabel"),
+            string.Empty);
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        try
+        {
+            var rotation = await _documentService.GetPageRotationAsync(FilePath, pageNumber);
+            var point = PageGeometry.ToPageQuad(
+                new PdfSearchRect(normalizedX, normalizedY, 0, 0),
+                page.WidthPoints,
+                page.HeightPoints,
+                rotation);
+
+            var note = new PdfNote(pageNumber, new PdfPoint(point.Left, point.Top), text.Trim());
+            await AddNoteAsync(note);
+            PushStep(NoteAddedStep(note));
+            HasUnsavedAnnotations = true;
+            ShowStatus(_localization.T("L.NoteAdded"));
+            return true;
+        }
+        catch (PdfDocumentException failure)
+        {
+            SetError(_localization.GetPdfFailureMessage(failure.Failure));
+            return false;
+        }
+        catch (Exception unexpected)
+        {
+            CrashLog.Write("AddNote", unexpected);
+            SetError(_localization.T("L.ErrorEditFailed"));
+            return false;
+        }
+    }
     private bool CanHighlightSelection() => IsDocumentOpen && HasSelection && !IsBusy;
 
     /// <summary>Writes the document, annotations included, to a file the reader chooses.</summary>
@@ -967,7 +1102,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 return false;
             }
 
-            PushUndo(wasAddition: false, removed);
+            PushStep(HighlightRemovedStep(removed));
 
             page.RequestRender();
             HasUnsavedAnnotations = true;
@@ -986,9 +1121,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>True when there is a taken-back edit that can be applied again.</summary>
     public bool CanRedoAnnotation => _annotationRedo.Count > 0;
 
-    /// <summary>
-    /// Takes back the last annotation edit, whether it added a highlight or removed one.
-    /// </summary>
+    /// <summary>Takes back the last markup edit, whatever kind it was.</summary>
     [RelayCommand(CanExecute = nameof(CanUndoAnnotation))]
     private async Task UndoAnnotationAsync()
     {
@@ -1001,7 +1134,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _annotationRedo.Push(step);
         NotifyUndoChanged();
 
-        await ApplyAnnotationStepAsync(step, invert: true);
+        await RunUndoStepAsync(step.Undo, "L.Undone");
     }
 
     [RelayCommand(CanExecute = nameof(CanRedoAnnotation))]
@@ -1016,44 +1149,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _annotationUndo.Push(step);
         NotifyUndoChanged();
 
-        await ApplyAnnotationStepAsync(step, invert: false);
+        await RunUndoStepAsync(step.Redo, "L.Redone");
     }
 
-    /// <summary>
-    /// Applies a recorded step in either direction. A step describes what the reader did, so
-    /// undoing an addition removes it and undoing a removal puts it back.
-    /// </summary>
-    private async Task ApplyAnnotationStepAsync(AnnotationUndoStep step, bool invert)
+    private async Task RunUndoStepAsync(Func<Task> action, string statusKey)
     {
-        var adding = step.WasAddition != invert;
-
         try
         {
-            foreach (var highlight in step.Highlights)
-            {
-                if (adding)
-                {
-                    await _documentService.AddHighlightAsync(
-                        FilePath,
-                        highlight.PageNumber,
-                        highlight.Quads,
-                        highlight.Red,
-                        highlight.Green,
-                        highlight.Blue);
-                }
-                else
-                {
-                    await _documentService.RemoveHighlightMatchingAsync(
-                        FilePath,
-                        highlight.PageNumber,
-                        highlight.Quads);
-                }
-
-                Pages.FirstOrDefault(page => page.Number == highlight.PageNumber)?.RequestRender();
-            }
-
+            await action();
             HasUnsavedAnnotations = true;
-            ShowStatus(_localization.T(invert ? "L.Undone" : "L.Redone"));
+            ShowStatus(_localization.T(statusKey));
         }
         catch (PdfDocumentException failure)
         {
@@ -1061,24 +1166,108 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         catch (Exception unexpected)
         {
-            CrashLog.Write("ApplyAnnotationStep", unexpected);
+            CrashLog.Write("UndoStep", unexpected);
             SetError(_localization.T("L.ErrorEditFailed"));
         }
     }
-    private void PushUndo(bool wasAddition, IReadOnlyList<PdfHighlight> highlights)
+
+    /// <summary>Records an edit and drops the redo trail, as every editor does.</summary>
+    private void PushStep(UndoStep step)
     {
-        if (highlights.Count == 0)
-        {
-            return;
-        }
-
-        _annotationUndo.Push(new AnnotationUndoStep(wasAddition, highlights));
-
-        // A new edit makes the redo trail meaningless, as everywhere else.
+        _annotationUndo.Push(step);
         _annotationRedo.Clear();
         NotifyUndoChanged();
     }
 
+    private UndoStep HighlightAddedStep(IReadOnlyList<PdfHighlight> highlights) => new(
+        Undo: async () =>
+        {
+            foreach (var highlight in highlights)
+            {
+                await RemoveHighlightAsync(highlight);
+            }
+        },
+        Redo: async () =>
+        {
+            foreach (var highlight in highlights)
+            {
+                await AddHighlightAsync(highlight);
+            }
+        });
+
+    private UndoStep HighlightRemovedStep(IReadOnlyList<PdfHighlight> highlights) => new(
+        Undo: async () =>
+        {
+            foreach (var highlight in highlights)
+            {
+                await AddHighlightAsync(highlight);
+            }
+        },
+        Redo: async () =>
+        {
+            foreach (var highlight in highlights)
+            {
+                await RemoveHighlightAsync(highlight);
+            }
+        });
+
+    private UndoStep InkAddedStep(PdfInk ink) => new(
+        Undo: async () =>
+        {
+            await _documentService.RemoveInkMatchingAsync(FilePath, ink);
+            RenderPage(ink.PageNumber);
+        },
+        Redo: async () => await AddInkAsync(ink));
+
+    private UndoStep NoteAddedStep(PdfNote note) => new(
+        Undo: async () =>
+        {
+            await _documentService.RemoveNoteMatchingAsync(FilePath, note);
+            RenderPage(note.PageNumber);
+        },
+        Redo: async () => await AddNoteAsync(note));
+
+    private async Task AddHighlightAsync(PdfHighlight highlight)
+    {
+        await _documentService.AddHighlightAsync(
+            FilePath,
+            highlight.PageNumber,
+            highlight.Quads,
+            highlight.Red,
+            highlight.Green,
+            highlight.Blue);
+
+        RenderPage(highlight.PageNumber);
+    }
+
+    private async Task RemoveHighlightAsync(PdfHighlight highlight)
+    {
+        await _documentService.RemoveHighlightMatchingAsync(FilePath, highlight.PageNumber, highlight.Quads);
+        RenderPage(highlight.PageNumber);
+    }
+
+    private async Task AddInkAsync(PdfInk ink)
+    {
+        await _documentService.AddInkAsync(
+            FilePath,
+            ink.PageNumber,
+            ink.Strokes,
+            ink.Red,
+            ink.Green,
+            ink.Blue,
+            ink.Width);
+
+        RenderPage(ink.PageNumber);
+    }
+
+    private async Task AddNoteAsync(PdfNote note)
+    {
+        await _documentService.AddNoteAsync(FilePath, note.PageNumber, note.Position, note.Text);
+        RenderPage(note.PageNumber);
+    }
+
+    private void RenderPage(int pageNumber) =>
+        Pages.FirstOrDefault(page => page.Number == pageNumber)?.RequestRender();
     private void ClearUndo()
     {
         _annotationUndo.Clear();

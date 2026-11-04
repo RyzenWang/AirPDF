@@ -403,6 +403,188 @@ public sealed class PdfDocumentService : IDisposable
             },
             cancellationToken);
     }
+    /// <summary>Draws ink strokes into the resident document.</summary>
+    public Task AddInkAsync(
+        string filePath,
+        int pageNumber,
+        IReadOnlyList<PdfInkStroke> strokes,
+        byte red = 32,
+        byte green = 33,
+        byte blue = 36,
+        float width = 1.5f,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ArgumentNullException.ThrowIfNull(strokes);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    ResidentSession(fullPath).AddInk(pageNumber, strokes, red, green, blue, width);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
+    /// <summary>Removes the ink annotation matching the snapshot, for undo.</summary>
+    public Task<bool> RemoveInkMatchingAsync(string filePath, PdfInk ink, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var fullPath = NormalizePath(filePath);
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return ResidentSession(fullPath).RemoveInkMatching(ink.PageNumber, ink);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
+    /// <summary>Removes the sticky note matching the snapshot, for undo.</summary>
+    public Task<bool> RemoveNoteMatchingAsync(string filePath, PdfNote note, CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var fullPath = NormalizePath(filePath);
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return ResidentSession(fullPath).RemoveNoteMatching(note.PageNumber, note);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+    /// <summary>Every ink annotation on a page.</summary>
+    public Task<IReadOnlyList<PdfInk>> GetInksAsync(
+        string filePath,
+        int pageNumber,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var session = ResidentSession(fullPath);
+                    var inks = new List<PdfInk>();
+                    for (var index = 0; index < session.GetAnnotationCount(pageNumber); index++)
+                    {
+                        if (session.TryReadInk(pageNumber, index) is { } ink)
+                        {
+                            inks.Add(ink);
+                        }
+                    }
+
+                    return (IReadOnlyList<PdfInk>)inks;
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
+    /// <summary>Adds a sticky note with text at a page-space point.</summary>
+    public Task AddNoteAsync(
+        string filePath,
+        int pageNumber,
+        PdfPoint position,
+        string text,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    ResidentSession(fullPath).AddNote(pageNumber, position, text ?? string.Empty);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
+    /// <summary>Every sticky note on a page.</summary>
+    public Task<IReadOnlyList<PdfNote>> GetNotesAsync(
+        string filePath,
+        int pageNumber,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var session = ResidentSession(fullPath);
+                    var notes = new List<PdfNote>();
+                    for (var index = 0; index < session.GetAnnotationCount(pageNumber); index++)
+                    {
+                        if (session.TryReadNote(pageNumber, index) is { } note)
+                        {
+                            notes.Add(note);
+                        }
+                    }
+
+                    return (IReadOnlyList<PdfNote>)notes;
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
     /// <summary>Removes the highlights under a page-space point.</summary>
     public Task<IReadOnlyList<PdfHighlight>> RemoveHighlightsAtAsync(
         string filePath,

@@ -4,6 +4,17 @@ All notable changes to AirPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning once it reaches 1.0.
 
+## [Unreleased]
+
+### Added
+
+- Ink annotations: `Ctrl+Shift+K` (or the pen button) turns on drawing, and a drag on the page
+  becomes a freehand stroke stored as an ink annotation. The stroke is drawn under the pointer
+  while it is being made, and both ink and notes can be undone and redone like any other markup.
+- Sticky notes: **Add note** in the page menu asks for the text and pins it to the point you
+  right-clicked. The text is stored in the annotation itself, so it travels with the file.
+- The undo model now records an action as a pair of closures rather than as highlight geometry,
+  which is what let ink and notes join it without special cases.
 ## [0.4.0] - 2026-11-04
 
 ### Added
