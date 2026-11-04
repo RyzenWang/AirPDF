@@ -599,6 +599,21 @@ public sealed class MainWindowViewModelTests
         Assert.Same(blue, context.ViewModel.InkColor);
     }
     [AvaloniaFact]
+    public async Task Pages_DrawTheStrokeInTheChosenInkColour()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        // The live stroke uses the page's brush, so it has to match the current ink colour from
+        // the moment the document opens and follow every change.
+        Assert.Same(context.ViewModel.InkColor.Brush, context.ViewModel.Pages[0].InkBrush);
+
+        var blue = context.ViewModel.Palette.Single(color => color.Name == "Blue");
+        context.ViewModel.SetInkColor(blue);
+
+        Assert.Same(blue.Brush, context.ViewModel.Pages[0].InkBrush);
+    }
+    [AvaloniaFact]
     public async Task HighlightSelection_WithoutASelection_CannotRun()
     {
         using var context = new TestContext();

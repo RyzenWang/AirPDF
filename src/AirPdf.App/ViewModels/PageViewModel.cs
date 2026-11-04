@@ -1,3 +1,4 @@
+using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using AirPdf.App.Rendering;
@@ -267,6 +268,8 @@ public sealed class PageViewModel : ObservableObject, IDisposable
 
     public void Deactivate()
     {
+        _clearLiveInkAfterRender = false;
+        ClearLiveInk();
         _isActive = false;
         CancelRender();
         IsRendering = false;
@@ -277,6 +280,8 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     /// was added to it.
     /// </summary>
     private IReadOnlyList<PdfSearchRect> _liveInk = [];
+    private IBrush? _inkBrush;
+    private bool _clearLiveInkAfterRender;
 
     /// <summary>
     /// The stroke being drawn right now, as normalized points, so the reader sees the line under
@@ -295,6 +300,25 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     }
 
     public bool HasLiveInk => _liveInk.Count > 0;
+
+    /// <summary>
+    /// Brush for the stroke being drawn, so the line under the pointer is already the colour it
+    /// will have once it becomes an annotation.
+    /// </summary>
+    public IBrush? InkBrush
+    {
+        get => _inkBrush;
+        set => SetProperty(ref _inkBrush, value);
+    }
+
+    /// <summary>
+    /// Keeps the stroke on screen until the page has been redrawn with it baked in. Clearing it
+    /// when the pointer is released makes the line vanish and come back, which reads as a flicker.
+    /// </summary>
+    public void ClearLiveInkAfterRender()
+    {
+        _clearLiveInkAfterRender = true;
+    }
 
     public void SetLiveInk(IReadOnlyList<(double X, double Y)> points) =>
         LiveInk = points.Select(point => new PdfSearchRect(point.X, point.Y, 0, 0)).ToList();
@@ -417,6 +441,12 @@ public sealed class PageViewModel : ObservableObject, IDisposable
             Image = bitmap;
             _renderedWidth = targetWidth;
             DisposeBitmapLater(previous);
+
+            if (_clearLiveInkAfterRender)
+            {
+                _clearLiveInkAfterRender = false;
+                ClearLiveInk();
+            }
         }
         catch (OperationCanceledException)
         {

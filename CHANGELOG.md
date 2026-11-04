@@ -4,40 +4,37 @@ All notable changes to AirPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning once it reaches 1.0.
 
-
 ## [Unreleased]
-
 
 ### Added
 
 - Ink annotations: `Ctrl+Shift+K` (or the pen button) turns on drawing, and a drag on the page
-  becomes a freehand stroke stored as an ink annotation. The stroke is drawn under the pointer
-  while it is being made, and both ink and notes can be undone and redone like any other markup.
+  becomes a freehand stroke stored as an ink annotation. The stroke is drawn under the pointer in
+  the colour it will keep, and both ink and notes can be undone and redone like any other markup.
 - Sticky notes: **Add note** in the page menu asks for the text and pins it to the point you
   right-clicked. The text is stored in the annotation itself, so it travels with the file.
 - A colour palette for markup, with the highlight colour and the ink colour chosen separately.
 - The undo model records an action as a pair of closures rather than as highlight geometry, which
   is what let ink and notes join it without special cases.
 
-
 ### Changed
 
-- The palette hangs off the tool buttons instead of a separate one: the pen opens its colour list
-  and picking a colour starts drawing, and a new highlighter button opens the highlight colours and
-  applies the choice to the selection. One less button, and the colour belongs to the tool it
-  colours.
-
+- The palette hangs off the tools that use it instead of a button of its own: the pen opens the ink
+  colours and picking one starts drawing, and **Highlight** in the page menu opens the highlight
+  colours and applies the chosen colour to the selection straight away.
 
 ### Fixed
 
-- Clicking away from a selection, or pressing Escape, now clears it: a select-all had no way back.
-  Escape also leaves drawing mode, and right-clicking away from a selection clears it while
-  keeping it when the click lands on the selection itself.
+- A stroke was drawn in the theme colour rather than the chosen ink colour, and it disappeared for a
+  moment between the pointer being released and its own render. It now uses the ink brush while
+  being drawn and stays on screen until the page has been redrawn with it.
+- The pen button now leaves drawing mode when pressed again, instead of only Escape doing it.
+- Clicking away from a selection, or pressing Escape, clears it: a select-all had no way back.
+  Escape also leaves drawing mode, and right-clicking away from a selection clears it while keeping
+  it when the click lands on the selection itself.
 - A context menu stayed open when clicking elsewhere in the window. The page pointer handler
   marked the press as handled before the popup could see it, so the popup never dismissed itself.
-
 ## [0.4.0] - 2026-11-04
-
 
 ### Added
 
@@ -63,7 +60,6 @@ semantic versioning once it reaches 1.0.
 - End-to-end tests that drive a real window with real key events, covering zoom, search, language
   switching, undo/redo, and the update banner.
 
-
 ### Changed
 
 - The release page no longer offers the Windows installer or the macOS `.pkg` while the builds are
@@ -71,7 +67,6 @@ semantic versioning once it reaches 1.0.
   the reader. Portable archives stay, and Windows users have the Store.
 - The toolbar's zoom controls share one size, and the new undo/redo buttons sit with the navigation
   icons rather than inside the zoom group.
-
 
 ### Fixed
 
@@ -85,11 +80,9 @@ semantic versioning once it reaches 1.0.
   the file was swapped, so editing failed and rendering fell back to a transient handle per page. A
   read-only or busy file is now detected before the session is released.
 
-
 ## [0.3.2] - 2026-11-02
 
 Every platform is now compiled ahead of time.
-
 
 ### Changed
 
@@ -100,9 +93,7 @@ Every platform is now compiled ahead of time.
   separately, because Windows says nothing about Linux or macOS: they have different
   toolchains and different native assets.
 
-
 ### Changed
-
 
 ### Fixed
 
@@ -117,7 +108,6 @@ Every platform is now compiled ahead of time.
 ## [0.3.1] - 2026-11-02
 
 The Windows build is compiled ahead of time, and starts in well under a second.
-
 
 ### Changed
 
@@ -142,7 +132,6 @@ The Windows build is compiled ahead of time, and starts in well under a second.
 
 Rotated pages work end to end, and the Windows download halves.
 
-
 ### Changed
 
 - The Windows build is trimmed, taking the download from 53 MB to 28 MB. The release
@@ -156,9 +145,7 @@ Rotated pages work end to end, and the Windows download halves.
   supplies metadata and the outline, and CJK text keeps its own per-character selection
   units because the search text no longer invents spaces between them.
 
-
 ### Changed
-
 
 ### Fixed
 
@@ -175,7 +162,6 @@ A packaging release. The application binaries are unchanged from 0.2.0; this
 version publishes the signing tooling and makes the release pipeline state
 explicit.
 
-
 ### Added
 
 - `packaging/signing/Set-SigningSecrets.ps1` validates a Windows or macOS
@@ -191,7 +177,6 @@ explicit.
 - `docs/SIGNING.md` covering certificate acquisition, secret names, verification,
   rotation, and cost.
 
-
 ### Changed
 
 - The release workflow now fails when signing is half configured (a certificate
@@ -201,15 +186,12 @@ explicit.
 - Certificate and key files are ignored by git so private material cannot be
   committed by accident.
 
-
 ### Notes
 
 - No code-signing credentials are configured in this repository yet, so the
   published installers are unsigned.
 
-
 ## [0.2.0] - 2026-10-29
-
 
 ### Added
 
@@ -247,7 +229,6 @@ explicit.
   document handle, zoom, scroll position, search results, and reading position, so
   switching does not reload. The tab strip only appears once a second tab exists.
 
-
 ### Changed
 
 - Windows now share one settings store, language, theme, and update channel
@@ -271,16 +252,13 @@ explicit.
 - Release builds now run the full test suite before packaging, and CI runs the
   new headless Avalonia tests.
 
-
 ### Notes
 
 - Windows Authenticode and Apple Developer ID credentials are supplied as
   repository secrets. Without them the workflow produces unsigned packages and
   skips notarization.
 
-
 ### Changed
-
 
 ### Fixed
 
@@ -300,11 +278,9 @@ explicit.
   again for fit-width.
 - Closing a maximized window no longer overwrites the remembered restore size.
 
-
 ## [0.1.0] - 2026-10-28
 
 First public preview.
-
 
 ### Added
 
@@ -324,16 +300,13 @@ First public preview.
 - Atomic JSON settings storage in the platform application-data folder.
 - MIT license, third-party notices, architecture notes, and CI workflows.
 
-
 ### Changed
-
 
 ### Fixed
 
 - Zooming in and out could terminate the process. Cancellation tokens are now
   retired safely, and replaced page bitmaps are released after the compositor
   has had a chance to finish the frame.
-
 
 ### Known limitations
 

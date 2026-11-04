@@ -5,6 +5,7 @@ using AirPdf.Core.Models;
 using AirPdf.Core.Services;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
@@ -1205,13 +1206,19 @@ public partial class MainWindow : Window
         if (_inkStroke is { } drawing)
         {
             _inkStroke = null;
-            drawing.Page.ClearLiveInk();
             e.Pointer.Capture(null);
             e.Handled = true;
 
             if (drawing.Points.Count >= 2)
             {
+                // The stroke stays on screen until the page is redrawn with it baked in; clearing
+                // it here is what made it disappear and reappear.
+                drawing.Page.ClearLiveInkAfterRender();
                 _ = _viewModel.AddInkAtAsync(drawing.Page.Number, drawing.Points);
+            }
+            else
+            {
+                drawing.Page.ClearLiveInk();
             }
 
             return;
@@ -1393,7 +1400,7 @@ public partial class MainWindow : Window
             }
         }
 
-        CloseFlyout(HighlightButton);
+        HidePalettes();
     }
 
     private void OnInkSwatchClick(object? sender, RoutedEventArgs e)
@@ -1403,14 +1410,74 @@ public partial class MainWindow : Window
             _viewModel.UseInkColor(color);
         }
 
-        CloseFlyout(InkButton);
+        HidePalettes();
     }
 
-    private static void CloseFlyout(Button button)
+    /// <summary>
+    /// Opens the highlight colours at the point the page menu was opened at. The flyout is a
+    /// window resource rather than something attached to the menu item, because the menu closes
+    /// as soon as the item is activated and takes an attached flyout with it.
+    /// </summary>
+    private void OnHighlightMenuClick(object? sender, RoutedEventArgs e)
     {
-        if (button.Flyout is { } flyout)
+        if (Resources["HighlightPalette"] is not Flyout flyout)
         {
-            flyout.Hide();
+            return;
+        }
+
+        if (flyout.Content is Control content)
+        {
+            content.DataContext = _viewModel;
+        }
+
+        flyout.ShowAt(PagesList);
+    }
+
+    /// <summary>
+    /// The pen button: out of the way while drawing (a second click stops), otherwise the way in,
+    /// which is also where the colour is chosen.
+    /// </summary>
+    private void OnInkButtonClick(object? sender, RoutedEventArgs e)
+    {
+        if (_viewModel.IsInkMode)
+        {
+            _viewModel.ToggleInkModeCommand.Execute(null);
+            return;
+        }
+
+        ShowInkPalette();
+    }
+
+    private void ShowInkPalette()
+    {
+        if (Resources["InkPalette"] is not Flyout flyout)
+        {
+            return;
+        }
+
+        if (flyout.Content is Control content)
+        {
+            content.DataContext = _viewModel;
+        }
+
+        flyout.ShowAt(InkButton);
+    }
+
+    private void HidePalettes()
+    {
+        if (InkButton.Flyout is { } ink)
+        {
+            ink.Hide();
+        }
+
+        if (Resources["HighlightPalette"] is Flyout highlight)
+        {
+            highlight.Hide();
+        }
+
+        if (Resources["InkPalette"] is Flyout resource)
+        {
+            resource.Hide();
         }
     }
     private async void OnAddNoteClick(object? sender, RoutedEventArgs e)

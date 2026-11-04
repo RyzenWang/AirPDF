@@ -2079,6 +2079,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _reading.Attach(info);
 
         Pages = info.Pages.Select(page => new PageViewModel(_pageRenderer, page, _localization)).ToList();
+
+        // The stroke drawn under the pointer has to be the colour it will keep.
+        foreach (var page in Pages)
+        {
+            page.InkBrush = InkColor.Brush;
+        }
         Thumbnails = info.Pages.Select(page => new ThumbnailViewModel(_pageRenderer, page)).ToList();
         OutlineItems = info.Bookmarks.Select(item => new OutlineItemViewModel(item)).ToList();
         LoadBookmarks(info.FilePath);
@@ -2569,6 +2575,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(HasStatusMessage));
 
     partial void OnIsInkModeChanged(bool value) => OnPropertyChanged(nameof(InkModeLabel));
+
+    partial void OnInkColorChanged(MarkupColor value)
+    {
+        foreach (var page in Pages)
+        {
+            page.InkBrush = value.Brush;
+        }
+    }
 
     partial void OnHasUnsavedAnnotationsChanged(bool value) => UpdateTitleMarker();
 

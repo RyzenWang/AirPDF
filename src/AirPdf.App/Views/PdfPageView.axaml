@@ -20,7 +20,7 @@
                                        IsVisible="{Binding HasSelection}" />
 
         <controls:InkOverlay Points="{Binding LiveInk}"
-                               Stroke="{DynamicResource TextPrimaryBrush}"
+                               Stroke="{Binding InkBrush}"
                                StrokeThickness="2"
                                IsHitTestVisible="False" />
 
