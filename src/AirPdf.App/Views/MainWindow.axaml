@@ -14,7 +14,7 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource AppBackgroundBrush}">
   <Window.Resources>
-    <Flyout x:Key="InkPalette" Placement="BottomEdgeAlignedLeft">
+    <Flyout x:Key="InkPalette" Placement="Pointer">
       <StackPanel Spacing="9" Width="176">
         <TextBlock Text="{DynamicResource L.InkColorLabel}" Classes="eyebrow" />
         <ItemsControl ItemsSource="{Binding Palette}">
@@ -25,13 +25,14 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:MarkupColor">
-              <Button Classes="swatch" Margin="0,0,6,6" Background="{Binding Brush}" Tag="{Binding}" Click="OnInkSwatchClick" />
+              <Button Classes="swatch" Margin="0,0,6,6"
+                      Background="{Binding Brush}" Tag="{Binding}"
+                      Click="OnInkSwatchClick" />
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
       </StackPanel>
-    </Flyout>
-    <Flyout x:Key="NotePopup" Placement="Pointer">
+    </Flyout>    <Flyout x:Key="NotePopup" Placement="Pointer">
       <Border MaxWidth="320" Padding="14,12"
               Background="{DynamicResource SurfaceBrush}"
               BorderBrush="{DynamicResource BorderStrongBrush}"
@@ -242,17 +243,14 @@
                   ToolTip.Tip="{DynamicResource L.Redo}">
             <Path Classes="icon" Data="{StaticResource IconRedo}" />
           </Button>
-          <Button x:Name="InkButton"
-                  Classes="icon"
+          <Button Classes="icon"
                   Classes.inkOn="{Binding IsInkMode}"
-                  PointerPressed="OnInkButtonPointerPressed"
-                  Click="OnInkButtonClick"
+                  Command="{Binding ToggleInkModeCommand}"
                   IsVisible="{Binding IsDocumentOpen}"
                   AutomationProperties.Name="{DynamicResource L.InkMode}"
                   ToolTip.Tip="{DynamicResource L.InkMode}">
             <Path Classes="icon" Data="{StaticResource IconPen}" Stroke="{Binding InkColor.Brush}" />
-          </Button>
-          <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="8,0" VerticalAlignment="Center" />
+          </Button>          <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="8,0" VerticalAlignment="Center" />
 
           <Button Classes="zoom"
                   Command="{Binding ZoomOutCommand}"
@@ -583,7 +581,9 @@
                         IsVisible="{Binding HasSelection}" />
               <MenuItem Header="{DynamicResource L.HighlightSelection}"
                         Click="OnHighlightMenuClick"
-                        IsVisible="{Binding HasSelection}" />
+                        IsVisible="{Binding HasSelection}" />              <MenuItem Header="{DynamicResource L.InkColor}"
+                        Click="OnInkColorMenuClick"
+                        IsVisible="{Binding IsDocumentOpen}" />
               <MenuItem Header="{DynamicResource L.ShowNote}"
                         Click="OnShowNoteClick"
                         IsVisible="{Binding HasNoteUnderPointer}" />

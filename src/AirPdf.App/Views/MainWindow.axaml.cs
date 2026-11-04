@@ -96,6 +96,7 @@ public partial class MainWindow : Window
         AddHandler(PointerPressedEvent, OnSelectionPointerPressed, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, OnSelectionPointerMoved, RoutingStrategies.Tunnel);
         AddHandler(PointerReleasedEvent, OnSelectionPointerReleased, RoutingStrategies.Tunnel);
+        AddHandler(PointerCaptureLostEvent, OnPointerCaptureLost, RoutingStrategies.Tunnel);
         PagesList.AddHandler(PointerWheelChangedEvent, OnPagesPointerWheel, RoutingStrategies.Tunnel);
         AddHandler(DragDrop.DragOverEvent, OnDragOver);
         AddHandler(DragDrop.DragLeaveEvent, OnDragLeave);
@@ -962,7 +963,7 @@ public partial class MainWindow : Window
                 return bookmark;
             }
 
-            visual = visual.GetVisualParent();
+            visual = visual.GetVisualParent() as Visual;
         }
 
         return null;
@@ -1041,9 +1042,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (_viewModel.IsInkMode)
+        // Only a press that starts inside the page list can begin a stroke. Testing the pointer
+        // position instead let a press on the toolbar count as a stroke when a page happened to
+        // be laid out underneath it, which swallowed the click and made the buttons dead.
+        if (_viewModel.IsInkMode && IsInsidePageList(e.Source))
         {
-            var inkView = FindPageView(e.Source) ?? FindPageViewAt(e.GetPosition(this));
+            HidePalettes();
+
+            var inkView = FindPageView(e.Source);
             if (inkView?.DataContext is PageViewModel inkPage)
             {
                 var start = e.GetPosition(inkView);
@@ -1210,6 +1216,21 @@ public partial class MainWindow : Window
         Cursor = active ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
     }
 
+    /// <summary>
+    /// A capture can be lost without a release - the window loses focus, or the pointer leaves
+    /// the surface. The half-drawn stroke and its capture have to go with it, or the next press
+    /// anywhere in the window never reaches the control under it.
+    /// </summary>
+    private void OnPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+    {
+        if (_inkStroke is not { } drawing)
+        {
+            return;
+        }
+
+        _inkStroke = null;
+        drawing.Page.ClearLiveInk();
+    }
     private void OnSelectionPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         if (_inkStroke is { } drawing)
@@ -1278,6 +1299,27 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>True when the control that raised the event sits inside the page list.</summary>
+    private bool IsInsidePageList(object? source)
+    {
+        if (source is not Visual start)
+        {
+            return false;
+        }
+
+        Visual? visual = start;
+        while (visual is not null)
+        {
+            if (ReferenceEquals(visual, PagesList))
+            {
+                return true;
+            }
+
+            visual = visual.GetVisualParent() as Visual;
+        }
+
+        return false;
+    }
     private static PdfPageView? FindPageView(object? source)
     {
         if (source is PdfPageView pageView)
@@ -1488,25 +1530,14 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Leaving the mode must not also open the colours, so the press is consumed here and the
+        // click that would open the flyout never happens.
         _viewModel.ToggleInkModeCommand.Execute(null);
+        HidePalettes();
         e.Handled = true;
     }
-    /// <summary>
-    /// The pen button: out of the way while drawing (a second click stops), otherwise the way in,
-    /// which is also where the colour is chosen.
-    /// </summary>
-    private void OnInkButtonClick(object? sender, RoutedEventArgs e)
-    {
-        if (_viewModel.IsInkMode)
-        {
-            _viewModel.ToggleInkModeCommand.Execute(null);
-            return;
-        }
-
-        ShowInkPalette();
-    }
-
-    private void ShowInkPalette()
+    /// <summary>Opens the ink colours from the page menu.</summary>
+    private void OnInkColorMenuClick(object? sender, RoutedEventArgs e)
     {
         if (Resources["InkPalette"] is not Flyout flyout)
         {
@@ -1518,7 +1549,31 @@ public partial class MainWindow : Window
             content.DataContext = _viewModel;
         }
 
-        flyout.ShowAt(InkButton);
+        flyout.ShowAt(PagesList);
+    }
+    private void HidePalettes()
+    {
+        if (Resources["InkPalette"] is Flyout ink)
+        {
+            ink.Hide();
+        }
+
+        if (Resources["HighlightPalette"] is Flyout highlight)
+        {
+            highlight.Hide();
+        }
+
+
+    }
+    private async void OnAddNoteClick(object? sender, RoutedEventArgs e)
+    {
+        if (_contextPoint is not { } point)
+        {
+            return;
+        }
+
+        await _viewModel.AddNoteAtAsync(point.Page, point.X, point.Y);
+        _contextPoint = null;
     }
 
     /// <summary>Shows the text of the note that was clicked.</summary>
@@ -1536,34 +1591,6 @@ public partial class MainWindow : Window
 
         flyout.ShowAt(PagesList);
     }
-    private void HidePalettes()
-    {
-        if (InkButton.Flyout is { } ink)
-        {
-            ink.Hide();
-        }
-
-        if (Resources["HighlightPalette"] is Flyout highlight)
-        {
-            highlight.Hide();
-        }
-
-        if (Resources["InkPalette"] is Flyout resource)
-        {
-            resource.Hide();
-        }
-    }
-    private async void OnAddNoteClick(object? sender, RoutedEventArgs e)
-    {
-        if (_contextPoint is not { } point)
-        {
-            return;
-        }
-
-        await _viewModel.AddNoteAtAsync(point.Page, point.X, point.Y);
-        _contextPoint = null;
-    }
-
     private void OnShowNoteClick(object? sender, RoutedEventArgs e)
     {
         _viewModel.ShowNoteUnderPointer();

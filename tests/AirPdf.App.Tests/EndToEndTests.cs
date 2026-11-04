@@ -1,3 +1,4 @@
+using Avalonia;
 using AirPdf.App.Services;
 using AirPdf.App.ViewModels;
 using AirPdf.App.Views;

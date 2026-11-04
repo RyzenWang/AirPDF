@@ -13,13 +13,25 @@ namespace AirPdf.Core.Tests;
 [Collection(PdfiumCollection.Name)]
 public sealed class AnnotationTests : IDisposable
 {
-    private static readonly string SamplePath =
+    private static readonly string SampleAsset =
         Path.Combine(AppContext.BaseDirectory, "Assets", "sample.pdf");
 
     private readonly string _directory =
         Path.Combine(Path.GetTempPath(), $"airpdf-annot-{Guid.NewGuid():N}");
 
-    public AnnotationTests() => Directory.CreateDirectory(_directory);
+    /// <summary>
+    /// A private copy of the sample, because these tests add annotations to the document they
+    /// open. A shared fixture silently carried one test's ink into the next one, and into the
+    /// repository when the file was committed.
+    /// </summary>
+    private string SamplePath { get; }
+
+    public AnnotationTests()
+    {
+        Directory.CreateDirectory(_directory);
+        SamplePath = Path.Combine(_directory, "sample.pdf");
+        File.Copy(SampleAsset, SamplePath);
+    }
 
     public void Dispose()
     {
@@ -389,6 +401,61 @@ public sealed class AnnotationTests : IDisposable
 
         // Nothing there any more.
         Assert.Empty(await service.RemoveMarkupAtAsync(SamplePath, 1, 150, 300));
+    }
+    [Fact]
+    public async Task Ink_KeepsItsColourThroughAReadBack()
+    {
+        using var service = new PdfDocumentService();
+        await service.OpenAsync(SamplePath);
+
+        // Removing a stroke and undoing it goes through the read-back, so a colour that does not
+        // survive the round trip comes back black.
+        await service.AddInkAsync(
+            SamplePath,
+            1,
+            [new PdfInkStroke([new PdfPoint(60, 420), new PdfPoint(180, 440)])],
+            red: 41,
+            green: 98,
+            blue: 255,
+            width: 3f);
+
+        var ink = Assert.Single(await service.GetInksAsync(SamplePath, 1));
+        Assert.Equal(41, ink.Red);
+        Assert.Equal(98, ink.Green);
+        Assert.Equal(255, ink.Blue);
+    }
+    [Fact]
+    public async Task Ink_RendersInTheColourItWasGiven()
+    {
+        using var service = new PdfDocumentService();
+        var info = await service.OpenAsync(SamplePath);
+        var page = info.Pages[0];
+
+        await service.AddInkAsync(
+            SamplePath,
+            1,
+            [new PdfInkStroke([new PdfPoint(40, page.Height * 0.5), new PdfPoint(page.Width - 40, page.Height * 0.5)])],
+            red: 41,
+            green: 98,
+            blue: 255,
+            width: 8f);
+
+        using var bitmap = await service.RenderPageAsync(SamplePath, 1, 600);
+
+        // Sample the middle of the stroke: it has to be blue, not black.
+        var y = (int)(bitmap.Height * 0.5);
+        var best = (Red: 255, Green: 255, Blue: 255);
+        for (var x = bitmap.Width / 4; x < bitmap.Width * 3 / 4; x++)
+        {
+            var colour = bitmap.GetPixel(x, y);
+            if (colour.Blue > best.Red + 40 || colour.Blue > 120)
+            {
+                best = (colour.Red, colour.Green, colour.Blue);
+                break;
+            }
+        }
+
+        Assert.True(best.Blue > best.Red + 40, $"the stroke rendered as {best.Red},{best.Green},{best.Blue} rather than blue");
     }
     [Fact]
     public async Task AddHighlight_WithNoRectangles_ChangesNothing()

@@ -117,7 +117,11 @@ public sealed partial class PdfiumDocument
             };
 
             PdfiumNative.AnnotSetRect(annot, ref rect);
+
+            // Both colour slots: readers disagree about which one an ink annotation uses, and a
+            // stroke that comes back black is worse than one written twice.
             PdfiumNative.AnnotSetColor(annot, PdfiumNative.AnnotColorStroke, red, green, blue, 255);
+            PdfiumNative.AnnotSetColor(annot, PdfiumNative.AnnotColorFill, red, green, blue, 255);
             PdfiumNative.AnnotSetBorder(annot, width, width, width);
             PdfiumNative.AnnotSetFlags(annot, PdfiumNative.AnnotFlagPrint);
         }
@@ -179,17 +183,15 @@ public sealed partial class PdfiumDocument
                     strokes.Add(new PdfInkStroke(points));
                 }
 
-                byte red = 0;
-                byte green = 0;
-                byte blue = 0;
-                if (PdfiumNative.AnnotGetColor(annot, PdfiumNative.AnnotColorStroke, out var r, out var g, out var b, out _) != 0)
+                var (red, green, blue) = ReadColour(annot);
+
+                var width = 1.5f;
+                if (PdfiumNative.AnnotGetBorder(annot, out _, out _, out var borderWidth) != 0 && borderWidth > 0)
                 {
-                    red = (byte)Math.Min(r, 255);
-                    green = (byte)Math.Min(g, 255);
-                    blue = (byte)Math.Min(b, 255);
+                    width = borderWidth;
                 }
 
-                return new PdfInk(pageNumber, strokes, red, green, blue, 1.5f);
+                return new PdfInk(pageNumber, strokes, red, green, blue, width);
             }
             finally
             {
@@ -443,6 +445,30 @@ public sealed partial class PdfiumDocument
         }
     }
 
+    /// <summary>
+    /// Reads an annotation's colour from whichever slot holds it; ink is written to both, but a
+    /// file from elsewhere may only carry one, and reading the wrong one turns a coloured stroke
+    /// black.
+    /// </summary>
+    private static (byte Red, byte Green, byte Blue) ReadColour(IntPtr annot)
+    {
+        foreach (var slot in new[] { PdfiumNative.AnnotColorStroke, PdfiumNative.AnnotColorFill })
+        {
+            if (PdfiumNative.AnnotGetColor(annot, slot, out var r, out var g, out var b, out _) == 0)
+            {
+                continue;
+            }
+
+            if (r == 0 && g == 0 && b == 0 && slot == PdfiumNative.AnnotColorStroke)
+            {
+                continue;
+            }
+
+            return ((byte)Math.Min(r, 255), (byte)Math.Min(g, 255), (byte)Math.Min(b, 255));
+        }
+
+        return (0, 0, 0);
+    }
     private static bool SameStrokes(IReadOnlyList<PdfInkStroke> left, IReadOnlyList<PdfInkStroke> right)
     {
         if (left.Count != right.Count)

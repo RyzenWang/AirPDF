@@ -49,6 +49,7 @@ public sealed class LocalizationService : IDisposable
             ["L.RemoveHighlight"] = ("Remove highlight", "移除高亮"),
             ["L.MarkupColors"] = ("Markup colours", "标注颜色"),
             ["L.HighlightColorLabel"] = ("Highlight", "高亮"),
+            ["L.InkColor"] = ("Ink colour", "墨迹颜色"),
             ["L.InkColorLabel"] = ("Ink", "墨迹"),
             ["L.StartDrawing"] = ("Start drawing", "开始绘制"),
             ["L.StopDrawing"] = ("Stop drawing", "停止绘制"),

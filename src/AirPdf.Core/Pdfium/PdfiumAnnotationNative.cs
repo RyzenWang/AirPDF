@@ -140,6 +140,8 @@ internal static partial class PdfiumNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_SetBorder")]
     internal static extern int AnnotSetBorder(IntPtr annot, float horizontalRadius, float verticalRadius, float borderWidth);
 
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_GetBorder")]
+    internal static extern int AnnotGetBorder(IntPtr annot, out float horizontalRadius, out float verticalRadius, out float borderWidth);
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_SetStringValue")]
     internal static extern int AnnotSetStringValue(
         IntPtr annot,

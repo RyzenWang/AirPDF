@@ -1583,6 +1583,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private async Task AddInkAsync(PdfInk ink)
     {
+
         await _documentService.AddInkAsync(
             FilePath,
             ink.PageNumber,

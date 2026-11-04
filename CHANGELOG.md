@@ -23,6 +23,8 @@ semantic versioning once it reaches 1.0.
 
 ### Changed
 
+- The test suite no longer writes into its own fixture: several tests saved edits into the copied
+  sample, and the next run inherited them. Each test now works on a private copy.
 - Undo and redo sit next to each other in the toolbar; the pen moved after them.
 - The page menu only offers what applies to what was clicked: a highlight can be highlighted, a
   note read, and any markup removed only when the pointer is actually on one.
@@ -32,6 +34,14 @@ semantic versioning once it reaches 1.0.
 
 ### Fixed
 
+- A press that started on the toolbar could be taken for the start of a stroke, which swallowed the
+  click: the whole toolbar went dead while drawing was on, including the pen that would turn it off.
+  A stroke now only begins when the press starts inside the page list.
+- The pen button is a plain toggle again. It no longer opens the palette from its own press handler,
+  so it works both before and after a stroke; the ink colours moved to **Ink colour** in the page menu.
+- Ink written by this app was read back with the wrong colour slot in some files, so removing a
+  stroke and undoing it brought it back black. Ink is written to both slots and read from either,
+  and its width is read back instead of being replaced with a default.
 - A context menu still would not close when clicking elsewhere. Popups are their own visual root,
   so walking the window for open menus found nothing; the menus are now looked up from the
   controls that own them, and the note popup is dismissed on a press too.

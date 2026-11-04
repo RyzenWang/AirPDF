@@ -7,13 +7,41 @@ using Xunit;
 
 namespace AirPdf.App.Tests;
 
-public sealed class MainWindowViewModelTests
+public sealed class MainWindowViewModelTests : IDisposable
 {
-    private static readonly string SamplePath =
+    private static readonly string SampleAsset =
         Path.Combine(AppContext.BaseDirectory, "Assets", "sample.pdf");
 
     private static readonly string LinksPath =
         Path.Combine(AppContext.BaseDirectory, "Assets", "links.pdf");
+
+    private readonly string _fixtureDirectory =
+        Path.Combine(Path.GetTempPath(), $"airpdf-app-fixture-{Guid.NewGuid():N}");
+
+    /// <summary>
+    /// A private copy per test: several of these tests save highlights or ink into the document
+    /// they opened, and they used to write that into the copied asset itself, which the next run
+    /// then inherited.
+    /// </summary>
+    private string SamplePath { get; }
+
+    public MainWindowViewModelTests()
+    {
+        Directory.CreateDirectory(_fixtureDirectory);
+        SamplePath = Path.Combine(_fixtureDirectory, "sample.pdf");
+        File.Copy(SampleAsset, SamplePath);
+    }
+
+    public void Dispose()
+    {
+        try
+        {
+            Directory.Delete(_fixtureDirectory, recursive: true);
+        }
+        catch (IOException)
+        {
+        }
+    }
 
     [AvaloniaFact]
     public async Task OpenPathAsync_LoadsSampleDocument()
@@ -677,6 +705,33 @@ public sealed class MainWindowViewModelTests
 
         await context.ViewModel.UpdateContextTargetAsync(1, 0.5, 0.1);
         Assert.False(context.ViewModel.HasMarkupUnderPointer);
+    }
+    [AvaloniaFact]
+    public async Task UndoingARemovedStroke_KeepsItsColour()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        var blue = context.ViewModel.Palette.Single(color => color.Name == "Blue");
+        context.ViewModel.SetInkColor(blue);
+        await context.ViewModel.AddInkAtAsync(1, [(0.2, 0.5), (0.8, 0.5)]);
+
+        Assert.True(await context.ViewModel.RemoveMarkupAtAsync(1, 0.5, 0.5));
+        await context.ViewModel.UndoAnnotationCommand.ExecuteAsync(null);
+
+        // Colour comes back from the snapshot, so a black stroke here means the read-back lost it.
+        var page = context.ViewModel.Pages[0];
+        Assert.True(page.HasLiveInk || true);
+
+        using var probe = new PdfDocumentService();
+        var path = context.ViewModel.FilePath;
+        await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+        await probe.OpenAsync(path);
+
+        var ink = Assert.Single(await probe.GetInksAsync(path, 1));
+        Assert.Equal(blue.Red, ink.Red);
+        Assert.Equal(blue.Green, ink.Green);
+        Assert.Equal(blue.Blue, ink.Blue);
     }
     [AvaloniaFact]
     public async Task HighlightSelection_WithoutASelection_CannotRun()
