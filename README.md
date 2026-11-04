@@ -30,7 +30,7 @@ AirPDF opens PDFs quickly, renders them natively, and stays out of the way. It
 has no account, no cloud, no telemetry, and no web view. The whole reader is a
 small .NET application with a hand-built Avalonia interface.
 
-> **Status:** 0.4. Windows builds are in the
+> **Status:** 0.5. Windows builds are in the
 > [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1); macOS and Linux ship as
 > portable archives. Highlights, ink, notes, bookmarks, undo/redo, and saving are in; printing is
 > not. See the [roadmap](#roadmap).
