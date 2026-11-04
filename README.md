@@ -63,6 +63,7 @@ small .NET application with a hand-built Avalonia interface.
 - **Status bar** with the page position and a reading-progress percentage.
 - **Highlights, ink, and notes** — select text and press `Ctrl+Shift+H` to highlight it, turn on
   drawing with `Ctrl+Shift+K` to write on the page, and add a sticky note from the page menu.
+  Both take their colour from the palette in the toolbar.
   Right-click a highlight to remove it.
   Every markup change can be undone and redone, from the toolbar or with `Ctrl+Z` and `Ctrl+Y`,
   and `Ctrl+S` writes them into the document itself.

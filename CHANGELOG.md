@@ -8,13 +8,20 @@ semantic versioning once it reaches 1.0.
 
 ### Added
 
+- A colour palette in the toolbar, with a highlight colour and an ink colour chosen separately.
+  The choice applies to the next mark.
 - Ink annotations: `Ctrl+Shift+K` (or the pen button) turns on drawing, and a drag on the page
   becomes a freehand stroke stored as an ink annotation. The stroke is drawn under the pointer
   while it is being made, and both ink and notes can be undone and redone like any other markup.
 - Sticky notes: **Add note** in the page menu asks for the text and pins it to the point you
   right-clicked. The text is stored in the annotation itself, so it travels with the file.
-- The undo model now records an action as a pair of closures rather than as highlight geometry,
-  which is what let ink and notes join it without special cases.
+- The undo model records an action as a pair of closures rather than as highlight geometry, which
+  is what let ink and notes join it without special cases.
+
+### Fixed
+
+- A context menu stayed open when clicking elsewhere in the window. The page pointer handler
+  marked the press as handled before the popup could see it, so the popup never dismissed itself.
 ## [0.4.0] - 2026-11-04
 
 ### Added

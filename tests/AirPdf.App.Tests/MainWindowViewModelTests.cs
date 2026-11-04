@@ -541,6 +541,50 @@ public sealed class MainWindowViewModelTests
         Assert.False(context.ViewModel.IsInkMode);
     }
     [AvaloniaFact]
+    public async Task TheChosenColour_IsUsedForTheNextHighlightAndStroke()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-colour-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var target = Path.Combine(directory, "colour.pdf");
+            File.Copy(SamplePath, target);
+
+            using var context = new TestContext();
+            await context.ViewModel.OpenPathAsync(target);
+
+            var green = context.ViewModel.Palette.Single(color => color.Name == "Green");
+            var blue = context.ViewModel.Palette.Single(color => color.Name == "Blue");
+            context.ViewModel.SetHighlightColor(green);
+            context.ViewModel.SetInkColor(blue);
+
+            await context.ViewModel.SelectAllTextCommand.ExecuteAsync(null);
+            await WaitForAsync(() => context.ViewModel.HasSelection);
+            await context.ViewModel.HighlightSelectionCommand.ExecuteAsync(null);
+            await context.ViewModel.AddInkAtAsync(1, [(0.3, 0.4), (0.5, 0.45)]);
+
+            await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+
+            using var probe = new PdfDocumentService();
+            await probe.OpenAsync(target);
+
+            var highlight = Assert.Single(await probe.GetHighlightsAsync(target, 1));
+            Assert.Equal(green.Red, highlight.Red);
+            Assert.Equal(green.Green, highlight.Green);
+            Assert.Equal(green.Blue, highlight.Blue);
+
+            var ink = Assert.Single(await probe.GetInksAsync(target, 1));
+            Assert.Equal(blue.Red, ink.Red);
+            Assert.Equal(blue.Green, ink.Green);
+            Assert.Equal(blue.Blue, ink.Blue);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+    [AvaloniaFact]
     public async Task HighlightSelection_WithoutASelection_CannotRun()
     {
         using var context = new TestContext();

@@ -40,13 +40,28 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly AppSettings _settings;
     private readonly List<NavigationPoint> _history = [];
 
-    /// <summary>The highlight colour, kept in one place so undo can restore it exactly.</summary>
-    private static readonly (byte Red, byte Green, byte Blue) HighlightColor = (255, 221, 71);
-
-    /// <summary>Ink colour and width; fixed until the reader can pick them.</summary>
-    private static readonly (byte Red, byte Green, byte Blue) InkColor = (32, 33, 36);
-
     private const float InkWidth = 2f;
+
+    /// <summary>The colours offered for markup, in one list for both highlight and ink.</summary>
+    public IReadOnlyList<MarkupColor> Palette { get; } =
+    [
+        new("Yellow", 255, 221, 71),
+        new("Green", 139, 195, 74),
+        new("Blue", 100, 181, 246),
+        new("Pink", 244, 143, 177),
+        new("Orange", 255, 171, 64),
+        new("Red", 239, 83, 80),
+        new("Grey", 120, 124, 130),
+        new("Black", 32, 33, 36)
+    ];
+
+    /// <summary>Colour used for the next highlight; yellow until the reader picks another.</summary>
+    [ObservableProperty]
+    private MarkupColor _highlightColor;
+
+    /// <summary>Colour used for the next stroke; near-black until the reader picks another.</summary>
+    [ObservableProperty]
+    private MarkupColor _inkColor;
 
     /// <summary>
     /// While this is on, dragging on a page draws instead of selecting text. It is a mode rather
@@ -111,6 +126,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _isSidebarVisible = _settings.SidebarVisible;
         _settings.RecentFiles ??= [];
         _settings.ReadingPositions ??= [];
+        _highlightColor = Palette[0];
+        _inkColor = Palette[^1];
         _documentSubtitle = _localization.T("L.Ready");
         _reading = new ReadingPositionController(
             _settingsService,
@@ -900,6 +917,23 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Picks the colour the next highlight will use.</summary>
+    public void SetHighlightColor(MarkupColor? color)
+    {
+        if (color is not null)
+        {
+            HighlightColor = color;
+        }
+    }
+
+    /// <summary>Picks the colour the next stroke will use.</summary>
+    public void SetInkColor(MarkupColor? color)
+    {
+        if (color is not null)
+        {
+            InkColor = color;
+        }
+    }
     /// <summary>Turns freehand drawing on or off.</summary>
     [RelayCommand]
     private void ToggleInkMode()

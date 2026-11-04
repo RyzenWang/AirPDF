@@ -1013,6 +1013,14 @@ public partial class MainWindow : Window
 
     private async void OnSelectionPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        // A press while a context menu is open belongs to the menu: close it and let the click
+        // fall through. Marking it handled here is what kept the menu on screen, because the
+        // popup never saw the press it dismisses itself with.
+        if (CloseOpenMenus())
+        {
+            return;
+        }
+
         if (!_viewModel.IsDocumentOpen)
         {
             return;
@@ -1314,6 +1322,29 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Closes any open context menu, including the ones inside list item templates.
+    /// </summary>
+    /// <returns>True when something was open and has been closed.</returns>
+    private bool CloseOpenMenus()
+    {
+        if (TopLevel.GetTopLevel(this) is not { } topLevel)
+        {
+            return false;
+        }
+
+        var closed = false;
+        foreach (var menu in topLevel.GetVisualDescendants().OfType<ContextMenu>())
+        {
+            if (menu.IsOpen)
+            {
+                menu.Close();
+                closed = true;
+            }
+        }
+
+        return closed;
+    }
     private void RememberContextPoint(PointerPressedEventArgs e)
     {
         var pageView = FindPageView(e.Source) ?? FindPageViewAt(e.GetPosition(this));
@@ -1336,6 +1367,21 @@ public partial class MainWindow : Window
             point.Y / Math.Max(1, pageView.Bounds.Height));
     }
 
+    private void OnHighlightSwatchClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: MarkupColor color })
+        {
+            _viewModel.SetHighlightColor(color);
+        }
+    }
+
+    private void OnInkSwatchClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: MarkupColor color })
+        {
+            _viewModel.SetInkColor(color);
+        }
+    }
     private async void OnAddNoteClick(object? sender, RoutedEventArgs e)
     {
         if (_contextPoint is not { } point)
