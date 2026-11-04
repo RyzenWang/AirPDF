@@ -1963,6 +1963,10 @@ public partial class MainWindow : Window
             {
                 _viewModel.ToggleInkModeCommand.Execute(null);
             }
+            else if (_viewModel.IsEraserMode)
+            {
+                _viewModel.ToggleEraserModeCommand.Execute(null);
+            }
             else if (_viewModel.IsSearchOpen)
             {
                 _viewModel.CloseSearchCommand.Execute(null);

@@ -66,8 +66,8 @@ small .NET application with a hand-built Avalonia interface.
   with `Ctrl+Shift+K` or the pen button and write on the page; the arrow beside the pen opens the
   ink colours and the thickness slider, which previews the stroke it will draw. Sticky notes come
   from the page menu, and a highlight can be removed from it too.
-  Every markup change can be undone and redone, from the toolbar or with `Ctrl+Z` and `Ctrl+Y`,
-  and `Ctrl+S` writes them into the document itself.
+  Every markup change can be undone and redone, from the toolbar or with `Ctrl+Z` and `Ctrl+Y`
+  (the last 100 steps are kept), and `Ctrl+S` writes them into the document itself.
 - **Per-document bookmarks** — `Ctrl+D` marks the current spot and the sidebar keeps them
   per file. Double-click one to rename it, drag them into the order you want, and the
   welcome screen lists bookmarks from every document so you can jump straight back in.
@@ -231,7 +231,7 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl+Shift+K` / `Cmd+Shift+K` | Turn drawing on or off (freehand ink) |
 | `Ctrl+S` / `Cmd+S` | Save the document, highlights included |
 | `Ctrl+Shift+S` / `Cmd+Shift+S` | Save as… |
-| `Ctrl+Z` / `Cmd+Z` | Undo the last markup change |
+| `Ctrl+Z` / `Cmd+Z` | Undo the last markup change (last 100 steps are kept) |
 | `Ctrl+Y` / `Cmd+Y` | Redo |
 | `F3` / `Shift+F3` | Next / previous search match |
 | `Alt+Left` | Return to the previous position |
@@ -240,7 +240,7 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl+C` / `Cmd+C` | Copy the selected text |
 | `Ctrl+A` / `Cmd+A` | Select all document text |
 | `Enter` | Jump to the typed page, or run a search |
-| `Esc` | Leave drawing mode, clear the selection, close search, dismiss an error, or leave full screen |
+| `Esc` | Leave drawing or erasing mode, clear the selection, close search, dismiss an error, or leave full screen |
 | `Ctrl++` / `Ctrl+-` | Zoom in / out |
 | `Ctrl+0` | Fit page |
 | `Ctrl+1` | Actual size |

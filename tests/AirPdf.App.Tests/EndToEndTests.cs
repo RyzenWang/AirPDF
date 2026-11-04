@@ -242,6 +242,32 @@ public sealed class EndToEndTests : IDisposable
         Assert.False(document.HasSelection);
         Assert.DoesNotContain(document.Pages, page => page.SelectionRects.Count > 0);
     }
+
+    /// <summary>
+    /// Escape is the keyboard way out of a tool. It left drawing mode but not erasing mode, so
+    /// the eraser could only be turned off with the button.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Escape_LeavesDrawingAndErasingModes()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 0);
+
+        document.ToggleInkModeCommand.Execute(null);
+        Assert.True(document.IsInkMode);
+
+        _window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        await WaitAsync(() => !document.IsInkMode);
+        Assert.False(document.IsInkMode);
+
+        document.ToggleEraserModeCommand.Execute(null);
+        Assert.True(document.IsEraserMode);
+
+        _window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        await WaitAsync(() => !document.IsEraserMode);
+        Assert.False(document.IsEraserMode);
+    }
+
     [AvaloniaFact]
     public async Task DiagnosticShortcut_WritesAProbeBlockOnDemand()
     {

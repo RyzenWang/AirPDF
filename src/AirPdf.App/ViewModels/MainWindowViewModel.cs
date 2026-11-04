@@ -23,6 +23,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private const int MaxHistoryEntries = 50;
 
+    /// <summary>
+    /// How many markup edits the undo history keeps. The history used to be unbounded, and every
+    /// step holds a snapshot of what it changed (an ink step keeps all of its points), so a long
+    /// editing session accumulated memory that could never be used again. Older edits are
+    /// dropped; the document still contains them, only the ability to step back that far is gone.
+    /// </summary>
+    public const int MaxUndoSteps = 100;
+
     /// <summary>Must match <c>SettingsService.MaxRecentFiles</c> so nothing stored is unreachable.</summary>
     private const int MaxRecentFilesShown = 10;
 
@@ -109,8 +117,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>Page rotation per page; the hit test needs it and it does not change.</summary>
     private readonly Dictionary<int, int> _rotationCache = [];
 
-    private readonly Stack<UndoStep> _annotationUndo = new();
-    private readonly Stack<UndoStep> _annotationRedo = new();
+    /// <summary>
+    /// Markup edits, newest last. A list rather than a stack because the oldest entry has to be
+    /// dropped once <see cref="MaxUndoSteps"/> is reached.
+    /// </summary>
+    private readonly List<UndoStep> _annotationUndo = [];
+
+    private readonly List<UndoStep> _annotationRedo = [];
     private NavigationPoint? _pendingOpenPosition;
     private CancellationTokenSource? _loadCancellation;
     private CancellationTokenSource? _searchCancellation;
@@ -1566,6 +1579,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>True when there is a taken-back edit that can be applied again.</summary>
     public bool CanRedoAnnotation => _annotationRedo.Count > 0;
 
+    /// <summary>Edits that can still be undone; at most <see cref="MaxUndoSteps"/>.</summary>
+    public int UndoDepth => _annotationUndo.Count;
+
+    /// <summary>Edits that can be redone; at most <see cref="MaxUndoSteps"/>.</summary>
+    public int RedoDepth => _annotationRedo.Count;
+
     /// <summary>Takes back the last markup edit, whatever kind it was.</summary>
     [RelayCommand(CanExecute = nameof(CanUndoAnnotation))]
     private async Task UndoAnnotationAsync()
@@ -1575,8 +1594,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var step = _annotationUndo.Pop();
-        _annotationRedo.Push(step);
+        var step = _annotationUndo[^1];
+        _annotationUndo.RemoveAt(_annotationUndo.Count - 1);
+        _annotationRedo.Add(step);
         InvalidateMarkupCache();
         NotifyUndoChanged();
 
@@ -1591,8 +1611,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        var step = _annotationRedo.Pop();
-        _annotationUndo.Push(step);
+        var step = _annotationRedo[^1];
+        _annotationRedo.RemoveAt(_annotationRedo.Count - 1);
+        _annotationUndo.Add(step);
         InvalidateMarkupCache();
         NotifyUndoChanged();
 
@@ -1622,7 +1643,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void PushStep(UndoStep step)
     {
         InvalidateMarkupCache();
-        _annotationUndo.Push(step);
+
+        if (_annotationUndo.Count >= MaxUndoSteps)
+        {
+            _annotationUndo.RemoveAt(0);
+        }
+
+        _annotationUndo.Add(step);
         _annotationRedo.Clear();
         NotifyUndoChanged();
     }
@@ -1776,6 +1803,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void NotifyUndoChanged()
     {
+        OnPropertyChanged(nameof(CanUndoAnnotation));
+        OnPropertyChanged(nameof(CanRedoAnnotation));
+        OnPropertyChanged(nameof(UndoDepth));
+        OnPropertyChanged(nameof(RedoDepth));
         UndoAnnotationCommand.NotifyCanExecuteChanged();
         RedoAnnotationCommand.NotifyCanExecuteChanged();
     }

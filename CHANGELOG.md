@@ -25,6 +25,10 @@ semantic versioning once it reaches 1.0.
 
 ### Changed
 
+- Undo keeps the last 100 markup edits instead of growing for the whole session. Each step holds
+  a snapshot of what it changed - an ink step holds all of that stroke's points - so an unbounded
+  history kept data that could never be reached again. Older steps are dropped from the history;
+  they stay in the document.
 - One file is one tab: opening a document that a window already has focuses its tab instead of
   opening a second one, and **Open in new tab** is gone from the page menu. Two tabs over the
   same file meant two document sessions, and saving in either failed because the other held the
@@ -55,6 +59,9 @@ semantic versioning once it reaches 1.0.
 
 ### Fixed
 
+- `Esc` now leaves eraser mode as well as drawing mode, so either tool can be dismissed from the
+  keyboard. It used to clear drawing only, leaving the eraser active until its button was pressed
+  again.
 - Switching to the pen or the eraser left the selected word highlighted, which made selection
   and drawing look like modes that could be on at the same time. Entering either tool now clears
   the text selection; ink and eraser already turned each other off, so exactly one of select,

@@ -824,6 +824,44 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.Equal(blue.Green, ink.Green);
         Assert.Equal(blue.Blue, ink.Blue);
     }
+
+    /// <summary>
+    /// The undo history is bounded: every step holds a snapshot of the markup it changed, so an
+    /// unbounded history grows for the whole editing session. The oldest steps are dropped, but
+    /// they stay in the document - only stepping back that far is no longer possible.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task UndoHistory_KeepsAtMostTheConfiguredNumberOfSteps()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        const int extra = 15;
+        for (var step = 0; step < MainWindowViewModel.MaxUndoSteps + extra; step++)
+        {
+            var y = 0.1 + (step * 0.002);
+            Assert.True(await context.ViewModel.AddInkAtAsync(1, [(0.1, y), (0.5, y)]));
+        }
+
+        Assert.Equal(MainWindowViewModel.MaxUndoSteps, context.ViewModel.UndoDepth);
+        Assert.Equal(0, context.ViewModel.RedoDepth);
+
+        for (var step = 0; step < MainWindowViewModel.MaxUndoSteps; step++)
+        {
+            await context.ViewModel.UndoAnnotationCommand.ExecuteAsync(null);
+        }
+
+        Assert.False(context.ViewModel.CanUndoAnnotation);
+        Assert.Equal(0, context.ViewModel.UndoDepth);
+        Assert.Equal(MainWindowViewModel.MaxUndoSteps, context.ViewModel.RedoDepth);
+
+        // Only the dropped oldest steps remain: the 100 most recent were taken back.
+        using var probe = new PdfDocumentService();
+        var path = context.ViewModel.FilePath;
+        await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+        await probe.OpenAsync(path);
+        Assert.Equal(extra, (await probe.GetInksAsync(path, 1)).Count);
+    }
     [AvaloniaFact]
     public async Task HighlightingTheSameTextAgain_DoesNotStackUnlessAsked()
     {
