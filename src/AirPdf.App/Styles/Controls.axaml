@@ -109,6 +109,17 @@
     <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
   </Style>
 
+  <Style Selector="Button.caret">
+    <Setter Property="Width" Value="17" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="MinHeight" Value="34" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+
   <Style Selector="Button.icon.inkOn /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
   </Style>

@@ -25,6 +25,14 @@ semantic versioning once it reaches 1.0.
 
 ### Changed
 
+- The pen is a plain toggle again and a small arrow beside it opens the ink palette, which now
+  carries a thickness slider as well as the colours. The pen itself only shows which tool is
+  active and what colour it draws in.
+- The drawing and erasing cursors are real bitmap cursors built from the tool icons, set once
+  when the pointer enters a page. Drawing a glyph on every pointer move is what made those
+  modes feel slow, and the glyph itself was painted behind the page, which is why no cursor was
+  visible at all.
+- The eraser sits directly beside the pen, before the zoom controls, rather than after them.
 - Highlighting the same text twice stacks again, which is what a reader expects from pressing the
   same thing twice; the skip policy is still one property away.
 - While a drawing or erasing tool is active, the pointer carries that tool over a page and

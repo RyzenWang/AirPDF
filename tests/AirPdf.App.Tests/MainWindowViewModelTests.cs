@@ -803,6 +803,23 @@ public sealed class MainWindowViewModelTests : IDisposable
         context.ViewModel.EndErase();
     }
     [AvaloniaFact]
+    public async Task TheChosenThickness_IsUsedForTheNextStroke()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        context.ViewModel.InkWidth = 6;
+        await context.ViewModel.AddInkAtAsync(1, [(0.2, 0.45), (0.6, 0.45)]);
+
+        using var probe = new PdfDocumentService();
+        var path = context.ViewModel.FilePath;
+        await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+        await probe.OpenAsync(path);
+
+        var ink = Assert.Single(await probe.GetInksAsync(path, 1));
+        Assert.InRange(ink.Width, 4.5f, 7.5f);
+    }
+    [AvaloniaFact]
     public async Task HighlightSelection_WithoutASelection_CannotRun()
     {
         using var context = new TestContext();

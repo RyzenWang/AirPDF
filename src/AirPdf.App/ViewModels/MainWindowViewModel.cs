@@ -40,7 +40,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly AppSettings _settings;
     private readonly List<NavigationPoint> _history = [];
 
-    private const float InkWidth = 2f;
+    /// <summary>Ink thickness in points, chosen from the palette; 1 to 10.</summary>
+    [ObservableProperty]
+    private double _inkWidth = 2;
 
     /// <summary>The colours offered for markup, in one list for both highlight and ink.</summary>
     public IReadOnlyList<MarkupColor> Palette { get; } =
@@ -1301,7 +1303,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 InkColor.Red,
                 InkColor.Green,
                 InkColor.Blue,
-                InkWidth);
+                (float)Math.Clamp(InkWidth, 1, 10));
 
             await AddInkAsync(ink);
             PushStep(InkAddedStep(ink));

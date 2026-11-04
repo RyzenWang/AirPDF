@@ -9,6 +9,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -32,7 +33,6 @@ public partial class MainWindow : Window
     private (int Page, double X, double Y)? _contextPoint;
     private (PageViewModel Page, Control View, List<(double X, double Y)> Points)? _inkStroke;
     private (PageViewModel Page, int Number)? _erasing;
-    private readonly Cursor _hiddenCursor = new(StandardCursorType.None);
     private bool _selectionMoved;
     private bool _restoringDocument;
     private bool _linkCursorActive;
@@ -1179,7 +1179,7 @@ public partial class MainWindow : Window
 
     private void OnSelectionPointerMoved(object? sender, PointerEventArgs e)
     {
-        UpdatePointerGlyph(e);
+        UpdateToolCursor(e);
 
         if (_erasing is { } erasing)
         {
@@ -1275,34 +1275,71 @@ public partial class MainWindow : Window
         }
     }
 
+    private Cursor? _penCursor;
+    private Cursor? _eraserCursor;
+
     /// <summary>
-    /// Draws the tool under the pointer and hides the system cursor, but only where the tool would
-    /// do something: over a page. Anywhere else the ordinary arrow stays.
+    /// Builds a cursor from one of the tool icons. A bitmap cursor is set once when the pointer
+    /// enters a page and left alone after that; drawing a glyph on every pointer move is what made
+    /// the tools feel slow.
     /// </summary>
-    private void UpdatePointerGlyph(PointerEventArgs e)
+    private Cursor CreateToolCursor(string iconKey, PixelPoint hotspot)
     {
-        var drawing = _viewModel.IsInkMode || _viewModel.IsEraserMode;
-        var pageView = drawing ? FindPageView(e.Source) ?? FindPageViewAt(e.GetPosition(this)) : null;
-        var overPage = pageView is not null && pageView.DataContext is PageViewModel;
-
-        if (!drawing || !overPage)
+        const int size = 28;
+        var bitmap = new RenderTargetBitmap(new PixelSize(size, size), new Vector(96, 96));
+        using (var context = bitmap.CreateDrawingContext())
         {
-            if (PointerLayer.IsVisible)
+            if (this.FindResource(iconKey) is Geometry geometry)
             {
-                PointerLayer.IsVisible = false;
+                using (context.PushTransform(Matrix.CreateScale(size / 24.0, size / 24.0)))
+                {
+                    context.DrawGeometry(
+                        Brushes.White,
+                        new Pen(Brushes.Black, 2.2, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round),
+                        geometry);
+                }
             }
-
-            Cursor = Cursor.Default;
-            return;
         }
 
-        var position = e.GetPosition(PointerLayer);
-        Canvas.SetLeft(PointerGlyph, position.X + 2);
-        Canvas.SetTop(PointerGlyph, position.Y + 2);
-        PointerGlyph.Data = this.FindResource(_viewModel.IsEraserMode ? "IconEraser" : "IconPen") as Geometry;
-        PointerLayer.IsVisible = true;
-        Cursor = _hiddenCursor;
+        return new Cursor(bitmap, hotspot);
     }
+
+    /// <summary>
+    /// Puts the tool in the pointer while it is over a page, and leaves the ordinary arrow
+    /// everywhere else, so where the tool works is visible without guessing.
+    /// </summary>
+    private void UpdateToolCursor(PointerEventArgs e)
+    {
+        var drawing = _viewModel.IsInkMode || _viewModel.IsEraserMode;
+        var overPage = drawing && FindPageView(e.Source) is { DataContext: PageViewModel };
+
+        Cursor wanted;
+        if (overPage)
+        {
+            try
+            {
+                _penCursor ??= CreateToolCursor("IconPen", new PixelPoint(5, 24));
+                _eraserCursor ??= CreateToolCursor("IconEraser", new PixelPoint(14, 14));
+                wanted = _viewModel.IsEraserMode ? _eraserCursor : _penCursor;
+            }
+            catch (Exception unexpected)
+            {
+                // A cursor that cannot be built must not take the window down mid-hover.
+                CrashLog.Write("ToolCursor", unexpected);
+                wanted = new Cursor(StandardCursorType.Cross);
+            }
+        }
+        else
+        {
+            wanted = Cursor.Default;
+        }
+
+        if (!ReferenceEquals(Cursor, wanted))
+        {
+            Cursor = wanted;
+        }
+    }
+
     /// <summary>
     /// A capture can be lost without a release - the window loses focus, or the pointer leaves
     /// the surface. The half-drawn stroke and its capture have to go with it, or the next press
@@ -1613,36 +1650,6 @@ public partial class MainWindow : Window
         }
 
         flyout.ShowAt(PagesList);
-    }
-
-    /// <summary>
-    /// The pen button: while drawing, a press leaves the mode and consumes the click so the colours
-    /// do not open; otherwise the click starts drawing and the button opens its own palette.
-    /// </summary>
-    private void OnInkButtonPointerPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!_viewModel.IsInkMode || e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
-        {
-            return;
-        }
-
-        _viewModel.ToggleInkModeCommand.Execute(null);
-        HidePalettes();
-        e.Handled = true;
-    }
-
-    private void OnInkButtonClick(object? sender, RoutedEventArgs e)
-    {
-        if (!_viewModel.IsInkMode)
-        {
-            _viewModel.ToggleInkModeCommand.Execute(null);
-            return;
-        }
-
-        // A press should have caught this; if a click arrives anyway, leave the mode rather than
-        // leaving the reader stuck in it.
-        _viewModel.ToggleInkModeCommand.Execute(null);
-        HidePalettes();
     }
 
     /// <summary>Applies a colour picked from the highlight submenu.</summary>

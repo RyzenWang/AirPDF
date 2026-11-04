@@ -16,20 +16,6 @@
   <Window.Resources>
   </Window.Resources>
   <Grid RowDefinitions="Auto,Auto,*,Auto">
-    <!-- The pointer glyph: the system cursor is hidden over a drawable page so the tool in hand is
-         what the reader sees. -->
-    <Canvas x:Name="PointerLayer"
-            Grid.RowSpan="4"
-            IsHitTestVisible="False"
-            IsVisible="False">
-      <Path x:Name="PointerGlyph"
-            Width="22" Height="22"
-            Stretch="Uniform"
-            Stroke="{DynamicResource TextPrimaryBrush}"
-            StrokeThickness="1.6"
-            StrokeLineCap="Round"
-            StrokeJoin="Round" />
-    </Canvas>
     <!-- Tab strip. Its DataContext is the WindowViewModel (the tab host), set in code,
          which is why compiled bindings are opted out: the window's DataContext is the
          active document's view model. Hidden while only one tab exists. -->
@@ -215,15 +201,27 @@
           <Button x:Name="InkButton"
                   Classes="icon"
                   Classes.inkOn="{Binding IsInkMode}"
-                  PointerPressed="OnInkButtonPointerPressed"
-                  Click="OnInkButtonClick"
+                  Command="{Binding ToggleInkModeCommand}"
                   IsVisible="{Binding IsDocumentOpen}"
                   AutomationProperties.Name="{DynamicResource L.InkMode}"
                   ToolTip.Tip="{DynamicResource L.InkMode}">
             <Path Classes="icon" Data="{StaticResource IconPen}" Stroke="{Binding InkColor.Brush}" />
+          </Button>
+          <Button x:Name="InkPaletteButton"
+                  Classes="caret"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{DynamicResource L.InkColor}"
+                  ToolTip.Tip="{DynamicResource L.InkColor}">
+            <Path Data="{StaticResource IconCaretDown}"
+                  Stroke="{DynamicResource TextSecondaryBrush}"
+                  StrokeThickness="1.8"
+                  StrokeLineCap="Round"
+                  Stretch="Uniform"
+                  Width="8"
+                  Height="8" />
             <Button.Flyout>
               <Flyout Placement="BottomEdgeAlignedLeft">
-                <StackPanel Spacing="9" Width="176">
+                <StackPanel Spacing="9" Width="200">
                   <TextBlock Text="{DynamicResource L.InkColorLabel}" Classes="eyebrow" />
                   <ItemsControl ItemsSource="{Binding Palette}">
                     <ItemsControl.ItemsPanel>
@@ -239,16 +237,19 @@
                       </DataTemplate>
                     </ItemsControl.ItemTemplate>
                   </ItemsControl>
+                  <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+                    <TextBlock Text="{DynamicResource L.InkWidthLabel}" Classes="eyebrow" />
+                    <TextBlock Grid.Column="1"
+                               Text="{Binding InkWidth, StringFormat={}{0:0.#}}"
+                               Classes="caption" />
+                  </Grid>
+                  <Slider Minimum="1" Maximum="10"
+                          TickFrequency="1"
+                          IsSnapToTickEnabled="True"
+                          Value="{Binding InkWidth, Mode=TwoWay}" />
                 </StackPanel>
               </Flyout>
             </Button.Flyout>
-          </Button>          <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="8,0" VerticalAlignment="Center" />
-
-          <Button Classes="zoom"
-                  Command="{Binding ZoomOutCommand}"
-                  AutomationProperties.Name="{DynamicResource L.ZoomOut}"
-                  ToolTip.Tip="{DynamicResource L.ZoomOut}">
-            <Border Width="12" Height="1.5" CornerRadius="1" Background="{DynamicResource TextPrimaryBrush}" />
           </Button>
           <Button x:Name="EraserButton"
                   Classes="icon"
@@ -258,11 +259,33 @@
                   AutomationProperties.Name="{DynamicResource L.Eraser}"
                   ToolTip.Tip="{DynamicResource L.Eraser}">
             <Path Classes="icon" Data="{StaticResource IconEraser}" />
-          </Button>          <Button Classes="chip"
+          </Button>
+          <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="8,0" VerticalAlignment="Center" />
+
+
+
+          <Button Classes="zoom"
+
+                  Command="{Binding ZoomOutCommand}"
+
+                  AutomationProperties.Name="{DynamicResource L.ZoomOut}"
+
+                  ToolTip.Tip="{DynamicResource L.ZoomOut}">
+
+            <Border Width="12" Height="1.5" CornerRadius="1" Background="{DynamicResource TextPrimaryBrush}" />
+
+          </Button>
+
+          <Button Classes="chip"
+
                   Content="{Binding ZoomText}"
+
                   Padding="9,5"
+
                   MinWidth="58"
+
                   AutomationProperties.Name="{DynamicResource L.ZoomLevelLabel}"
+
                   ToolTip.Tip="{DynamicResource L.ZoomPreset}">
             <Button.Flyout>
               <MenuFlyout Placement="BottomEdgeAlignedRight">
