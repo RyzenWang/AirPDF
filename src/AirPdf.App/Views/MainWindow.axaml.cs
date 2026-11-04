@@ -1434,6 +1434,20 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Pressing the pen while drawing leaves the mode. Done on the press rather than the click so
+    /// the palette cannot open at the same moment the mode closes.
+    /// </summary>
+    private void OnInkButtonPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!_viewModel.IsInkMode || e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+        {
+            return;
+        }
+
+        _viewModel.ToggleInkModeCommand.Execute(null);
+        e.Handled = true;
+    }
+    /// <summary>
     /// The pen button: out of the way while drawing (a second click stops), otherwise the way in,
     /// which is also where the colour is chosen.
     /// </summary>

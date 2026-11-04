@@ -25,11 +25,7 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:MarkupColor">
-              <Button Classes="swatch"
-                      Margin="0,0,6,6"
-                      Background="{Binding Brush}"
-                      Tag="{Binding}"
-                      Click="OnInkSwatchClick" />
+              <Button Classes="swatch" Margin="0,0,6,6" Background="{Binding Brush}" Tag="{Binding}" Click="OnInkSwatchClick" />
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
@@ -46,16 +42,13 @@
           </ItemsControl.ItemsPanel>
           <ItemsControl.ItemTemplate>
             <DataTemplate x:DataType="vm:MarkupColor">
-              <Button Classes="swatch"
-                      Margin="0,0,6,6"
-                      Background="{Binding Brush}"
-                      Tag="{Binding}"
-                      Click="OnHighlightSwatchClick" />
+              <Button Classes="swatch" Margin="0,0,6,6" Background="{Binding Brush}" Tag="{Binding}" Click="OnHighlightSwatchClick" />
             </DataTemplate>
           </ItemsControl.ItemTemplate>
         </ItemsControl>
       </StackPanel>
-    </Flyout>  </Window.Resources>
+    </Flyout>
+  </Window.Resources>
   <Grid RowDefinitions="Auto,Auto,*,Auto">
     <!-- Tab strip. Its DataContext is the WindowViewModel (the tab host), set in code,
          which is why compiled bindings are opted out: the window's DataContext is the
@@ -234,12 +227,70 @@
           <Button x:Name="InkButton"
                   Classes="icon"
                   Classes.inkOn="{Binding IsInkMode}"
+                  PointerPressed="OnInkButtonPointerPressed"
                   Click="OnInkButtonClick"
                   IsVisible="{Binding IsDocumentOpen}"
                   AutomationProperties.Name="{DynamicResource L.InkMode}"
                   ToolTip.Tip="{DynamicResource L.InkMode}">
-            <Path Classes="icon" Data="{StaticResource IconPen}" />
-          </Button>          <Button Classes="icon"
+            <Path Classes="icon" Data="{StaticResource IconPen}" Stroke="{Binding InkColor.Brush}" />
+          </Button>
+          <Button Classes="icon"
+                  Command="{Binding RedoAnnotationCommand}"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{DynamicResource L.Redo}"
+                  ToolTip.Tip="{DynamicResource L.Redo}">
+            <Path Classes="icon" Data="{StaticResource IconRedo}" />
+          </Button>
+
+          <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="8,0" VerticalAlignment="Center" />
+
+          <Button Classes="zoom"
+                  Command="{Binding ZoomOutCommand}"
+                  AutomationProperties.Name="{DynamicResource L.ZoomOut}"
+                  ToolTip.Tip="{DynamicResource L.ZoomOut}">
+            <Border Width="12" Height="1.5" CornerRadius="1" Background="{DynamicResource TextPrimaryBrush}" />
+          </Button>
+          <Button Classes="chip"
+                  Content="{Binding ZoomText}"
+                  Padding="9,5"
+                  MinWidth="58"
+                  AutomationProperties.Name="{DynamicResource L.ZoomLevelLabel}"
+                  ToolTip.Tip="{DynamicResource L.ZoomPreset}">
+            <Button.Flyout>
+              <MenuFlyout Placement="BottomEdgeAlignedRight">
+                <MenuItem Header="{DynamicResource L.FitWidth}" Tag="fit-width" Click="OnFitWidthMenuClick" />
+                <MenuItem Header="{DynamicResource L.FitPage}" Tag="fit-page" Click="OnFitPageMenuClick" />
+                <MenuItem Header="{DynamicResource L.ActualSize}" Tag="actual" Click="OnActualSizeMenuClick" />
+                <MenuItem Header="50%" Tag="0.5" Click="OnZoomPresetMenuClick" />
+                <MenuItem Header="75%" Tag="0.75" Click="OnZoomPresetMenuClick" />
+                <MenuItem Header="125%" Tag="1.25" Click="OnZoomPresetMenuClick" />
+                <MenuItem Header="150%" Tag="1.5" Click="OnZoomPresetMenuClick" />
+                <MenuItem Header="200%" Tag="2" Click="OnZoomPresetMenuClick" />
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+          <Button Classes="zoom"
+                  Command="{Binding ZoomInCommand}"
+                  AutomationProperties.Name="{DynamicResource L.ZoomIn}"
+                  ToolTip.Tip="{DynamicResource L.ZoomIn}">
+            <Path Classes="icon small" Data="{StaticResource IconPlus}" />
+          </Button>
+          <Button Classes="zoom"
+                  Command="{Binding FitWidthCommand}"
+                  AutomationProperties.Name="{DynamicResource L.FitWidth}"
+                  ToolTip.Tip="{DynamicResource L.FitWidth}">
+            <Path Classes="icon small" Data="{StaticResource IconFitWidth}" />
+          </Button>
+          <Button Classes="zoom"
+                  Command="{Binding FitPageCommand}"
+                  AutomationProperties.Name="{DynamicResource L.FitPage}"
+                  ToolTip.Tip="{DynamicResource L.FitPage}">
+            <Path Classes="icon small" Data="{StaticResource IconFitPage}" />
+          </Button>
+        </StackPanel>
+
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+          <Button Classes="icon"
                   Command="{Binding ToggleSearchCommand}"
                   IsVisible="{Binding IsDocumentOpen}"
                   AutomationProperties.Name="{DynamicResource L.FindInDocument}"
@@ -523,7 +574,8 @@
               <MenuItem Header="{DynamicResource L.SelectAll}"
                         Command="{Binding SelectAllTextCommand}" />
               <MenuItem Header="{DynamicResource L.HighlightSelection}"
-                        Click="OnHighlightMenuClick" />              <MenuItem Header="{DynamicResource L.RemoveHighlight}"
+                        Click="OnHighlightMenuClick" />
+              <MenuItem Header="{DynamicResource L.RemoveHighlight}"
                         Click="OnRemoveHighlightClick"
                         IsEnabled="{Binding IsDocumentOpen}" />              <MenuItem Header="{DynamicResource L.AddNote}"
                         Click="OnAddNoteClick"
