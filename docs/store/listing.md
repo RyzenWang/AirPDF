@@ -157,17 +157,21 @@ the pen.
 
 ## Screenshots
 
-Captured at 1578×944 from the shipping build, English and light theme.
+Captured at 2178×1264 from the 0.5 build, English and light theme. The display runs
+at 150% scaling, so the pixels are real ones rather than an upscale.
 
-| Screenshot | Caption (English) | Caption (简体中文) |
+| File | Caption (English) | Caption (简体中文) |
 | --- | --- | --- |
 | `screenshot-welcome.png` | Opens straight to the page, not a start screen | 打开就是页面,不是首页 |
 | `screenshot-reading.png` | Fit-width reading with the page in front of you | 适应宽度,专注页面本身 |
+| `screenshot-markup.png` | Highlight, ink, and the pen in the toolbar | 高亮、墨迹,以及工具栏上的画笔 |
 
-These were captured before the 0.5 annotation tools existed. They are still
-accurate for reading, but a screenshot showing the pen, the colour palette, or a
-sticky note would sell this version better; recapture them from the 0.5 build when
-there is time.
+The markup shot shows a real highlight over a paragraph plus an ink underline drawn
+with the pen, with the status bar reading "Drawing off" after Esc.
+
+Recapture with `artifacts/shots/capture.ps1 -Scene welcome|reading|markup` after any
+UI change; the scenes drive the app by fractions of its client area, so they survive
+a different window size or DPI.
 
 ## Category and audience
 
