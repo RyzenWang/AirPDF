@@ -14,51 +14,6 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource AppBackgroundBrush}">
   <Window.Resources>
-    <Flyout x:Key="InkPalette" Placement="Pointer">
-      <StackPanel Spacing="9" Width="176">
-        <TextBlock Text="{DynamicResource L.InkColorLabel}" Classes="eyebrow" />
-        <ItemsControl ItemsSource="{Binding Palette}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <WrapPanel />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:MarkupColor">
-              <Button Classes="swatch" Margin="0,0,6,6"
-                      Background="{Binding Brush}" Tag="{Binding}"
-                      Click="OnInkSwatchClick" />
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </StackPanel>
-    </Flyout>    <Flyout x:Key="NotePopup" Placement="Pointer">
-      <Border MaxWidth="320" Padding="14,12"
-              Background="{DynamicResource SurfaceBrush}"
-              BorderBrush="{DynamicResource BorderStrongBrush}"
-              BorderThickness="1" CornerRadius="10">
-        <StackPanel Spacing="8">
-          <TextBlock Text="{DynamicResource L.NoteTextLabel}" Classes="eyebrow" />
-          <SelectableTextBlock Text="{Binding NoteText}" TextWrapping="Wrap" />
-        </StackPanel>
-      </Border>
-    </Flyout>    <Flyout x:Key="HighlightPalette" Placement="Pointer">
-      <StackPanel Spacing="9" Width="176">
-        <TextBlock Text="{DynamicResource L.HighlightColorLabel}" Classes="eyebrow" />
-        <ItemsControl ItemsSource="{Binding Palette}">
-          <ItemsControl.ItemsPanel>
-            <ItemsPanelTemplate>
-              <WrapPanel />
-            </ItemsPanelTemplate>
-          </ItemsControl.ItemsPanel>
-          <ItemsControl.ItemTemplate>
-            <DataTemplate x:DataType="vm:MarkupColor">
-              <Button Classes="swatch" Margin="0,0,6,6" Background="{Binding Brush}" Tag="{Binding}" Click="OnHighlightSwatchClick" />
-            </DataTemplate>
-          </ItemsControl.ItemTemplate>
-        </ItemsControl>
-      </StackPanel>
-    </Flyout>
   </Window.Resources>
   <Grid RowDefinitions="Auto,Auto,*,Auto">
     <!-- Tab strip. Its DataContext is the WindowViewModel (the tab host), set in code,
@@ -243,13 +198,36 @@
                   ToolTip.Tip="{DynamicResource L.Redo}">
             <Path Classes="icon" Data="{StaticResource IconRedo}" />
           </Button>
-          <Button Classes="icon"
+          <Button x:Name="InkButton"
+                  Classes="icon"
                   Classes.inkOn="{Binding IsInkMode}"
-                  Command="{Binding ToggleInkModeCommand}"
+                  PointerPressed="OnInkButtonPointerPressed"
+                  Click="OnInkButtonClick"
                   IsVisible="{Binding IsDocumentOpen}"
                   AutomationProperties.Name="{DynamicResource L.InkMode}"
                   ToolTip.Tip="{DynamicResource L.InkMode}">
             <Path Classes="icon" Data="{StaticResource IconPen}" Stroke="{Binding InkColor.Brush}" />
+            <Button.Flyout>
+              <Flyout Placement="BottomEdgeAlignedLeft">
+                <StackPanel Spacing="9" Width="176">
+                  <TextBlock Text="{DynamicResource L.InkColorLabel}" Classes="eyebrow" />
+                  <ItemsControl ItemsSource="{Binding Palette}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:MarkupColor">
+                        <Button Classes="swatch" Margin="0,0,6,6"
+                                Background="{Binding Brush}" Tag="{Binding}"
+                                Click="OnInkSwatchClick" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Flyout>
+            </Button.Flyout>
           </Button>          <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="8,0" VerticalAlignment="Center" />
 
           <Button Classes="zoom"
@@ -579,11 +557,23 @@
               <MenuItem Header="{DynamicResource L.CopySelection}"
                         Command="{Binding CopySelectionCommand}"
                         IsVisible="{Binding HasSelection}" />
-              <MenuItem Header="{DynamicResource L.HighlightSelection}"
-                        Click="OnHighlightMenuClick"
-                        IsVisible="{Binding HasSelection}" />              <MenuItem Header="{DynamicResource L.InkColor}"
-                        Click="OnInkColorMenuClick"
-                        IsVisible="{Binding IsDocumentOpen}" />
+              <MenuItem x:Name="HighlightMenu"
+                        Header="{DynamicResource L.HighlightSelection}"
+                        ItemsSource="{Binding Palette}"
+                        IsVisible="{Binding HasSelection}">
+                <MenuItem.ItemTemplate>
+                  <DataTemplate x:DataType="vm:MarkupColor">
+                    <StackPanel Orientation="Horizontal" Spacing="9" Margin="0,1">
+                      <Border Width="15" Height="15" CornerRadius="8"
+                              Background="{Binding Brush}"
+                              BorderBrush="{DynamicResource BorderStrongBrush}"
+                              BorderThickness="1"
+                              VerticalAlignment="Center" />
+                      <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                    </StackPanel>
+                  </DataTemplate>
+                </MenuItem.ItemTemplate>
+              </MenuItem>
               <MenuItem Header="{DynamicResource L.ShowNote}"
                         Click="OnShowNoteClick"
                         IsVisible="{Binding HasNoteUnderPointer}" />

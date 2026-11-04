@@ -72,6 +72,9 @@ public partial class MainWindow : Window
         // The host selects its home tab during construction, before this window could
         // subscribe, so point the content at it explicitly.
         ShowTab(_tabs.SelectedTab);
+        // The colour submenu is generated from the palette, so its items are handled where they
+        // bubble: the parent item owns one handler for all of them.
+        HighlightMenu.AddHandler(MenuItem.ClickEvent, OnHighlightPaletteClick);
         StartRenderProbe();
 
         if (restoreWindowPosition)
@@ -1520,8 +1523,8 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Pressing the pen while drawing leaves the mode. Done on the press rather than the click so
-    /// the palette cannot open at the same moment the mode closes.
+    /// The pen button: while drawing, a press leaves the mode and consumes the click so the colours
+    /// do not open; otherwise the click starts drawing and the button opens its own palette.
     /// </summary>
     private void OnInkButtonPointerPressed(object? sender, PointerPressedEventArgs e)
     {
@@ -1530,37 +1533,45 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Leaving the mode must not also open the colours, so the press is consumed here and the
-        // click that would open the flyout never happens.
         _viewModel.ToggleInkModeCommand.Execute(null);
         HidePalettes();
         e.Handled = true;
     }
-    /// <summary>Opens the ink colours from the page menu.</summary>
-    private void OnInkColorMenuClick(object? sender, RoutedEventArgs e)
+
+    private void OnInkButtonClick(object? sender, RoutedEventArgs e)
     {
-        if (Resources["InkPalette"] is not Flyout flyout)
+        if (!_viewModel.IsInkMode)
+        {
+            _viewModel.ToggleInkModeCommand.Execute(null);
+            return;
+        }
+
+        // A press should have caught this; if a click arrives anyway, leave the mode rather than
+        // leaving the reader stuck in it.
+        _viewModel.ToggleInkModeCommand.Execute(null);
+        HidePalettes();
+    }
+
+    /// <summary>Applies a colour picked from the highlight submenu.</summary>
+    private void OnHighlightPaletteClick(object? sender, RoutedEventArgs e)
+    {
+        if (e.Source is not MenuItem { DataContext: MarkupColor color })
         {
             return;
         }
 
-        if (flyout.Content is Control content)
-        {
-            content.DataContext = _viewModel;
-        }
+        _viewModel.SetHighlightColor(color);
 
-        flyout.ShowAt(PagesList);
+        if (_viewModel.HighlightSelectionCommand.CanExecute(null))
+        {
+            _viewModel.HighlightSelectionCommand.Execute(null);
+        }
     }
     private void HidePalettes()
     {
-        if (Resources["InkPalette"] is Flyout ink)
+        if (InkButton.Flyout is { } ink)
         {
             ink.Hide();
-        }
-
-        if (Resources["HighlightPalette"] is Flyout highlight)
-        {
-            highlight.Hide();
         }
 
 

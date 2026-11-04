@@ -55,6 +55,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         new("Black", 32, 33, 36)
     ];
 
+    /// <summary>
+    /// What to do when the selection is already highlighted. Skipping keeps a word from growing
+    /// darker every time it is highlighted; the other value is here so stacking stays a choice
+    /// rather than something the code would have to be restructured for.
+    /// </summary>
+    public enum HighlightOverlapPolicy
+    {
+        Skip,
+        Stack
+    }
+
+    /// <summary>Current policy; skipping duplicates by default.</summary>
+    public HighlightOverlapPolicy HighlightPolicy { get; set; } = HighlightOverlapPolicy.Skip;
+
     /// <summary>Colour used for the next highlight; yellow until the reader picks another.</summary>
     [ObservableProperty]
     private MarkupColor _highlightColor;
@@ -896,6 +910,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                     continue;
                 }
 
+                if (HighlightPolicy == HighlightOverlapPolicy.Skip)
+                {
+                    var existing = await _documentService.GetHighlightsAsync(FilePath, page.Number);
+                    quads = quads
+                        .Where(quad => !existing.Any(highlight => highlight.Quads.Any(known => SameQuad(known, quad))))
+                        .ToList();
+
+                    if (quads.Count == 0)
+                    {
+                        continue;
+                    }
+                }
+
                 await _documentService.AddHighlightAsync(
                     FilePath,
                     page.Number,
@@ -906,6 +933,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
                 added.Add(new PdfHighlight(page.Number, quads, HighlightColor.Red, HighlightColor.Green, HighlightColor.Blue));
                 page.RequestRender();
+            }
+
+            if (added.Count == 0)
+            {
+                ShowStatus(_localization.T("L.AlreadyHighlighted"));
+                return;
             }
 
             PushStep(HighlightAddedStep(added));
@@ -1397,6 +1430,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>True when two quads cover the same area, within rounding.</summary>
+    private static bool SameQuad(PdfQuad left, PdfQuad right) =>
+        Math.Abs(left.Left - right.Left) < 0.5 &&
+        Math.Abs(left.Top - right.Top) < 0.5 &&
+        Math.Abs(left.Right - right.Right) < 0.5 &&
+        Math.Abs(left.Bottom - right.Bottom) < 0.5;
     /// <summary>True when there is an annotation edit to take back.</summary>
     public bool CanUndoAnnotation => _annotationUndo.Count > 0;
 

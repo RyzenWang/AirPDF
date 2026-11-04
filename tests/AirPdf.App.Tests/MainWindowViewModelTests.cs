@@ -734,6 +734,46 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.Equal(blue.Blue, ink.Blue);
     }
     [AvaloniaFact]
+    public async Task HighlightingTheSameTextAgain_DoesNotStackUnlessAsked()
+    {
+        var target = Path.Combine(_fixtureDirectory, "stack.pdf");
+        File.Copy(SampleAsset, target);
+
+        async Task<int> HighlightAndCountAsync(MainWindowViewModel.HighlightOverlapPolicy policy)
+        {
+            using (var context = new TestContext())
+            {
+                await context.ViewModel.OpenPathAsync(target);
+                context.ViewModel.HighlightPolicy = policy;
+                await context.ViewModel.SelectAllTextCommand.ExecuteAsync(null);
+                await WaitForAsync(() => context.ViewModel.HasSelection);
+                await context.ViewModel.HighlightSelectionCommand.ExecuteAsync(null);
+                await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+            }
+
+            using var probe = new PdfDocumentService();
+            var info = await probe.OpenAsync(target);
+            var total = 0;
+            for (var page = 1; page <= info.PageCount; page++)
+            {
+                total += (await probe.GetHighlightsAsync(target, page)).Count;
+            }
+
+            return total;
+        }
+
+        var first = await HighlightAndCountAsync(MainWindowViewModel.HighlightOverlapPolicy.Skip);
+        Assert.True(first > 0);
+
+        // Same text, same colour, again: nothing is added, so it cannot get darker.
+        var second = await HighlightAndCountAsync(MainWindowViewModel.HighlightOverlapPolicy.Skip);
+        Assert.Equal(first, second);
+
+        // Stacking stays available without reshaping anything.
+        var stacked = await HighlightAndCountAsync(MainWindowViewModel.HighlightOverlapPolicy.Stack);
+        Assert.True(stacked > second, $"stacking added nothing: {second} -> {stacked}");
+    }
+    [AvaloniaFact]
     public async Task HighlightSelection_WithoutASelection_CannotRun()
     {
         using var context = new TestContext();

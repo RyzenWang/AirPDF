@@ -23,6 +23,9 @@ semantic versioning once it reaches 1.0.
 
 ### Changed
 
+- The pen button opens the ink colours again, and clicking it while drawing leaves the mode.
+- **Highlight** in the page menu is a submenu now, so the colours appear on hover instead of after
+  a click, and choosing one highlights the selection in it.
 - The test suite no longer writes into its own fixture: several tests saved edits into the copied
   sample, and the next run inherited them. Each test now works on a private copy.
 - Undo and redo sit next to each other in the toolbar; the pen moved after them.
@@ -34,6 +37,9 @@ semantic versioning once it reaches 1.0.
 
 ### Fixed
 
+- Highlighting the same text twice no longer stacks a second annotation on top of the first, which
+  made it darker every time. The behaviour is a property (Skip for now, Stack available), so
+  stacking later is a setting rather than a rewrite.
 - A press that started on the toolbar could be taken for the start of a stroke, which swallowed the
   click: the whole toolbar went dead while drawing was on, including the pen that would turn it off.
   A stroke now only begins when the press starts inside the page list.
