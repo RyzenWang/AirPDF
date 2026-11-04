@@ -117,6 +117,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private PdfDocumentInfo? _document;
     private PdfPageRenderer? _pageRenderer;
     private string? _password;
+    private bool _disposed;
     private double _zoom = 1.0;
     private string _zoomMode = ZoomModes.FitWidth;
     private double? _restoreZoom;
@@ -1063,6 +1064,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             // A document that cannot be read has no markup to offer.
         }
+        catch (ObjectDisposedException)
+        {
+            // The tab can close while the pointer hit test is waiting on the document.
+        }
     }
 
     /// <summary>Shows the note the menu was opened on.</summary>
@@ -1533,6 +1538,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         catch (PdfDocumentException)
         {
+            return false;
+        }
+        catch (ObjectDisposedException)
+        {
+            // The tab can close between the press and this asynchronous hit test.
             return false;
         }
     }
@@ -2175,7 +2185,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public async Task OpenPathAsync(string filePath, bool recordRecent = true)
     {
-        if (string.IsNullOrWhiteSpace(filePath))
+        // A closed tab must not be able to load a document again: its document service is
+        // already disposed, so the pages would be created without a renderer behind them.
+        if (_disposed || string.IsNullOrWhiteSpace(filePath))
         {
             return;
         }
@@ -2229,6 +2241,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             }
 
             cancellation.Token.ThrowIfCancellationRequested();
+
+            // The tab may have been closed while the document was parsing.
+            if (_disposed)
+            {
+                return;
+            }
+
             LoadDocument(info, password);
 
             if (recordRecent)
@@ -3126,6 +3145,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
         _localization.LanguageChanged -= OnLanguageChanged;
         _theme.Changed -= OnThemeChanged;
         _services.RecentFilesChanged -= OnSharedRecentFilesChanged;

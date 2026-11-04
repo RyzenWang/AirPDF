@@ -32,6 +32,8 @@ public sealed class PdfDocumentService : IDisposable
         string? password = null,
         CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         var fullPath = NormalizePath(filePath);
         return Task.Run(() => OpenCore(fullPath, password, cancellationToken), cancellationToken);
     }
@@ -824,6 +826,14 @@ public sealed class PdfDocumentService : IDisposable
             cancellationToken.ThrowIfCancellationRequested();
 
             var session = PdfiumDocument.Open(fullPath, password);
+
+            // A dispose can land while the document is being parsed. Do not install a session
+            // the service will never close again.
+            if (_disposed)
+            {
+                session.Dispose();
+                throw new ObjectDisposedException(nameof(PdfDocumentService));
+            }
 
             // Measure the new document before swapping it in, so a failure leaves the
             // currently open document untouched.

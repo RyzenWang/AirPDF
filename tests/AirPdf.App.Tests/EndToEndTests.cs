@@ -358,6 +358,84 @@ public sealed class EndToEndTests : IDisposable
     }
 
     /// <summary>
+    /// Closing a tab has to leave the window on Home, and a document opened from Home's recent
+    /// list has to render. Removing the selected item clears the tab strip's two-way selection
+    /// before the close code used to check it, so the window kept the closed tab as its
+    /// DataContext: Home appeared because that view model reported no document, but opening the
+    /// file from its recent list ran on the disposed view model. Every page stayed blank at the
+    /// right reading position, and the next click crashed on the disposed document service.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ClosingATabThenOpeningItFromRecent_RendersTheDocumentAgain()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 0 && document.Pages[0].Image is not null);
+
+        // Remember a position away from page one, because the report was about reopening at
+        // the last reading position rather than at the top.
+        document.UpdateCurrentPageFromScroll(2, 0.1);
+        document.SaveReadingPositionNow();
+        await Task.Delay(300);
+
+        _window.KeyPressQwerty(PhysicalKey.W, RawInputModifiers.Control);
+        await WaitAsync(() => Tabs().All(tab => tab.IsHomeTab), 10_000);
+
+        // The window itself must be showing Home, not the disposed document view model.
+        var home = Assert.IsType<MainWindowViewModel>(_window.DataContext);
+        Assert.True(home.IsHomeTab);
+        Assert.Same(Tabs().Single(tab => tab.IsHomeTab), home);
+
+        var recent = home.RecentFiles.FirstOrDefault(
+            item => string.Equals(item.FilePath, SamplePath, StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(recent);
+
+        recent!.OpenCommand.Execute(null);
+
+        MainWindowViewModel? reopened = null;
+        await WaitAsync(() =>
+        {
+            reopened = Tabs().FirstOrDefault(tab => !tab.IsHomeTab && tab.IsDocumentOpen);
+            return reopened is not null;
+        }, 10_000);
+
+        Assert.NotNull(reopened);
+        Assert.NotSame(document, reopened);
+
+        // It has to return to the remembered page, and that page has to be rendered.
+        await WaitAsync(() => reopened!.CurrentPage == 2, 10_000);
+        Assert.Equal(2, reopened.CurrentPage);
+
+        await WaitAsync(() => reopened.Pages.Count > 1 && reopened.Pages[1].Image is not null, 20_000);
+
+        var page = reopened.Pages[1];
+        Assert.NotNull(page.Image);
+        Assert.False(page.HasRenderError, page.RenderError);
+        Assert.True(HasInk(page.Image!), "the reopened page rendered blank");
+    }
+
+    /// <summary>True when a rendered page carries anything other than paper white.</summary>
+    private static bool HasInk(Avalonia.Media.Imaging.WriteableBitmap bitmap)
+    {
+        using var buffer = bitmap.Lock();
+        var pixels = new byte[buffer.RowBytes * buffer.Size.Height];
+        System.Runtime.InteropServices.Marshal.Copy(buffer.Address, pixels, 0, pixels.Length);
+
+        for (var y = 4; y < buffer.Size.Height; y += 12)
+        {
+            for (var x = 4; x < buffer.Size.Width; x += 12)
+            {
+                var offset = (y * buffer.RowBytes) + (x * 4);
+                if (pixels[offset] < 245 || pixels[offset + 1] < 245 || pixels[offset + 2] < 245)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Opens the sample from the home tab, which is how a reader gets a document: the open lands
     /// in a new tab and that tab becomes active.
     /// </summary>

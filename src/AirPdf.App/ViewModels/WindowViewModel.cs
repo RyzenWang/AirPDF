@@ -85,9 +85,23 @@ public sealed partial class WindowViewModel : ObservableObject, ITabService, IDi
             return;
         }
 
+        // Leave the tab before the strip removes it. Removing the selected item makes the
+        // ListBox write null back through the two-way SelectedTab binding, and a selection
+        // checked after the removal is already gone: the window then kept the closed tab as
+        // its DataContext. The welcome screen stayed on screen, but opening a recent file
+        // from it ran on the disposed view model, so the document opened with no renderer
+        // behind it - blank pages at the right reading position - and the next page click
+        // crashed on the disposed service.
+        if (ReferenceEquals(SelectedTab, tab))
+        {
+            SelectedTab = HomeTab;
+        }
+
         Tabs.Remove(tab);
 
-        if (ReferenceEquals(SelectedTab, tab))
+        // Also covers a selection the list cleared for some other reason, or a selected tab
+        // that is no longer in the collection.
+        if (SelectedTab is null || !Tabs.Contains(SelectedTab))
         {
             SelectedTab = HomeTab;
         }

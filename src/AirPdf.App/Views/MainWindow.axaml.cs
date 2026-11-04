@@ -134,7 +134,8 @@ public partial class MainWindow : Window
         switch (e.PropertyName)
         {
             case nameof(WindowViewModel.SelectedTab):
-                ShowTab(_tabs.SelectedTab);
+                // A null selection must not leave the window pointed at the tab it just closed.
+                ShowTab(_tabs.SelectedTab ?? _tabs.HomeTab);
                 break;
             case nameof(WindowViewModel.HasTabs):
                 UpdateTabStripVisibility();

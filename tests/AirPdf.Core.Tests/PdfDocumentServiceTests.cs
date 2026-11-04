@@ -84,6 +84,20 @@ public sealed class PdfDocumentServiceTests
         Assert.Contains(pixels, value => value != 255);
     }
 
+    /// <summary>
+    /// A disposed service cannot resurrect itself. This matters because a closed tab used to
+    /// stay reachable from the welcome screen; opening a file through it produced page view
+    /// models whose renderer was already dead, which looked like a document with blank pages.
+    /// </summary>
+    [Fact]
+    public async Task OpenAsync_AfterDispose_FailsInsteadOfReopening()
+    {
+        var service = new PdfDocumentService();
+        service.Dispose();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => service.OpenAsync(SamplePath));
+    }
+
     private static async Task<byte[]> RenderPixelsAsync(PdfDocumentService service, int pageNumber)
     {
         using var bitmap = await service.RenderPageAsync(SamplePath, pageNumber, 400);

@@ -51,6 +51,14 @@ semantic versioning once it reaches 1.0.
 
 ### Fixed
 
+- Closing a tab could leave the window pointed at the tab it had just closed. Removing the
+  selected item cleared the tab strip's two-way selection before the close handler looked at it,
+  so Home was never selected; the welcome screen still appeared because the disposed view model
+  reported no document, but opening the file from its recent list ran on that dead view model.
+  The document loaded with a disposed renderer behind it - every page blank at the right reading
+  position - and the next click crashed on the closed document service. Closing a tab now
+  selects Home before the item is removed, the window falls back to Home if the selection is
+  ever null, and a disposed view model or document service refuses to open a document again.
 - Erasing a highlight or a stroke and then undoing it used to bring the markup back black.
   Rendering a page makes PDFium generate the annotation's appearance stream, and it discards the
   standard `/C` and `/IC` colour entries while doing so; the eraser's snapshot then had no colour
