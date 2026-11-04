@@ -247,6 +247,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string _filePath = string.Empty;
 
+    /// <summary>
+    /// The file this tab is in the middle of opening. <see cref="FilePath"/> stays empty until
+    /// the document has loaded, so this is what lets a second open of the same file find the
+    /// tab already working on it instead of starting a duplicate session over the same file.
+    /// </summary>
+    public string? OpeningPath { get; private set; }
+
     [ObservableProperty]
     private string _fileDirectory = string.Empty;
 
@@ -527,7 +534,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // new tab. The welcome screen (no document open) keeps using this tab.
         if (IsDocumentOpen && _tabs is not null)
         {
-            _tabs.OpenInNewTab(path);
+            _tabs.OpenDocument(path);
             return;
         }
 
@@ -1800,6 +1807,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             SetError(_localization.T("L.ErrorSaveFailed"));
         }
+        catch (UnauthorizedAccessException)
+        {
+            // Another tab or window in this process still has the file open, or another
+            // program locks it. The replace cannot land until that handle is gone.
+            SetError(_localization.T("L.ErrorSaveInUse"));
+        }
         catch (Exception unexpected)
         {
             CrashLog.Write("SaveCopy", unexpected);
@@ -2195,10 +2208,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // Home is a place: opening from it must not turn the welcome screen into a document.
         if (IsHomeTab && _tabs is not null)
         {
-            _tabs.OpenInNewTab(filePath);
+            _tabs.OpenDocument(filePath);
             return;
         }
 
+        OpeningPath = filePath;
         SaveReadingPositionNow();
         CancelSafely(_loadCancellation);
         var cancellation = new CancellationTokenSource();
@@ -2277,6 +2291,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 IsBusy = false;
                 _busyFileName = null;
                 _loadCancellation = null;
+                OpeningPath = null;
                 OnPropertyChanged(nameof(IsWelcomeVisible));
             }
 
@@ -3032,7 +3047,25 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(HasStatusMessage));
 
-    partial void OnIsInkModeChanged(bool value) => OnPropertyChanged(nameof(InkModeLabel));
+    partial void OnIsInkModeChanged(bool value)
+    {
+        OnPropertyChanged(nameof(InkModeLabel));
+
+        if (value)
+        {
+            // The drawing tool owns the pointer, so a text selection left highlighted would
+            // look like both modes are active at once.
+            ClearTextSelection();
+        }
+    }
+
+    partial void OnIsEraserModeChanged(bool value)
+    {
+        if (value)
+        {
+            ClearTextSelection();
+        }
+    }
 
     partial void OnNoteTextChanged(string? value) => OnPropertyChanged(nameof(HasNoteText));
 
@@ -3151,6 +3184,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         _disposed = true;
+        OpeningPath = null;
 
         _localization.LanguageChanged -= OnLanguageChanged;
         _theme.Changed -= OnThemeChanged;

@@ -413,6 +413,63 @@ public sealed class EndToEndTests : IDisposable
         Assert.True(HasInk(page.Image!), "the reopened page rendered blank");
     }
 
+    /// <summary>
+    /// Opening a file that already has a tab selects that tab instead of starting a second
+    /// document session over the same file. With two sessions, saving in either failed because
+    /// the other still held the file open, and the reader saw "the change could not be applied".
+    /// </summary>
+    [AvaloniaFact]
+    public async Task OpeningTheSameFileFromRecent_SelectsItsTabAndSavingStillWorks()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-e2e-same-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        var target = Path.Combine(directory, "same.pdf");
+        File.Copy(SamplePath, target);
+
+        try
+        {
+            var document = await OpenAsync(target);
+            await WaitAsync(() => document.Pages.Count > 0 && document.Pages[0].Image is not null);
+
+            document.GoHomeCommand.Execute(null);
+            await WaitAsync(() => _window.DataContext is MainWindowViewModel { IsHomeTab: true }, 10_000);
+            var home = Assert.IsType<MainWindowViewModel>(_window.DataContext);
+
+            var recent = home.RecentFiles.FirstOrDefault(
+                item => string.Equals(item.FilePath, target, StringComparison.OrdinalIgnoreCase));
+            Assert.NotNull(recent);
+
+            recent!.OpenCommand.Execute(null);
+            await Task.Delay(800);
+
+            // The existing tab must be selected, not a second session created.
+            Assert.Same(document, _window.DataContext);
+            Assert.Same(document, Assert.Single(Tabs(), tab => !tab.IsHomeTab));
+
+            // Saving has to land now that no other session holds the file.
+            await document.AddInkAtAsync(1, [(0.2, 0.5), (0.8, 0.5)]);
+            await document.SaveDocumentCommand.ExecuteAsync(null);
+            Assert.False(document.HasError, document.ErrorMessage);
+
+            using var probe = new PdfDocumentService();
+            await probe.OpenAsync(target);
+            Assert.Single(await probe.GetInksAsync(target, 1));
+
+            document.CloseDocumentCommand.Execute(null);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // A leftover temporary directory must not fail the test.
+            }
+        }
+    }
+
     /// <summary>True when a rendered page carries anything other than paper white.</summary>
     private static bool HasInk(Avalonia.Media.Imaging.WriteableBitmap bitmap)
     {

@@ -8,7 +8,12 @@ namespace AirPdf.App.Services;
 /// </summary>
 public interface ITabService
 {
-    void OpenInNewTab(string filePath);
+    /// <summary>
+    /// Shows a document: selects the tab that already has it open, or opens a new one. The same
+    /// file is never open in two tabs of one window, which would give two document sessions
+    /// over one file and make saving fail on the file lock.
+    /// </summary>
+    void OpenDocument(string filePath);
     /// <summary>Selects the window's home tab; open documents stay open.</summary>
     void ShowHome();
 

@@ -679,9 +679,6 @@
               <MenuItem Header="{DynamicResource L.OpenInNewWindow}"
                         Command="{Binding OpenInNewWindowCommand}"
                         IsEnabled="{Binding IsDocumentOpen}" />
-              <MenuItem Header="{DynamicResource L.OpenInNewTab}"
-                        Click="OnOpenInNewTabClick"
-                        IsEnabled="{Binding IsDocumentOpen}" />
             </ContextMenu>
           </controls:PdfPageList.ContextMenu>
           <controls:PdfPageList.ItemTemplate>

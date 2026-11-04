@@ -260,14 +260,6 @@ public partial class MainWindow : Window
 
     private void OnNewTabClick(object? sender, RoutedEventArgs e) => _tabs.AddTab();
 
-    private void OnOpenInNewTabClick(object? sender, RoutedEventArgs e)
-    {
-        if (_viewModel.IsDocumentOpen && !string.IsNullOrWhiteSpace(_viewModel.FilePath))
-        {
-            _tabs.AddTab(_viewModel.FilePath);
-        }
-    }
-
     private void OnCloseTabClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Control { DataContext: MainWindowViewModel tab })
@@ -2020,7 +2012,7 @@ public partial class MainWindow : Window
         {
             if (_viewModel.IsDocumentOpen)
             {
-                _tabs.AddTab(path);
+                _tabs.OpenDocument(path);
             }
             else
             {

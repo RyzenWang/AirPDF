@@ -90,6 +90,50 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.Equal(word.Text, context.ViewModel.GetSelectedText());
     }
 
+    /// <summary>
+    /// Text selection is not a tool that can run beside drawing or erasing: the pointer belongs
+    /// to exactly one of them. Leaving a selection highlighted while the eraser is on made it
+    /// look as if both modes were active.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task SwitchingToAnInkOrEraserTool_ClearsTheTextSelection()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        const int pageNumber = 7;
+        Assert.True(await context.ViewModel.EnsureTextLayerAsync(pageNumber));
+        var page = context.ViewModel.Pages[pageNumber - 1];
+        var word = page.Words[0];
+        var x = word.Bounds.X + (word.Bounds.Width / 2);
+        var y = word.Bounds.Y + (word.Bounds.Height / 2);
+
+        async Task SelectWordAsync()
+        {
+            Assert.True(await context.ViewModel.BeginTextSelectionAsync(pageNumber, x, y, clickCount: 2));
+            context.ViewModel.CompleteTextSelection();
+            Assert.True(context.ViewModel.HasSelection);
+        }
+
+        await SelectWordAsync();
+        context.ViewModel.ToggleEraserModeCommand.Execute(null);
+        Assert.False(context.ViewModel.HasSelection);
+        Assert.All(context.ViewModel.Pages, candidate => Assert.Empty(candidate.SelectionRects));
+
+        context.ViewModel.ToggleEraserModeCommand.Execute(null);
+        await SelectWordAsync();
+        context.ViewModel.ToggleInkModeCommand.Execute(null);
+        Assert.False(context.ViewModel.HasSelection);
+
+        context.ViewModel.ToggleInkModeCommand.Execute(null);
+        await SelectWordAsync();
+        var blue = context.ViewModel.Palette.Single(color => color.Name == "Blue");
+        context.ViewModel.UseInkColor(blue);
+        Assert.False(context.ViewModel.HasSelection);
+        Assert.True(context.ViewModel.IsInkMode);
+        Assert.False(context.ViewModel.IsEraserMode);
+    }
+
     [AvaloniaFact]
     public async Task ReadingPosition_RoundTripsAcrossReopen()
     {

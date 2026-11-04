@@ -25,6 +25,10 @@ semantic versioning once it reaches 1.0.
 
 ### Changed
 
+- One file is one tab: opening a document that a window already has focuses its tab instead of
+  opening a second one, and **Open in new tab** is gone from the page menu. Two tabs over the
+  same file meant two document sessions, and saving in either failed because the other held the
+  file open.
 - The pen and the arrow that opens its palette are one segmented control now: the group carries
   the hover and the active background, and a bar under the nib shows the colour the next stroke
   will have. The arrow used to be a smaller button with its own hover, which made the pair look
@@ -51,6 +55,16 @@ semantic versioning once it reaches 1.0.
 
 ### Fixed
 
+- Switching to the pen or the eraser left the selected word highlighted, which made selection
+  and drawing look like modes that could be on at the same time. Entering either tool now clears
+  the text selection; ink and eraser already turned each other off, so exactly one of select,
+  draw, and erase owns the pointer.
+- Opening a file that already had a tab created a second tab and a second document session over
+  the same file. Saving in the new tab then failed with "the change could not be applied",
+  because the first session still held the file open while the save tried to replace it. Opening
+  a file now selects the tab that already has it - including a tab whose document is still
+  loading - and drag and drop take the same path. A save that still finds the file locked by
+  another window says so instead of showing a generic failure.
 - Closing a tab could leave the window pointed at the tab it had just closed. Removing the
   selected item cleared the tab strip's two-way selection before the close handler looked at it,
   so Home was never selected; the welcome screen still appeared because the disposed view model

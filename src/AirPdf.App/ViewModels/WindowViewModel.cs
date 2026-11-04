@@ -110,16 +110,36 @@ public sealed partial class WindowViewModel : ObservableObject, ITabService, IDi
         tab.Dispose();
     }
 
-    /// <summary>Opens a document in a new tab of this window.</summary>
-    public void OpenInNewTab(string filePath) => AddTab(filePath);
+    /// <summary>
+    /// Shows a document: if this window already has it open, that tab is selected instead of a
+    /// second document session being created over the same file. Two sessions over one file made
+    /// saving fail, because one session still held the file open while the other tried to
+    /// replace it.
+    /// </summary>
+    public void OpenDocument(string filePath)
+    {
+        if (SelectTab(filePath) is null)
+        {
+            AddTab(filePath);
+        }
+    }
 
     public void ShowHome() => SelectedTab = HomeTab;
 
+    /// <summary>
+    /// Selects the tab already showing <paramref name="filePath"/>, including a tab that is
+    /// still opening it, or returns null when no tab has it.
+    /// </summary>
     public MainWindowViewModel? SelectTab(string filePath)
     {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            return null;
+        }
+
         var tab = Tabs.FirstOrDefault(
             candidate => !candidate.IsHomeTab
-                && string.Equals(candidate.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
+                && (SameFile(candidate.FilePath, filePath) || SameFile(candidate.OpeningPath, filePath)));
 
         if (tab is not null)
         {
@@ -155,5 +175,36 @@ public sealed partial class WindowViewModel : ObservableObject, ITabService, IDi
 
         _owned.Clear();
         Tabs.Clear();
+    }
+
+    /// <summary>
+    /// Compares two paths as files. Recent entries and command-line arguments can be relative
+    /// or use a different case, and either spelling must find the tab that already has it.
+    /// </summary>
+    private static bool SameFile(string? left, string? right)
+    {
+        if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right))
+        {
+            return false;
+        }
+
+        return string.Equals(
+            NormalizePath(left),
+            NormalizePath(right),
+            OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal);
+    }
+
+    private static string NormalizePath(string path)
+    {
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch
+        {
+            return path;
+        }
     }
 }

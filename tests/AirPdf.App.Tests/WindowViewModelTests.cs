@@ -188,7 +188,7 @@ public sealed class WindowViewModelTests : IDisposable
     }
 
     [AvaloniaFact]
-    public async Task OpenCommand_WithADocumentAlreadyOpen_AddsATab()
+    public async Task OpenCommand_OnTheSameDocument_SelectsItsTabInsteadOfDuplicating()
     {
         var host = CreateHost();
         var first = host.AddTab();
@@ -198,14 +198,57 @@ public sealed class WindowViewModelTests : IDisposable
         _dialog.NextFile = SamplePath;
         first.OpenCommand.Execute(null);
 
-        var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (host.Tabs.Count < 3 && DateTime.UtcNow < deadline)
-        {
-            await Task.Delay(20);
-        }
+        // A second tab would give two document sessions over one file, and saving in either
+        // then fails because the other holds the file open.
+        await Task.Delay(500);
+        Assert.Equal(2, host.Tabs.Count);
+        Assert.Same(first, host.SelectedTab);
+        Assert.Same(first, Assert.Single(host.Tabs, tab => !tab.IsHomeTab));
+    }
+
+    [AvaloniaFact]
+    public async Task OpenDocument_WithTheSameFile_SelectsTheExistingTab()
+    {
+        var host = CreateHost();
+        var first = host.AddTab();
+        await first.OpenPathAsync(SamplePath);
+        var second = host.AddTab();
+        Assert.Same(second, host.SelectedTab);
+
+        host.OpenDocument(SamplePath);
 
         Assert.Equal(3, host.Tabs.Count);
-        Assert.NotSame(first, host.SelectedTab);
+        Assert.Same(first, host.SelectedTab);
+    }
+
+    [AvaloniaFact]
+    public async Task OpenDocument_WhileTheSameFileIsStillOpening_SelectsThatTab()
+    {
+        var host = CreateHost();
+        var first = host.AddTab();
+
+        // OpeningPath is set before the first await, so the duplicate check also covers the
+        // window between creating a tab and its document finishing load.
+        var opening = first.OpenPathAsync(SamplePath);
+        host.OpenDocument(SamplePath);
+
+        Assert.Equal(2, host.Tabs.Count);
+        Assert.Same(first, host.SelectedTab);
+
+        await opening;
+        Assert.True(first.IsDocumentOpen);
+    }
+
+    [AvaloniaFact]
+    public async Task SelectTab_MatchesTheSameFileWrittenDifferently()
+    {
+        var host = CreateHost();
+        var tab = host.AddTab();
+        await tab.OpenPathAsync(SamplePath);
+
+        var relative = Path.GetRelativePath(Environment.CurrentDirectory, SamplePath);
+
+        Assert.Same(tab, host.SelectTab(relative));
     }
 
     [AvaloniaFact]

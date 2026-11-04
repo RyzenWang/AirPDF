@@ -192,7 +192,7 @@ public sealed class LocalizationService : IDisposable
             ["L.NewTab"] = ("New tab", "新标签页"),
             ["L.NewTabHint"] = ("New tab (Ctrl+T)", "新建标签页（Ctrl+T）"),
             ["L.CloseTab"] = ("Close tab", "关闭标签页"),
-            ["L.OpenInNewTab"] = ("Open in new tab", "在新标签页中打开"),
+            ["L.ErrorSaveInUse"] = ("The file is still open in another tab or window. Close it there, then save again.", "该文件仍在另一个标签页或窗口中打开，请先关闭它再保存。"),
             ["L.ExplorerError"] = ("AirPDF could not open the file's folder.", "无法打开文件所在文件夹。"),
             ["L.NavigateBack"] = ("Back to previous position (Alt+Left)", "返回上一个位置（Alt+Left）"),
             ["L.PageNumberLabel"] = ("Page number", "页码"),
