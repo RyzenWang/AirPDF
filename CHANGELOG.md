@@ -16,6 +16,9 @@ semantic versioning once it reaches 1.0.
   file, and a retry after the other handle is gone writes the changes through.
 - Closing a tab now flushes its reading position before the stream is disposed, and closed
   tabs are removed from the window's tab list instead of being retained until exit.
+- A scroll that was still being applied no longer reports an older page after the reader has
+  moved on. Closing a tab right after opening a document used to save page one and reopen
+  there, discarding the page the reader had actually reached.
 - The text layer is no longer parsed for every page that scrolls past. Parsed words are kept
   only around the current page (or pages in the active selection), and `Ctrl+A` refuses
   documents above 1,000 pages rather than loading every page at once.

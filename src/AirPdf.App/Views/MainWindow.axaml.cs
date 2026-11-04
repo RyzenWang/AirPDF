@@ -759,11 +759,24 @@ public partial class MainWindow : Window
     private void ApplyScrollOffset(double target, int pageNumber, double fraction)
     {
         _suppressScrollSync = true;
+
+        // The write below only reports where this scroll landed. By the time the timer runs the
+        // reader may already be somewhere else - a page-number jump, a bookmark, a search result,
+        // or a closing tab - and reporting the older page would pull the current page and the
+        // saved reading position back to it. That is how a position set right after opening a
+        // document ended up saved as page one.
+        var viewModel = _viewModel;
+        var pageBeforeScroll = viewModel.CurrentPage;
+
         PagesList.ScrollToVerticalOffset(target);
         DispatcherTimer.RunOnce(() =>
         {
             _suppressScrollSync = false;
-            _viewModel.UpdateCurrentPageFromScroll(pageNumber, fraction);
+            if (ReferenceEquals(_viewModel, viewModel) && viewModel.CurrentPage == pageBeforeScroll)
+            {
+                viewModel.UpdateCurrentPageFromScroll(pageNumber, fraction);
+            }
+
             UpdateThumbnailSelection();
         }, TimeSpan.FromMilliseconds(140));
 

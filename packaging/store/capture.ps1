@@ -1,5 +1,5 @@
 ﻿# Capture helpers for the Microsoft Store screenshots.
-# Run:  powershell -NoProfile -ExecutionPolicy Bypass -File artifacts/shots/capture.ps1 -Scene welcome
+# Run:  powershell -NoProfile -ExecutionPolicy Bypass -File packaging/store/capture.ps1 -Scene welcome
 #
 # The display runs at 150% scaling, so every interaction below is expressed as a
 # fraction of the client area instead of hard-coded pixels; that keeps the clicks on

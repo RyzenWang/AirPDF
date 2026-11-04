@@ -32,7 +32,7 @@ generates the logo assets from `src/AirPdf.App/Assets/airpdf.png`, expands
 the parts Microsoft certifies.
 
 `makeappx` is resolved from an installed Windows SDK, or downloaded on demand
-from the `Microsoft.Windows.SDK.BuildTools` NuGet package 鈥?no elevation and no
+from the `Microsoft.Windows.SDK.BuildTools` NuGet package — no elevation and no
 SDK install needed.
 
 Sign with a certificate whose subject matches the manifest `Publisher`:
@@ -77,7 +77,7 @@ expectations, and the pre-submission smoke test — is in
 
 ## What the manifest declares
 
-- `rescap:runFullTrust` 鈥?a PDF reader needs unconstrained file system access to
+- `rescap:runFullTrust` — a PDF reader needs unconstrained file system access to
   the documents the user opens.
 - `.pdf` file type association, so Windows can offer AirPDF as a handler. Windows
   always prompts before changing the default; the manifest cannot claim it.
