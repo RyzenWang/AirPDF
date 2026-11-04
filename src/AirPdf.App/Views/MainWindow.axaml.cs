@@ -8,6 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -30,6 +31,8 @@ public partial class MainWindow : Window
     private bool _selectionPressInProgress;
     private (int Page, double X, double Y)? _contextPoint;
     private (PageViewModel Page, Control View, List<(double X, double Y)> Points)? _inkStroke;
+    private (PageViewModel Page, int Number)? _erasing;
+    private readonly Cursor _hiddenCursor = new(StandardCursorType.None);
     private bool _selectionMoved;
     private bool _restoringDocument;
     private bool _linkCursorActive;
@@ -1045,6 +1048,26 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (_viewModel.IsEraserMode && IsInsidePageList(e.Source))
+        {
+            HidePalettes();
+
+            var eraseView = FindPageView(e.Source);
+            if (eraseView?.DataContext is PageViewModel erasePage)
+            {
+                var start = e.GetPosition(eraseView);
+                if (new Rect(eraseView.Bounds.Size).Contains(start))
+                {
+                    _erasing = (erasePage, erasePage.Number);
+                    _viewModel.BeginErase();
+                    _ = EraseAsync(erasePage.Number, start.X / Math.Max(1, eraseView.Bounds.Width), start.Y / Math.Max(1, eraseView.Bounds.Height));
+                    e.Pointer.Capture(PagesList);
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
+
         // Only a press that starts inside the page list can begin a stroke. Testing the pointer
         // position instead let a press on the toolbar count as a stroke when a page happened to
         // be laid out underneath it, which swallowed the click and made the buttons dead.
@@ -1156,6 +1179,27 @@ public partial class MainWindow : Window
 
     private void OnSelectionPointerMoved(object? sender, PointerEventArgs e)
     {
+        UpdatePointerGlyph(e);
+
+        if (_erasing is { } erasing)
+        {
+            var view = FindPageView(e.Source) ?? FindPageViewAt(e.GetPosition(this));
+            if (view?.DataContext is PageViewModel erasePage && erasePage.Number == erasing.Number)
+            {
+                var point = e.GetPosition(view);
+                if (new Rect(view.Bounds.Size).Contains(point))
+                {
+                    _ = EraseAsync(
+                        erasePage.Number,
+                        point.X / Math.Max(1, view.Bounds.Width),
+                        point.Y / Math.Max(1, view.Bounds.Height));
+                }
+            }
+
+            e.Handled = true;
+            return;
+        }
+
         if (_inkStroke is { } drawing)
         {
             var point = e.GetPosition(drawing.View);
@@ -1219,6 +1263,46 @@ public partial class MainWindow : Window
         Cursor = active ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
     }
 
+    private async Task EraseAsync(int pageNumber, double x, double y)
+    {
+        try
+        {
+            await _viewModel.EraseAtAsync(pageNumber, x, y);
+        }
+        catch (Exception unexpected)
+        {
+            CrashLog.Write("Erase", unexpected);
+        }
+    }
+
+    /// <summary>
+    /// Draws the tool under the pointer and hides the system cursor, but only where the tool would
+    /// do something: over a page. Anywhere else the ordinary arrow stays.
+    /// </summary>
+    private void UpdatePointerGlyph(PointerEventArgs e)
+    {
+        var drawing = _viewModel.IsInkMode || _viewModel.IsEraserMode;
+        var pageView = drawing ? FindPageView(e.Source) ?? FindPageViewAt(e.GetPosition(this)) : null;
+        var overPage = pageView is not null && pageView.DataContext is PageViewModel;
+
+        if (!drawing || !overPage)
+        {
+            if (PointerLayer.IsVisible)
+            {
+                PointerLayer.IsVisible = false;
+            }
+
+            Cursor = Cursor.Default;
+            return;
+        }
+
+        var position = e.GetPosition(PointerLayer);
+        Canvas.SetLeft(PointerGlyph, position.X + 2);
+        Canvas.SetTop(PointerGlyph, position.Y + 2);
+        PointerGlyph.Data = this.FindResource(_viewModel.IsEraserMode ? "IconEraser" : "IconPen") as Geometry;
+        PointerLayer.IsVisible = true;
+        Cursor = _hiddenCursor;
+    }
     /// <summary>
     /// A capture can be lost without a release - the window loses focus, or the pointer leaves
     /// the surface. The half-drawn stroke and its capture have to go with it, or the next press
@@ -1236,6 +1320,15 @@ public partial class MainWindow : Window
     }
     private void OnSelectionPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
+        if (_erasing is not null)
+        {
+            _erasing = null;
+            _viewModel.EndErase();
+            e.Pointer.Capture(null);
+            e.Handled = true;
+            return;
+        }
+
         if (_inkStroke is { } drawing)
         {
             _inkStroke = null;

@@ -67,7 +67,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>Current policy; skipping duplicates by default.</summary>
-    public HighlightOverlapPolicy HighlightPolicy { get; set; } = HighlightOverlapPolicy.Skip;
+    public HighlightOverlapPolicy HighlightPolicy { get; set; } = HighlightOverlapPolicy.Stack;
 
     /// <summary>Colour used for the next highlight; yellow until the reader picks another.</summary>
     [ObservableProperty]
@@ -83,6 +83,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     [ObservableProperty]
     private bool _isInkMode;
+
+    /// <summary>
+    /// While this is on, dragging over the page rubs out markup instead of drawing. It owns the
+    /// pointer the same way drawing does, so the two modes exclude each other.
+    /// </summary>
+    [ObservableProperty]
+    private bool _isEraserMode;
+
+    /// <summary>Markup removed during the current drag, so one stroke of the eraser is one undo.</summary>
+    private readonly List<PdfMarkup> _erased = [];
 
     /// <summary>
     /// One reader action as a pair of closures: what it takes to undo it, and what it takes to
@@ -1169,7 +1179,91 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
 
         IsInkMode = !IsInkMode;
+        if (IsInkMode)
+        {
+            IsEraserMode = false;
+        }
+
         ShowStatus(_localization.T(IsInkMode ? "L.InkModeOn" : "L.InkModeOff"));
+    }
+
+    /// <summary>Turns the eraser on or off.</summary>
+    [RelayCommand]
+    private void ToggleEraserMode()
+    {
+        if (!IsDocumentOpen)
+        {
+            return;
+        }
+
+        IsEraserMode = !IsEraserMode;
+        if (IsEraserMode)
+        {
+            IsInkMode = false;
+        }
+
+        ShowStatus(_localization.T(IsEraserMode ? "L.EraserModeOn" : "L.EraserModeOff"));
+    }
+
+    /// <summary>Starts collecting erasures, so a drag becomes one undo step.</summary>
+    public void BeginErase()
+    {
+        _erased.Clear();
+    }
+
+    /// <summary>Rubs out whatever markup sits under a point on the page.</summary>
+    public async Task<bool> EraseAtAsync(int pageNumber, double normalizedX, double normalizedY)
+    {
+        if (!IsDocumentOpen || !IsEraserMode)
+        {
+            return false;
+        }
+
+        var page = Pages.FirstOrDefault(candidate => candidate.Number == pageNumber);
+        if (page is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var rotation = await GetRotationAsync(pageNumber);
+            var point = PageGeometry.ToPageQuad(
+                new PdfSearchRect(normalizedX, normalizedY, 0, 0),
+                page.WidthPoints,
+                page.HeightPoints,
+                rotation);
+
+            var removed = await _documentService.RemoveMarkupAtAsync(FilePath, pageNumber, point.Left, point.Top);
+            if (removed.Count == 0)
+            {
+                return false;
+            }
+
+            _erased.AddRange(removed);
+            page.RequestRender();
+            HasUnsavedAnnotations = true;
+            return true;
+        }
+        catch (PdfDocumentException failure)
+        {
+            SetError(_localization.GetPdfFailureMessage(failure.Failure));
+            return false;
+        }
+    }
+
+    /// <summary>Closes an erase drag, pushing one undo step for everything it removed.</summary>
+    public void EndErase()
+    {
+        if (_erased.Count == 0)
+        {
+            return;
+        }
+
+        var removed = _erased.ToList();
+        _erased.Clear();
+        PushStep(MarkupRemovedStep(removed));
+        ShowStatus(string.Format(_localization.T("L.Erased"), removed.Count));
     }
 
     /// <summary>

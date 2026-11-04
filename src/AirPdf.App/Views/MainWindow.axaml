@@ -16,6 +16,20 @@
   <Window.Resources>
   </Window.Resources>
   <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <!-- The pointer glyph: the system cursor is hidden over a drawable page so the tool in hand is
+         what the reader sees. -->
+    <Canvas x:Name="PointerLayer"
+            Grid.RowSpan="4"
+            IsHitTestVisible="False"
+            IsVisible="False">
+      <Path x:Name="PointerGlyph"
+            Width="22" Height="22"
+            Stretch="Uniform"
+            Stroke="{DynamicResource TextPrimaryBrush}"
+            StrokeThickness="1.6"
+            StrokeLineCap="Round"
+            StrokeJoin="Round" />
+    </Canvas>
     <!-- Tab strip. Its DataContext is the WindowViewModel (the tab host), set in code,
          which is why compiled bindings are opted out: the window's DataContext is the
          active document's view model. Hidden while only one tab exists. -->
@@ -236,7 +250,15 @@
                   ToolTip.Tip="{DynamicResource L.ZoomOut}">
             <Border Width="12" Height="1.5" CornerRadius="1" Background="{DynamicResource TextPrimaryBrush}" />
           </Button>
-          <Button Classes="chip"
+          <Button x:Name="EraserButton"
+                  Classes="icon"
+                  Classes.inkOn="{Binding IsEraserMode}"
+                  Command="{Binding ToggleEraserModeCommand}"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{DynamicResource L.Eraser}"
+                  ToolTip.Tip="{DynamicResource L.Eraser}">
+            <Path Classes="icon" Data="{StaticResource IconEraser}" />
+          </Button>          <Button Classes="chip"
                   Content="{Binding ZoomText}"
                   Padding="9,5"
                   MinWidth="58"

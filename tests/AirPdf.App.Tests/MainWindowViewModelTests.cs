@@ -774,6 +774,35 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.True(stacked > second, $"stacking added nothing: {second} -> {stacked}");
     }
     [AvaloniaFact]
+    public async Task ErasingRemovesMarkupAndOneUndoBringsItBack()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        await context.ViewModel.AddInkAtAsync(1, [(0.2, 0.5), (0.5, 0.5)]);
+
+        context.ViewModel.ToggleEraserModeCommand.Execute(null);
+        Assert.True(context.ViewModel.IsEraserMode);
+
+        // The two tools own the pointer, so turning one on turns the other off.
+        context.ViewModel.ToggleInkModeCommand.Execute(null);
+        Assert.True(context.ViewModel.IsInkMode);
+        Assert.False(context.ViewModel.IsEraserMode);
+        context.ViewModel.ToggleEraserModeCommand.Execute(null);
+        Assert.False(context.ViewModel.IsInkMode);
+
+        context.ViewModel.BeginErase();
+        Assert.True(await context.ViewModel.EraseAtAsync(1, 0.35, 0.5));
+        context.ViewModel.EndErase();
+
+        // One drag is one undo step, and it puts the stroke back where it was.
+        Assert.True(context.ViewModel.CanUndoAnnotation);
+        await context.ViewModel.UndoAnnotationCommand.ExecuteAsync(null);
+
+        context.ViewModel.BeginErase();
+        Assert.True(await context.ViewModel.EraseAtAsync(1, 0.35, 0.5));
+        context.ViewModel.EndErase();
+    }
+    [AvaloniaFact]
     public async Task HighlightSelection_WithoutASelection_CannotRun()
     {
         using var context = new TestContext();

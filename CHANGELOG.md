@@ -8,6 +8,8 @@ semantic versioning once it reaches 1.0.
 
 ### Added
 
+- Erasing: a button beside the pen rubs out whatever markup the pointer passes over, and a whole
+  drag becomes one undo step.
 - Removing markup: **Remove annotation** in the page menu takes away whatever sits under the
   pointer - a highlight, a stroke or a note - as one action and one undo step.
 - Clicking a sticky note shows its text in a small popup. The text is an annotation, so
@@ -23,6 +25,11 @@ semantic versioning once it reaches 1.0.
 
 ### Changed
 
+- Highlighting the same text twice stacks again, which is what a reader expects from pressing the
+  same thing twice; the skip policy is still one property away.
+- While a drawing or erasing tool is active, the pointer carries that tool over a page and
+  stays an arrow everywhere else, so the tool is visible without guessing where it works.
+- The status bar texts share one vertical alignment instead of sitting at different heights.
 - The pen button opens the ink colours again, and clicking it while drawing leaves the mode.
 - **Highlight** in the page menu is a submenu now, so the colours appear on hover instead of after
   a click, and choosing one highlights the selection in it.
