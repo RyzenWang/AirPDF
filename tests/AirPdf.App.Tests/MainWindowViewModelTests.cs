@@ -658,6 +658,27 @@ public sealed class MainWindowViewModelTests
         }
     }
     [AvaloniaFact]
+    public async Task ContextTarget_OnlyClaimsMarkupUnderThePointer()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        // Empty page: nothing to remove and no note to read.
+        await context.ViewModel.UpdateContextTargetAsync(1, 0.5, 0.5);
+        Assert.False(context.ViewModel.HasMarkupUnderPointer);
+        Assert.False(context.ViewModel.HasNoteUnderPointer);
+
+        // A stroke across the middle, then the same point, and one away from it.
+        await context.ViewModel.AddInkAtAsync(1, [(0.2, 0.5), (0.8, 0.5)]);
+
+        await context.ViewModel.UpdateContextTargetAsync(1, 0.5, 0.5);
+        Assert.True(context.ViewModel.HasMarkupUnderPointer);
+        Assert.False(context.ViewModel.HasNoteUnderPointer);
+
+        await context.ViewModel.UpdateContextTargetAsync(1, 0.5, 0.1);
+        Assert.False(context.ViewModel.HasMarkupUnderPointer);
+    }
+    [AvaloniaFact]
     public async Task HighlightSelection_WithoutASelection_CannotRun()
     {
         using var context = new TestContext();

@@ -77,6 +77,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     private sealed record UndoStep(Func<Task> Undo, Func<Task> Redo);
 
+    /// <summary>Markup per page, filled on demand and dropped whenever an edit lands.</summary>
+    private readonly Dictionary<int, IReadOnlyList<PdfMarkup>> _markupCache = [];
+
+    /// <summary>Page rotation per page; the hit test needs it and it does not change.</summary>
+    private readonly Dictionary<int, int> _rotationCache = [];
+
     private readonly Stack<UndoStep> _annotationUndo = new();
     private readonly Stack<UndoStep> _annotationRedo = new();
     private NavigationPoint? _pendingOpenPosition;
@@ -950,6 +956,169 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private string? _noteText;
 
+    /// <summary>True when a right-click landed on markup, so the menu offers to remove it.</summary>
+    [ObservableProperty]
+    private bool _hasMarkupUnderPointer;
+
+    /// <summary>True when the markup under the pointer is a note with text to read.</summary>
+    [ObservableProperty]
+    private bool _hasNoteUnderPointer;
+
+    /// <summary>Text of the note under the pointer, if that is what was hit.</summary>
+    private string? _noteUnderPointer;
+
+    /// <summary>
+    /// Works out what the pointer is over, so the context menu only offers what applies: remove an
+    /// annotation when one is under it, show the note when the annotation is a note.
+    /// </summary>
+    public async Task UpdateContextTargetAsync(int pageNumber, double normalizedX, double normalizedY)
+    {
+        HasMarkupUnderPointer = false;
+        HasNoteUnderPointer = false;
+        _noteUnderPointer = null;
+
+        if (!IsDocumentOpen)
+        {
+            return;
+        }
+
+        var page = Pages.FirstOrDefault(candidate => candidate.Number == pageNumber);
+        if (page is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var rotation = await GetRotationAsync(pageNumber);
+            var point = PageGeometry.ToPageQuad(
+                new PdfSearchRect(normalizedX, normalizedY, 0, 0),
+                page.WidthPoints,
+                page.HeightPoints,
+                rotation);
+
+            var markup = await GetMarkupAsync(pageNumber);
+            var hit = markup.LastOrDefault(candidate => HitTest(candidate, point.Left, point.Top));
+            if (hit is null)
+            {
+                return;
+            }
+
+            HasMarkupUnderPointer = true;
+            if (hit.Kind == PdfMarkupKind.Note && !string.IsNullOrWhiteSpace(hit.Note?.Text))
+            {
+                HasNoteUnderPointer = true;
+                _noteUnderPointer = hit.Note!.Text;
+            }
+        }
+        catch (PdfDocumentException)
+        {
+            // A document that cannot be read has no markup to offer.
+        }
+    }
+
+    /// <summary>Shows the note the menu was opened on.</summary>
+    public void ShowNoteUnderPointer()
+    {
+        if (!string.IsNullOrWhiteSpace(_noteUnderPointer))
+        {
+            NoteText = _noteUnderPointer;
+        }
+    }
+    /// <summary>Text of the note the menu is offering to show.</summary>
+    public string? NoteUnderPointer => _noteUnderPointer;
+
+    /// <summary>Drops the cached markup after an edit.</summary>
+    private void InvalidateMarkupCache() => _markupCache.Clear();
+
+    private async Task<int> GetRotationAsync(int pageNumber)
+    {
+        if (_rotationCache.TryGetValue(pageNumber, out var cached))
+        {
+            return cached;
+        }
+
+        var rotation = await _documentService.GetPageRotationAsync(FilePath, pageNumber);
+        _rotationCache[pageNumber] = rotation;
+        return rotation;
+    }
+
+    private async Task<IReadOnlyList<PdfMarkup>> GetMarkupAsync(int pageNumber)
+    {
+        if (_markupCache.TryGetValue(pageNumber, out var cached))
+        {
+            return cached;
+        }
+
+        var markup = await _documentService.GetMarkupAsync(FilePath, pageNumber);
+        _markupCache[pageNumber] = markup;
+        return markup;
+    }
+
+    private static bool HitTest(PdfMarkup markup, double x, double y) => markup.Kind switch
+    {
+        PdfMarkupKind.Highlight => markup.Highlight!.Quads.Any(quad =>
+            x >= quad.Left - 0.5 && x <= quad.Right + 0.5 && y >= quad.Bottom - 0.5 && y <= quad.Top + 0.5),
+        PdfMarkupKind.Ink => InkContains(markup.Ink!, x, y),
+        PdfMarkupKind.Note => x >= markup.Note!.Position.X - 1 && x <= markup.Note.Position.X + 24 &&
+                              y >= markup.Note.Position.Y - 1 && y <= markup.Note.Position.Y + 24,
+        _ => false
+    };
+
+    private static bool InkContains(PdfInk ink, double x, double y)
+    {
+        // A stroke is a polyline: the hit area is the line, not its vertices. Comparing only the
+        // vertices means the middle of a long stroke cannot be clicked.
+        const double slack = 6;
+
+        foreach (var stroke in ink.Strokes)
+        {
+            var points = stroke.Points;
+            if (points.Count == 0)
+            {
+                continue;
+            }
+
+            if (points.Count == 1)
+            {
+                if (DistanceToPoint(x, y, points[0].X, points[0].Y) <= slack)
+                {
+                    return true;
+                }
+
+                continue;
+            }
+
+            for (var index = 1; index < points.Count; index++)
+            {
+                if (DistanceToSegment(x, y, points[index - 1], points[index]) <= slack)
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static double DistanceToPoint(double x, double y, double px, double py) =>
+        Math.Sqrt((x - px) * (x - px) + (y - py) * (y - py));
+
+    private static double DistanceToSegment(double x, double y, PdfPoint start, PdfPoint end)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var lengthSquared = dx * dx + dy * dy;
+
+        if (lengthSquared < 1e-9)
+        {
+            return DistanceToPoint(x, y, start.X, start.Y);
+        }
+
+        var t = Math.Clamp(((x - start.X) * dx + (y - start.Y) * dy) / lengthSquared, 0, 1);
+        return DistanceToPoint(x, y, start.X + t * dx, start.Y + t * dy);
+    }
+
     /// <summary>True when a note's text is worth showing.</summary>
     public bool HasNoteText => !string.IsNullOrWhiteSpace(NoteText);
 
@@ -1245,6 +1414,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         var step = _annotationUndo.Pop();
         _annotationRedo.Push(step);
+        InvalidateMarkupCache();
         NotifyUndoChanged();
 
         await RunUndoStepAsync(step.Undo, "L.Undone");
@@ -1260,6 +1430,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         var step = _annotationRedo.Pop();
         _annotationUndo.Push(step);
+        InvalidateMarkupCache();
         NotifyUndoChanged();
 
         await RunUndoStepAsync(step.Redo, "L.Redone");
@@ -1287,6 +1458,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>Records an edit and drops the redo trail, as every editor does.</summary>
     private void PushStep(UndoStep step)
     {
+        InvalidateMarkupCache();
         _annotationUndo.Push(step);
         _annotationRedo.Clear();
         NotifyUndoChanged();
@@ -2256,6 +2428,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _reading.Detach();
         ClearHistory();
         ClearUndo();
+
+        // The caches are keyed by page number, so they cannot outlive the document.
+        InvalidateMarkupCache();
+        _rotationCache.Clear();
         _zoomMode = ZoomModes.FitWidth;
         _restoreZoom = null;
         _restoreZoomMode = null;

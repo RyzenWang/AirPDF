@@ -437,6 +437,33 @@ public sealed class PdfDocumentService : IDisposable
             cancellationToken);
     }
 
+    /// <summary>Every markup annotation on a page, for hit-testing the pointer against.</summary>
+    public Task<IReadOnlyList<PdfMarkup>> GetMarkupAsync(
+        string filePath,
+        int pageNumber,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return ResidentSession(fullPath).GetMarkup(pageNumber);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
     /// <summary>Removes whatever markup is under a page-space point.</summary>
     public Task<IReadOnlyList<PdfMarkup>> RemoveMarkupAtAsync(
         string filePath,

@@ -1425,6 +1425,10 @@ public partial class MainWindow : Window
         {
             _viewModel.ClearTextSelection();
         }
+
+        // The menu opens with the right-click, so the hit test runs alongside it and the items
+        // that do not apply are hidden as soon as the answer arrives.
+        _ = _viewModel.UpdateContextTargetAsync(page.Number, x, y);
     }
 
     private void OnHighlightSwatchClick(object? sender, RoutedEventArgs e)
@@ -1558,6 +1562,12 @@ public partial class MainWindow : Window
 
         await _viewModel.AddNoteAtAsync(point.Page, point.X, point.Y);
         _contextPoint = null;
+    }
+
+    private void OnShowNoteClick(object? sender, RoutedEventArgs e)
+    {
+        _viewModel.ShowNoteUnderPointer();
+        ShowNotePopup();
     }
 
     private async void OnRemoveMarkupClick(object? sender, RoutedEventArgs e)

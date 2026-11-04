@@ -42,6 +42,7 @@ public sealed class LocalizationService : IDisposable
             ["L.NoOutline"] = ("No outline in this PDF", "此 PDF 没有目录"),
             ["L.Bookmarks"] = ("Bookmarks", "书签"),
             ["L.HighlightSelection"] = ("Highlight selection", "高亮所选"),
+            ["L.ShowNote"] = ("Show note", "查看便签"),
             ["L.RemoveMarkup"] = ("Remove annotation", "移除标注"),
             ["L.MarkupRemoved"] = ("Annotation removed.", "已移除标注。"),
             ["L.NoMarkupHere"] = ("Nothing to remove here.", "这里没有可移除的标注。"),

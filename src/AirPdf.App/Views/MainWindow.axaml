@@ -234,6 +234,14 @@
                   ToolTip.Tip="{DynamicResource L.Undo}">
             <Path Classes="icon" Data="{StaticResource IconUndo}" />
           </Button>
+
+          <Button Classes="icon"
+                  Command="{Binding RedoAnnotationCommand}"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{DynamicResource L.Redo}"
+                  ToolTip.Tip="{DynamicResource L.Redo}">
+            <Path Classes="icon" Data="{StaticResource IconRedo}" />
+          </Button>
           <Button x:Name="InkButton"
                   Classes="icon"
                   Classes.inkOn="{Binding IsInkMode}"
@@ -244,14 +252,6 @@
                   ToolTip.Tip="{DynamicResource L.InkMode}">
             <Path Classes="icon" Data="{StaticResource IconPen}" Stroke="{Binding InkColor.Brush}" />
           </Button>
-          <Button Classes="icon"
-                  Command="{Binding RedoAnnotationCommand}"
-                  IsVisible="{Binding IsDocumentOpen}"
-                  AutomationProperties.Name="{DynamicResource L.Redo}"
-                  ToolTip.Tip="{DynamicResource L.Redo}">
-            <Path Classes="icon" Data="{StaticResource IconRedo}" />
-          </Button>
-
           <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="8,0" VerticalAlignment="Center" />
 
           <Button Classes="zoom"
@@ -580,21 +580,22 @@
             <ContextMenu x:DataType="vm:MainWindowViewModel">
               <MenuItem Header="{DynamicResource L.CopySelection}"
                         Command="{Binding CopySelectionCommand}"
-                        IsEnabled="{Binding HasSelection}" />
-              <MenuItem Header="{DynamicResource L.SelectAll}"
-                        Command="{Binding SelectAllTextCommand}" />
+                        IsVisible="{Binding HasSelection}" />
               <MenuItem Header="{DynamicResource L.HighlightSelection}"
-                        Click="OnHighlightMenuClick" />
+                        Click="OnHighlightMenuClick"
+                        IsVisible="{Binding HasSelection}" />
+              <MenuItem Header="{DynamicResource L.ShowNote}"
+                        Click="OnShowNoteClick"
+                        IsVisible="{Binding HasNoteUnderPointer}" />
               <MenuItem Header="{DynamicResource L.RemoveMarkup}"
                         Click="OnRemoveMarkupClick"
-                        IsEnabled="{Binding IsDocumentOpen}" />              <MenuItem Header="{DynamicResource L.AddNote}"
+                        IsVisible="{Binding HasMarkupUnderPointer}" />
+              <Separator />
+              <MenuItem Header="{DynamicResource L.SelectAll}"
+                        Command="{Binding SelectAllTextCommand}" />
+              <MenuItem Header="{DynamicResource L.AddNote}"
                         Click="OnAddNoteClick"
                         IsEnabled="{Binding IsDocumentOpen}" />
-              <MenuItem Header="{DynamicResource L.Undo}"
-                        Command="{Binding UndoAnnotationCommand}" />
-              <MenuItem Header="{DynamicResource L.Redo}"
-                        Command="{Binding RedoAnnotationCommand}" />
-              <Separator />
               <MenuItem Header="{DynamicResource L.AddBookmark}"
                         Command="{Binding AddBookmarkCommand}"
                         IsEnabled="{Binding IsDocumentOpen}" />
@@ -604,6 +605,11 @@
               <MenuItem Header="{DynamicResource L.SaveAs}"
                         Command="{Binding SaveCopyCommand}"
                         IsEnabled="{Binding IsDocumentOpen}" />
+              <Separator />
+              <MenuItem Header="{DynamicResource L.Undo}"
+                        Command="{Binding UndoAnnotationCommand}" />
+              <MenuItem Header="{DynamicResource L.Redo}"
+                        Command="{Binding RedoAnnotationCommand}" />
               <Separator />
               <MenuItem Header="{DynamicResource L.OpenContainingFolder}"
                         Command="{Binding OpenContainingFolderCommand}"

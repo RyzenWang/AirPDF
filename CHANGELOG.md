@@ -23,6 +23,9 @@ semantic versioning once it reaches 1.0.
 
 ### Changed
 
+- Undo and redo sit next to each other in the toolbar; the pen moved after them.
+- The page menu only offers what applies to what was clicked: a highlight can be highlighted, a
+  note read, and any markup removed only when the pointer is actually on one.
 - The palette hangs off the tools that use it instead of a button of its own: the pen opens the ink
   colours and picking one starts drawing, and **Highlight** in the page menu opens the highlight
   colours and applies the chosen colour to the selection straight away.

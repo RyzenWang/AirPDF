@@ -354,6 +354,38 @@ public sealed partial class PdfiumDocument
     private static bool ContainsNote(PdfNote note, double x, double y) =>
         x >= note.Position.X - 0.5 && x <= note.Position.X + 22 &&
         y >= note.Position.Y - 0.5 && y <= note.Position.Y + 22;
+    /// <summary>Every markup annotation on a page, in one pass.</summary>
+    public IReadOnlyList<PdfMarkup> GetMarkup(int pageNumber)
+    {
+        ThrowIfDisposed();
+
+        var markup = new List<PdfMarkup>();
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            for (var index = 0; index < PdfiumNative.PageGetAnnotCount(page); index++)
+            {
+                switch (GetAnnotationSubtype(pageNumber, index))
+                {
+                    case PdfiumNative.AnnotHighlight when TryReadHighlight(pageNumber, index) is { } highlight:
+                        markup.Add(new PdfMarkup(PdfMarkupKind.Highlight, Highlight: highlight));
+                        break;
+                    case PdfiumNative.AnnotInk when TryReadInk(pageNumber, index) is { } ink:
+                        markup.Add(new PdfMarkup(PdfMarkupKind.Ink, Ink: ink));
+                        break;
+                    case PdfiumNative.AnnotText when TryReadNote(pageNumber, index) is { } note:
+                        markup.Add(new PdfMarkup(PdfMarkupKind.Note, Note: note));
+                        break;
+                }
+            }
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+
+        return markup;
+    }
     /// <summary>Removes the ink annotation whose strokes match, so an addition can be taken back.</summary>
     public bool RemoveInkMatching(int pageNumber, PdfInk ink)
     {
