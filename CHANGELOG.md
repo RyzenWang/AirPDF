@@ -4,10 +4,13 @@ All notable changes to AirPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning once it reaches 1.0.
 
-## [Unreleased]
+## [0.4.0] - 2026-11-04
 
 ### Added
 
+- Windows builds are available from the [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1),
+  which is now the recommended way to install on Windows: updates arrive through the Store and no
+  unsigned installer has to be downloaded.
 - Redo (`Ctrl+Y`), and undo and redo buttons in the toolbar next to the zoom group, so the pair
   is visible without opening a menu. A new edit drops the redo trail, as elsewhere.
 - Saving into the document itself (`Ctrl+S`, **Save**). It is written beside the original and
@@ -181,6 +184,9 @@ explicit.
 
 ### Added
 
+- Windows builds are available from the [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1),
+  which is now the recommended way to install on Windows: updates arrive through the Store and no
+  unsigned installer has to be downloaded.
 - Redo (`Ctrl+Y`), and undo and redo buttons in the toolbar next to the zoom group, so the pair
   is visible without opening a menu. A new edit drops the redo trail, as elsewhere.
 - Saving into the document itself (`Ctrl+S`, **Save**). It is written beside the original and
@@ -245,6 +251,9 @@ explicit.
 
 ### Added
 
+- Windows builds are available from the [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1),
+  which is now the recommended way to install on Windows: updates arrive through the Store and no
+  unsigned installer has to be downloaded.
 - Redo (`Ctrl+Y`), and undo and redo buttons in the toolbar next to the zoom group, so the pair
   is visible without opening a menu. A new edit drops the redo trail, as elsewhere.
 - Saving into the document itself (`Ctrl+S`, **Save**). It is written beside the original and
@@ -380,6 +389,9 @@ First public preview.
 
 ### Added
 
+- Windows builds are available from the [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1),
+  which is now the recommended way to install on Windows: updates arrive through the Store and no
+  unsigned installer has to be downloaded.
 - Redo (`Ctrl+Y`), and undo and redo buttons in the toolbar next to the zoom group, so the pair
   is visible without opening a menu. A new edit drops the redo trail, as elsewhere.
 - Saving into the document itself (`Ctrl+S`, **Save**). It is written beside the original and

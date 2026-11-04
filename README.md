@@ -13,6 +13,10 @@
 </p>
 
 <p align="center">
+  <a href="https://apps.microsoft.com/detail/9pnsx3223qh1"><strong>Download for Windows from the Microsoft Store</strong></a>
+</p>
+
+<p align="center">
   <a href="https://github.com/RyzenWang/AirPDF/actions/workflows/ci.yml">
     <img alt="CI" src="https://github.com/RyzenWang/AirPDF/actions/workflows/ci.yml/badge.svg" />
   </a>
@@ -26,8 +30,10 @@ AirPDF opens PDFs quickly, renders them natively, and stays out of the way. It
 has no account, no cloud, no telemetry, and no web view. The whole reader is a
 small .NET application with a hand-built Avalonia interface.
 
-> **Status:** 0.2 preview. The reading core is stable and tested; annotations
-> and printing are not implemented yet. See the [roadmap](#roadmap).
+> **Status:** 0.4. Windows builds are in the
+> [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1); macOS and Linux ship as
+> portable archives. Highlights, bookmarks, undo/redo, and saving are in; printing and ink
+> annotations are not. See the [roadmap](#roadmap).
 
 ---
 
@@ -174,7 +180,9 @@ Supported runtime identifiers include `win-x64`, `win-arm64`, `linux-x64`,
 
 Tagged releases are packaged with [Velopack](https://velopack.io/):
 
-- Windows x64: `AirPDF-win-Portable.zip` — unzip anywhere and run `AirPdf.exe`
+- **Windows x64: [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1)** — recommended,
+  and updates arrive through the Store
+- Windows x64 portable: `AirPDF-win-Portable.zip` — unzip anywhere and run `AirPdf.exe`
 - macOS arm64 / x64: `AirPDF-osx-*-Portable.zip` — unzip and drag `AirPDF.app` to Applications
 - Linux x64: portable `.tar.gz`
 

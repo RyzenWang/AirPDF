@@ -11,6 +11,10 @@
 <p align="center">一款轻量、跨平台的 PDF 阅读器，使用 .NET 与 Avalonia 构建。</p>
 
 <p align="center">
+  <a href="https://apps.microsoft.com/detail/9pnsx3223qh1"><strong>从 Microsoft Store 下载 Windows 版</strong></a>
+</p>
+
+<p align="center">
   <img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4?style=flat-square" />
   <img alt="Avalonia 11" src="https://img.shields.io/badge/Avalonia-11.3-8B44AC?style=flat-square" />
   <img alt="MIT" src="https://img.shields.io/badge/license-MIT-2E6F63?style=flat-square" />
@@ -19,7 +23,8 @@
 AirPDF 打开得快、渲染得稳，然后安静地退到页面后面。没有账号，没有云端，没有遥测，
 也没有内嵌浏览器。整个阅读器就是一个小的 .NET 应用，界面用 Avalonia 手写。
 
-> **状态：** 0.2 预览版。阅读核心已经可用并有测试覆盖；批注、打印尚未实现。
+> **状态：** 0.4。Windows 版已上架 [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1)；
+> macOS 与 Linux 提供便携包。高亮、书签、撤销/重做、保存均已可用；打印与墨迹批注尚未实现。见[路线图](#路线图)。
 
 ![AirPDF 中文界面](docs/welcome-zh.png)
 
@@ -126,7 +131,8 @@ dotnet publish src/AirPdf.App -c Release -r win-x64 `
 
 Tag 发布会使用 [Velopack](https://velopack.io/) 生成：
 
-- Windows x64：`AirPDF-win-Portable.zip`，解压后直接运行 `AirPdf.exe`
+- **Windows x64：[Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1)** —— 推荐，更新由商店推送
+- Windows x64 便携版：`AirPDF-win-Portable.zip`，解压后直接运行 `AirPdf.exe`
 - macOS arm64 / x64：`AirPDF-osx-*-Portable.zip`，解压后把 `AirPDF.app` 拖进「应用程序」
 - Linux x64：便携 `.tar.gz`
 
