@@ -376,6 +376,44 @@
     <Setter Property="CornerRadius" Value="8" />
     <Setter Property="FontSize" Value="12.5" />
   </Style>
+  <!-- Managed Windows caption buttons. They follow the native 46x32 metrics inside the
+       44px workspace bar; the close button keeps the OS red for its hover state. -->
+  <Style Selector="Button.windowControl">
+    <Setter Property="Width" Value="46" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="4" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Path.windowGlyph">
+    <Setter Property="Width" Value="10" />
+    <Setter Property="Height" Value="10" />
+    <Setter Property="Stroke" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="StrokeThickness" Value="1.1" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="Stretch" Value="Uniform" />
+  </Style>
+  <Style Selector="Button.windowControl:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+  </Style>
+  <Style Selector="Button.windowControl:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfacePressedBrush}" />
+  </Style>
+  <Style Selector="Button.windowClose:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#C42B1C" />
+  </Style>
+  <Style Selector="Button.windowClose:pressed /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="#B0271A" />
+  </Style>
+  <Style Selector="Button.windowClose:pointerover Path.windowGlyph">
+    <Setter Property="Stroke" Value="White" />
+  </Style>
+  <Style Selector="Button.windowClose:pressed Path.windowGlyph">
+    <Setter Property="Stroke" Value="White" />
+  </Style>
 
   <Style Selector="Button.chip">
     <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />

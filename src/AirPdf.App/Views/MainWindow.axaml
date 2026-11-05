@@ -26,7 +26,7 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="12,0">
-      <Grid ColumnDefinitions="Auto,Auto,Auto,*">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
         <StackPanel x:Name="BrandPanel"
                     Grid.Column="0"
                     Orientation="Horizontal"
@@ -123,6 +123,45 @@
                 AutomationProperties.Name="{DynamicResource L.NewTabHint}">
           <Path Classes="tabNewIcon" Data="{StaticResource IconPlus}" />
         </Button>
+
+        <!-- In the Windows custom chrome this is the grab area. It is hidden on platforms
+             that keep their native decorations. -->
+        <Border x:Name="TitleDragRegion"
+                Grid.Column="3"
+                MinWidth="24"
+                Background="Transparent"
+                IsVisible="False"
+                PointerPressed="OnTitleBarPointerPressed" />
+
+        <StackPanel x:Name="WindowCaptionButtons"
+                    Grid.Column="4"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center"
+                    IsVisible="False">
+          <Button Classes="windowControl"
+                  Click="OnMinimizeWindowClick"
+                  ToolTip.Tip="{DynamicResource L.MinimizeWindow}"
+                  AutomationProperties.Name="{DynamicResource L.MinimizeWindow}">
+            <Border Width="10" Height="1.2" Background="{DynamicResource TextPrimaryBrush}" />
+          </Button>
+          <Button x:Name="MaximizeWindowButton"
+                  Classes="windowControl"
+                  Click="OnToggleMaximizeWindowClick"
+                  ToolTip.Tip="{DynamicResource L.MaximizeRestoreWindow}"
+                  AutomationProperties.Name="{DynamicResource L.MaximizeRestoreWindow}">
+            <Panel Width="10" Height="10">
+              <Path x:Name="MaximizeGlyph" Classes="windowGlyph" Data="{StaticResource IconWindowMaximize}" />
+              <Path x:Name="RestoreGlyph" Classes="windowGlyph" Data="{StaticResource IconWindowRestore}" IsVisible="False" />
+            </Panel>
+          </Button>
+          <Button x:Name="CloseWindowButton"
+                  Classes="windowControl windowClose"
+                  Click="OnCloseWindowClick"
+                  ToolTip.Tip="{DynamicResource L.CloseWindow}"
+                  AutomationProperties.Name="{DynamicResource L.CloseWindow}">
+            <Path Classes="windowGlyph" Data="{StaticResource IconClose}" />
+          </Button>
+        </StackPanel>
       </Grid>
     </Border>
 
