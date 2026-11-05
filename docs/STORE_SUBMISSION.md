@@ -137,7 +137,7 @@ need filling in.
 | Item | Requirement | Status |
 | --- | --- | --- |
 | Description | Plain text, no placeholder links, must match what the app does | Ready: [store/listing.md](store/listing.md), English and Chinese |
-| Screenshots | At least one desktop screenshot, 1366×768 or larger, PNG | Ready: `docs/store/screenshot-*.png` at 2178×1264, captured from the 0.5 build including the annotation tools |
+| Screenshots | At least one desktop screenshot, 1366×768 or larger, PNG | Ready: `docs/store/screenshot-*.png` at 2188×1308, captured from the 0.6 build with the workspace bar and annotation tools |
 | Store logo | 300×300 PNG | Ready: `docs/store/logo-300.png` |
 | App icon | Provided by the package | Done |
 | Category | Books & reference | Decided in [store/listing.md](store/listing.md) |

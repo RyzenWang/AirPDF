@@ -1,4 +1,4 @@
-﻿# Capture helpers for the Microsoft Store screenshots.
+# Capture helpers for the Microsoft Store screenshots.
 # Run:  powershell -NoProfile -ExecutionPolicy Bypass -File packaging/store/capture.ps1 -Scene welcome
 #
 # The display runs at 150% scaling, so every interaction below is expressed as a
@@ -10,11 +10,17 @@ param(
     [ValidateSet('welcome', 'reading', 'markup', 'search')]
     [string] $Scene,
 
-    [string] $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path,
-    [string] $Sample = (Join-Path $Root 'tests\Assets\sample.pdf')
+    [string] $Root,
+    [string] $Sample
 )
 
 $ErrorActionPreference = 'Stop'
+
+# Resolved here rather than in the parameter defaults: with -File, $PSScriptRoot is not
+# populated yet while the param block is evaluated.
+if (-not $Root) { $Root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path }
+if (-not $Sample) { $Sample = Join-Path $Root 'tests\Assets\sample.pdf' }
+
 Add-Type -AssemblyName System.Drawing, System.Windows.Forms
 Add-Type -Path (Join-Path $PSScriptRoot 'Shot.cs')
 
@@ -77,8 +83,16 @@ function Save-Window($handle, $name) {
     # PrintWindow renders per-monitor-DPI-aware windows at the wrong scale, which
     # clips the right and bottom edges on this 150% display, so the client area is
     # copied straight off the screen instead. The window is raised first.
+    #
+    # The custom titlebar draws rounded corners, so a few pixels around the client
+    # area show whatever sits behind the window; trim them rather than shipping a
+    # neighbouring window's pixels in a Store screenshot.
     $size = Get-ClientSize $handle
     $origin = Get-Origin $handle
+
+    $inset = 6
+    $origin = New-Object Shot+POINT -Property @{ X = ($origin.X + $inset); Y = ($origin.Y + $inset) }
+    $size = @(($size[0] - (2 * $inset)), ($size[1] - (2 * $inset)))
 
     $bitmap = New-Object System.Drawing.Bitmap($size[0], $size[1])
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
@@ -129,14 +143,14 @@ try {
 
             # The reading position is seeded to page 3 before launch, so this is already
             # a text page; paging proved unreliable because focus lands on the tab strip.
-            Drag $handle 0.30 0.525 0.88 0.525
+            Drag $handle 0.27 0.49 0.85 0.49
             [System.Windows.Forms.SendKeys]::SendWait('^+h')
             Start-Sleep -Milliseconds 1400
 
             # Underline the same paragraph with ink.
             [System.Windows.Forms.SendKeys]::SendWait('^+k')
             Start-Sleep -Milliseconds 900
-            Drag $handle 0.30 0.585 0.84 0.585 18
+            Drag $handle 0.27 0.56 0.85 0.56 18
             Start-Sleep -Milliseconds 900
             [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
             Start-Sleep -Milliseconds 900
@@ -159,6 +173,9 @@ try {
 finally {
     if (-not $process.HasExited) { $process | Stop-Process -Force }
 }
+
+
+
 
 
 

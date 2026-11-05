@@ -118,47 +118,46 @@ Limit is about 1500 characters. Both languages below fit.
 English:
 
 ```
-AirPDF can annotate now, not just read.
+AirPDF 0.6 is a faster, tidier reader.
 
-• Ink: press Ctrl+Shift+K or the pen button and draw on the page. Each stroke is a
-  real PDF ink annotation, so it travels with the file.
-• Sticky notes: right-click a page and choose Add note. Click the note later to read
-  it again.
-• Eraser: the button beside the pen rubs out whatever markup the pointer passes over,
-  and one drag is one undo step.
-• Remove annotation in the page menu takes away a highlight, a stroke, or a note.
-• A colour palette for markup: the highlight colour and the ink colour are chosen
-  separately, and the pen previews the stroke thickness.
-• Undo and redo cover every markup change, keeping the last 100 edits.
-• Ctrl+S writes the annotations into the PDF itself.
-
-Also in this version: opening a file that is already open focuses its tab instead of
-opening a second session over the same file, and Esc now leaves the eraser as well as
-the pen.
+• Page rendering now runs through one priority queue: the page you are looking at is
+  decoded before thumbnails, and the reader stays responsive on very large documents.
+• Battery and memory: page bitmaps are capped, thumbnails release their images once
+  they leave the rail, and closing a tab frees its PDF engine session off the UI thread.
+• Search reports progress while it scans and says when the result list was capped.
+• Zoom keeps your place inside the page instead of re-centring it on every step.
+• Tabs can be dragged to reorder, with a smooth slide instead of a jump, and the strip
+  scrolls horizontally when there are more tabs than fit.
+• A new workspace bar puts the brand, Open, and your document tabs on one line, with
+  Windows 11 Snap Layouts on the maximise button.
+• A tray icon keeps AirPDF reachable while it is minimised.
+• Closing a tab with unsaved highlights, ink, or notes asks first: Save, Discard, or
+  Cancel. If saving cannot replace the original file, the saved copy is kept and opened
+  so nothing is lost.
 ```
 
 简体中文：
 
 ```
-这一版 AirPDF 不只能读,也能批注了。
+AirPDF 0.6 更快、更整齐。
 
-• 墨迹:按 Ctrl+Shift+K 或点画笔按钮即可在页面上画,每条笔迹都是真正的 PDF 墨迹批注,
-  随文件保存。
-• 便签:右键页面选"添加便签",之后点击便签就能再看内容。
-• 橡皮擦:画笔旁边的按钮,擦掉指针经过的标记,一次拖动算一步撤销。
-• 页面菜单里的"移除批注"可以删掉高亮、笔迹或便签。
-• 批注颜色面板:高亮色和墨迹色分别选择,画笔会预览笔迹粗细。
-• 撤销重做覆盖所有批注修改,保留最近 100 步。
-• Ctrl+S 把批注写入 PDF 本身。
-
-其他改进:打开已打开的文件会聚焦它所在的标签页,不再在同一文件上开第二个会话;Esc 现在也能
-退出橡皮擦模式。
+• 页面渲染改走单一优先级队列:正在看的页面先于缩略图解码,超大文档下界面依然跟手。
+• 更省内存:页面位图有上限,缩略图离开侧栏就释放位图,关闭标签时在 UI 线程之外释放
+  PDF 引擎会话。
+• 搜索扫描时显示进度,结果超过上限会明确提示。
+• 缩放时保持页内位置,不再每步重新居中。
+• 标签可拖动排序,带平滑滑动而不是瞬移;标签超过一屏时横向滚动。
+• 新的工作区栏把品牌、打开按钮和文档标签放在同一行,最大化按钮支持 Windows 11 吸附布局。
+• 最小化后可通过托盘图标回到应用。
+• 有未保存的高亮、墨迹或便签时关闭标签会先询问:保存、放弃或取消。若无法覆盖原文件,
+  保存的副本会被保留并打开,不会丢失。
 ```
 
 ## Screenshots
 
-Captured at 2178×1264 from the 0.5 build, English and light theme. The display runs
-at 150% scaling, so the pixels are real ones rather than an upscale.
+Captured at 2188×1308 from the 0.6 build, English and light theme. The display runs
+at 150% scaling, so the pixels are real ones rather than an upscale, and the rounded
+window corners are trimmed.
 
 | File | Caption (English) | Caption (简体中文) |
 | --- | --- | --- |
@@ -167,11 +166,14 @@ at 150% scaling, so the pixels are real ones rather than an upscale.
 | `screenshot-markup.png` | Highlight, ink, and the pen in the toolbar | 高亮、墨迹,以及工具栏上的画笔 |
 
 The markup shot shows a real highlight over a paragraph plus an ink underline drawn
-with the pen, with the status bar reading "Drawing off" after Esc.
+with the pen, with the status bar reading "Drawing off" after Esc. The welcome and
+reading shots show the 0.6 workspace bar with the brand, Open, and document tabs on
+one line.
 
 Recapture with `packaging/store/capture.ps1 -Scene welcome|reading|markup` after any
 UI change; the scenes drive the app by fractions of its client area, so they survive
-a different window size or DPI.
+a different window size or DPI. Seed the reading position to page 3 first, otherwise
+the document scenes open on the cover.
 
 ## Category and audience
 
