@@ -82,7 +82,10 @@
                  ScrollViewer.VerticalScrollBarVisibility="Disabled"
                  ItemsSource="{Binding Tabs}"
                  SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
-                 SelectionChanged="OnTabSelectionChanged">
+                 SelectionChanged="OnTabSelectionChanged"
+                 PointerMoved="OnTabPointerMoved"
+                 PointerReleased="OnTabPointerReleased"
+                 PointerCaptureLost="OnTabPointerCaptureLost">
           <ListBox.ItemsPanel>
             <ItemsPanelTemplate>
               <StackPanel Orientation="Horizontal" />
@@ -90,7 +93,19 @@
           </ListBox.ItemsPanel>
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:MainWindowViewModel">
-              <Border Classes="tabPill" IsVisible="{Binding IsNotHomeTab}">
+              <Border Classes="tabPill"
+                      IsVisible="{Binding IsNotHomeTab}"
+                      PointerPressed="OnTabPointerPressed">
+                <Border.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Header="{DynamicResource L.CloseTab}"
+                              Click="OnTabContextCloseClick"
+                              Tag="{Binding}" />
+                    <MenuItem Header="{DynamicResource L.CloseOtherTabs}"
+                              Click="OnTabContextCloseOthersClick"
+                              Tag="{Binding}" />
+                  </ContextMenu>
+                </Border.ContextMenu>
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <Path Classes="tabDocIcon"
                         Data="{StaticResource IconDocumentTab}" />

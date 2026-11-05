@@ -33,6 +33,11 @@ public partial class MainWindow : Window
     private bool _thumbnailSyncPending;
     private bool _handlingScrollChanged;
     private bool _tabStripWidthUpdatePending;
+    private MainWindowViewModel? _dragTab;
+    private Border? _dragTabBorder;
+    private IPointer? _dragPointer;
+    private Point _dragTabStart;
+    private bool _tabDragStarted;
     private bool _isSelectingText;
     private bool _selectionPressInProgress;
     private (int Page, double X, double Y)? _contextPoint;
@@ -293,6 +298,135 @@ public partial class MainWindow : Window
 
     private void OnNewTabClick(object? sender, RoutedEventArgs e) => _tabs.AddTab();
 
+    private void OnTabPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Border { DataContext: MainWindowViewModel tab } border ||
+            tab.IsHomeTab ||
+            !e.GetCurrentPoint(border).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        // The close button owns its presses; starting a drag there makes it hard to click.
+        if (e.Source is Visual source && source.FindAncestorOfType<Button>() is not null)
+        {
+            return;
+        }
+
+        EndTabDrag();
+        _dragTab = tab;
+        _dragTabBorder = border;
+        _dragPointer = e.Pointer;
+        _dragTabStart = e.GetPosition(TabList);
+    }
+
+    private void OnTabPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_dragTab is null || _dragPointer is null)
+        {
+            return;
+        }
+
+        if (!e.GetCurrentPoint(TabList).Properties.IsLeftButtonPressed)
+        {
+            EndTabDrag();
+            return;
+        }
+
+        var position = e.GetPosition(TabList);
+        if (!_tabDragStarted)
+        {
+            var moved = Math.Abs(position.X - _dragTabStart.X) +
+                        Math.Abs(position.Y - _dragTabStart.Y);
+            if (moved < 6)
+            {
+                return;
+            }
+
+            _tabDragStarted = true;
+            _dragTabBorder?.Classes.Add("tabDragging");
+            _dragPointer.Capture(TabList);
+        }
+
+        ReorderTab(position.X);
+        e.Handled = true;
+    }
+
+    private void OnTabPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_dragTab is null)
+        {
+            return;
+        }
+
+        if (_tabDragStarted)
+        {
+            e.Handled = true;
+        }
+
+        EndTabDrag();
+    }
+
+    private void OnTabPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e) =>
+        EndTabDrag(releaseCapture: false);
+
+    private void EndTabDrag(bool releaseCapture = true)
+    {
+        var pointer = _dragPointer;
+        var border = _dragTabBorder;
+
+        _dragTab = null;
+        _dragTabBorder = null;
+        _dragPointer = null;
+        _tabDragStarted = false;
+        border?.Classes.Remove("tabDragging");
+
+        if (releaseCapture)
+        {
+            pointer?.Capture(null);
+        }
+    }
+
+    /// <summary>
+    /// Moves the dragged tab when the pointer crosses the midpoint of another document tab.
+    /// Home is a hidden placeholder at index zero, so it is never a drop target.
+    /// </summary>
+    private void ReorderTab(double pointerX)
+    {
+        if (_dragTab is null)
+        {
+            return;
+        }
+
+        var tabs = new List<(MainWindowViewModel Tab, double Center)>();
+        foreach (var container in TabList.GetRealizedContainers().OfType<ListBoxItem>())
+        {
+            if (container.DataContext is not MainWindowViewModel tab ||
+                tab.IsHomeTab ||
+                container.TranslatePoint(new Point(0, 0), TabList) is not { } origin)
+            {
+                continue;
+            }
+
+            tabs.Add((tab, origin.X + (container.Bounds.Width / 2)));
+        }
+
+        if (tabs.Count < 2)
+        {
+            return;
+        }
+
+        tabs.Sort((left, right) =>
+            _tabs.Tabs.IndexOf(left.Tab).CompareTo(_tabs.Tabs.IndexOf(right.Tab)));
+
+        var next = tabs.FirstOrDefault(candidate => pointerX < candidate.Center);
+        var targetIndex = next.Tab is null
+            ? _tabs.Tabs.IndexOf(tabs[^1].Tab)
+            : _tabs.Tabs.IndexOf(next.Tab);
+
+        _tabs.MoveTab(_dragTab, targetIndex);
+    }
+
     private async void OnCloseTabClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Control { DataContext: MainWindowViewModel tab })
@@ -302,21 +436,65 @@ public partial class MainWindow : Window
         }
     }
 
+    private async void OnTabContextCloseClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: MainWindowViewModel tab })
+        {
+            await CloseTabAsync(tab);
+        }
+    }
+
+    private async void OnTabContextCloseOthersClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: MainWindowViewModel target })
+        {
+            await CloseOtherTabsAsync(target);
+        }
+    }
+
     /// <summary>
     /// Closing a tab with unsaved annotations asks first. Save is attempted before the tab is
     /// disposed; if it fails, the tab stays open with its edits and the error on screen.
     /// </summary>
-    private async Task CloseTabAsync(MainWindowViewModel tab)
+    private async Task<bool> CloseTabAsync(MainWindowViewModel tab)
     {
-        if (!await tab.ConfirmCloseAsync())
+        if (tab.IsHomeTab || !await tab.ConfirmCloseAsync())
         {
-            return;
+            return false;
         }
 
         // Release PDFium off the UI thread before the tab's Dispose runs; Dispose still closes
         // synchronously and used to freeze the window behind another document's render.
         await tab.ReleaseDocumentAsync();
         _tabs.CloseTab(tab);
+        return true;
+    }
+
+    private async Task CloseOtherTabsAsync(MainWindowViewModel target)
+    {
+        if (target.IsHomeTab || !_tabs.Tabs.Contains(target))
+        {
+            return;
+        }
+
+        var others = _tabs.Tabs
+            .Where(tab => !ReferenceEquals(tab, target) && !tab.IsHomeTab)
+            .ToList();
+
+        foreach (var tab in others)
+        {
+            // A cancelled save leaves the remaining tabs alone instead of silently closing
+            // documents the reader has not confirmed yet.
+            if (!await CloseTabAsync(tab))
+            {
+                break;
+            }
+        }
+
+        if (_tabs.Tabs.Contains(target))
+        {
+            _tabs.SelectedTab = target;
+        }
     }
 
     private void OnTabSelectionChanged(object? sender, SelectionChangedEventArgs e)

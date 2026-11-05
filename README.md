@@ -100,8 +100,9 @@ share the top row. macOS and Linux keep their native window frame and the tab ba
 - **Tabs keep the whole document session** — `Ctrl+T` adds a document to the same window,
   and each tab keeps its own zoom, scroll position, search results, and reading position.
   The active tab is a warm pill, the strip scrolls when it runs out of room, and `+` follows
-  the last tab before pinning to the visible edge. The brand block is Home; there is no
-  separate visible Home tab.
+  the last tab before pinning to the visible edge. Drag tabs to reorder them; right-click a
+  tab to close it or close every other tab. The brand block is Home; there is no separate
+  visible Home tab.
 - **NativeAOT** — every release is compiled ahead of time, so the
   window appears in well under a second instead of several.
 - **Back navigation** with `Alt+Left` after any outline, thumbnail, search, or
@@ -174,7 +175,7 @@ dotnet build AirPdf.sln -c Release
 dotnet test AirPdf.sln -c Release
 ```
 
-The suite currently has **222 tests** (103 Core, 119 App). It uses
+The suite currently has **223 tests** (103 Core, 120 App). It uses
 `tests/Assets/sample.pdf`, an eight-page document that exercises Latin and Chinese text,
 mixed typography, and search geometry. `AirPdf.App.Tests` adds headless Avalonia coverage
 for the XAML and tab strip, opening, search, selection, zoom, language switching,

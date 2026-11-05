@@ -13,6 +13,8 @@ semantic versioning once it reaches 1.0.
 - Caption buttons dim while the window is inactive.
 - A system tray icon can restore, hide, or open a new AirPDF window, and exit the app.
   Closing a window still exits; use **Hide to tray** to keep reading sessions alive.
+- Tabs can be dragged into a new order. Right-clicking a tab now offers **Close tab** and
+  **Close other tabs**; both use the existing unsaved-changes confirmation.
 
 ### Changed
 

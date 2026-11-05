@@ -55,6 +55,28 @@ public sealed class WindowViewModelTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void MoveTab_ReordersDocumentsWithoutMovingHome()
+    {
+        var host = CreateHost();
+        var first = host.AddTab();
+        var second = host.AddTab();
+        var third = host.AddTab();
+
+        host.MoveTab(third, 1);
+
+        Assert.Same(host.HomeTab, host.Tabs[0]);
+        Assert.Equal([third, first, second], host.Tabs.Skip(1));
+
+        // Home is a hidden placeholder, never a draggable document tab.
+        host.MoveTab(host.HomeTab, 2);
+        Assert.Same(host.HomeTab, host.Tabs[0]);
+
+        // Clamp before Home rather than allowing the request to move it.
+        host.MoveTab(third, 0);
+        Assert.Same(third, host.Tabs[1]);
+    }
+
+    [AvaloniaFact]
     public void CloseTab_OnTheHomeTab_KeepsIt()
     {
         var host = CreateHost();

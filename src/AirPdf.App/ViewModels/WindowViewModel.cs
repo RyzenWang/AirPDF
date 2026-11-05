@@ -57,6 +57,29 @@ public sealed partial class WindowViewModel : ObservableObject, ITabService, IDi
     }
 
     /// <summary>
+    /// Reorders document tabs without moving the hidden Home placeholder away from index 0.
+    /// </summary>
+    public void MoveTab(MainWindowViewModel tab, int targetIndex)
+    {
+        if (tab.IsHomeTab)
+        {
+            return;
+        }
+
+        var sourceIndex = Tabs.IndexOf(tab);
+        if (sourceIndex <= 0)
+        {
+            return;
+        }
+
+        targetIndex = Math.Clamp(targetIndex, 1, Tabs.Count - 1);
+        if (sourceIndex != targetIndex)
+        {
+            Tabs.Move(sourceIndex, targetIndex);
+        }
+    }
+
+    /// <summary>
     /// Closes a tab. The last tab is not removed: closing it closes its document, so the
     /// window stays open on the welcome screen exactly as it did before tabs existed.
     /// </summary>
