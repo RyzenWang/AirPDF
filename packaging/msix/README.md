@@ -31,6 +31,12 @@ generates the logo assets from `src/AirPdf.App/Assets/airpdf.png`, expands
 `AppxManifest.xml`, packs with `makeappx`, then unpacks the result and asserts
 the parts Microsoft certifies.
 
+The source PNG is a full-bleed app icon, but MSIX square logos are canvases that
+Start draws at their full size. The generator therefore insets the icon (66px in
+the 150×150 tile, 28px in the 44×44 app-list logo) and emits `targetsize-*`
+variants for Start, the taskbar and the app list. Drawing the source edge to edge
+makes AirPDF's icon look oversized next to other apps.
+
 `makeappx` is resolved from an installed Windows SDK, or downloaded on demand
 from the `Microsoft.Windows.SDK.BuildTools` NuGet package — no elevation and no
 SDK install needed.

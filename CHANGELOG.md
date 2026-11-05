@@ -53,6 +53,9 @@ semantic versioning once it reaches 1.0.
 
 - Windows 11 Snap Layouts work for the custom titlebar: the maximize/restore button is
   marked as `HTMAXBUTTON` and keeps its custom hover state.
+- Microsoft Store/MSIX square logos are generated with the standard inset and include
+  app-list `targetsize-*` assets. The old full-bleed 150×150 and 44×44 artwork made the
+  installed app's Start icon look oversized.
 - Closing a tab or window, or replacing the open file from a bookmark, now asks before
   discarding unsaved highlights, ink or notes. **Save** must succeed before the document is
   closed; **Discard** and **Cancel** are explicit choices.

@@ -264,7 +264,8 @@ function New-PackageImage {
         [string] $Target,
         [int] $Width,
         [int] $Height,
-        [bool] $Tile
+        [double] $ContentScale = 1.0,
+        [bool] $Paper = $false
     )
 
     $sourceImage = [System.Drawing.Image]::FromFile($SourcePath)
@@ -277,19 +278,21 @@ function New-PackageImage {
                 $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
                 $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
 
-                if ($Tile) {
-                    # Wide tiles and the splash screen sit on the app's paper tone.
+                # MSIX logos are canvases, not app icons: Start draws the square logos
+                # at their full size. Keep the mark inset so it matches the size of
+                # other apps instead of filling the tile edge to edge.
+                if ($Paper) {
                     $graphics.Clear([System.Drawing.Color]::FromArgb(255, 246, 244, 239))
-                    $scale = [Math]::Min($Width / $sourceImage.Width, $Height / $sourceImage.Height)
-                    $drawWidth = [int]($sourceImage.Width * $scale)
-                    $drawHeight = [int]($sourceImage.Height * $scale)
                 }
                 else {
                     $graphics.Clear([System.Drawing.Color]::Transparent)
-                    $drawWidth = $Width
-                    $drawHeight = $Height
                 }
 
+                $scale = [Math]::Min(
+                    ($Width * $ContentScale) / $sourceImage.Width,
+                    ($Height * $ContentScale) / $sourceImage.Height)
+                $drawWidth = [int]($sourceImage.Width * $scale)
+                $drawHeight = [int]($sourceImage.Height * $scale)
                 $x = [int](($Width - $drawWidth) / 2)
                 $y = [int](($Height - $drawHeight) / 2)
                 $graphics.DrawImage($sourceImage, $x, $y, $drawWidth, $drawHeight)
@@ -310,17 +313,27 @@ function New-PackageImage {
 }
 
 $images = @(
-    @{ Name = 'Square44x44Logo.png'; Width = 44; Height = 44; Tile = $false },
-    @{ Name = 'Square150x150Logo.png'; Width = 150; Height = 150; Tile = $false },
-    @{ Name = 'StoreLogo.png'; Width = 50; Height = 50; Tile = $false },
-    @{ Name = 'Wide310x150Logo.png'; Width = 310; Height = 150; Tile = $true },
-    @{ Name = 'SplashScreen.png'; Width = 620; Height = 300; Tile = $true }
+    @{ Name = 'Square44x44Logo.png'; Width = 44; Height = 44; Scale = 0.64; Paper = $false },
+    @{ Name = 'Square150x150Logo.png'; Width = 150; Height = 150; Scale = 0.44; Paper = $true },
+    @{ Name = 'StoreLogo.png'; Width = 50; Height = 50; Scale = 1.0; Paper = $false },
+    @{ Name = 'Wide310x150Logo.png'; Width = 310; Height = 150; Scale = 0.62; Paper = $true },
+    @{ Name = 'SplashScreen.png'; Width = 620; Height = 300; Scale = 0.50; Paper = $true }
 )
 
 foreach ($image in $images) {
     $target = Join-Path $assetsDirectory $image.Name
-    New-PackageImage -SourcePath $sourceIcon -Target $target -Width $image.Width -Height $image.Height -Tile $image.Tile
+    New-PackageImage -SourcePath $sourceIcon -Target $target -Width $image.Width -Height $image.Height -ContentScale $image.Scale -Paper $image.Paper
     Write-Host "  $($image.Name) $($image.Width)x$($image.Height)"
+}
+
+# Windows resolves target-size variants for Start, the taskbar and the app list.
+# Without them the single 44px asset is scaled, which is what made the app icon
+# look oversized after installation.
+foreach ($size in 16, 20, 24, 32, 40, 48, 64, 256) {
+    $name = "Square44x44Logo.targetsize-$size.png"
+    New-PackageImage -SourcePath $sourceIcon -Target (Join-Path $assetsDirectory $name) `
+        -Width $size -Height $size -ContentScale 0.64 -Paper $false
+    Write-Host "  $name ${size}x${size}"
 }
 
 Write-Step 'Expanding the manifest'
@@ -438,6 +451,15 @@ foreach ($image in @('Square44x44Logo.png', 'Square150x150Logo.png', 'StoreLogo.
         Ok     = (Test-Path (Join-Path $verifyDirectory "Assets/$image"))
         Detail = $image
     }
+}
+
+$appListTargets = @(
+    Get-ChildItem (Join-Path $verifyDirectory 'Assets') -Filter 'Square44x44Logo.targetsize-*.png' -ErrorAction SilentlyContinue
+)
+$checks += @{
+    Name   = 'app list target-size assets'
+    Ok     = ($appListTargets.Count -ge 8)
+    Detail = "$($appListTargets.Count) assets"
 }
 
 if ($Symbols) {
