@@ -165,9 +165,9 @@
       </Grid>
     </Border>
 
-    <!-- Toolbar. At normal sizes its controls are unchanged; the brand and Open action
-         moved up into the workspace bar. Equal star columns keep the navigation group
-         truly centred. At the minimum width the two fit shortcuts fold into the zoom menu. -->
+    <!-- Toolbar. Page navigation sits at the far left, aligned with the thumbnail
+         rail; the remaining document tools stay centred. At the minimum width the
+         two fit shortcuts fold into the zoom menu. -->
     <Border x:Name="Toolbar"
             Grid.Row="1"
             Classes="toolbar"
@@ -177,20 +177,14 @@
             Padding="14,9">
       <Grid ColumnDefinitions="*,Auto,*">
 
-        <StackPanel Grid.Column="1"
-                    Classes="toolbarCenter"
+        <StackPanel x:Name="ToolbarNavigation"
+                    Grid.Column="0"
+                    Classes="toolbarNav"
                     Orientation="Horizontal"
                     Spacing="5"
-                    HorizontalAlignment="Center"
+                    HorizontalAlignment="Left"
                     VerticalAlignment="Center"
                     IsVisible="{Binding IsDocumentOpen}">
-          <Button Classes="icon"
-                  Command="{Binding NavigateBackCommand}"
-                  IsVisible="{Binding CanNavigateBack}"
-                  AutomationProperties.Name="{DynamicResource L.NavigateBack}"
-                  ToolTip.Tip="{DynamicResource L.NavigateBack}">
-            <Path Classes="icon" Data="{StaticResource IconHistory}" />
-          </Button>
           <Button Classes="icon"
                   Command="{Binding PreviousPageCommand}"
                   IsEnabled="{Binding CanGoPrevious}"
@@ -231,7 +225,22 @@
                   ToolTip.Tip="{DynamicResource L.NextPage}">
             <Path Classes="icon" Data="{StaticResource IconChevronRight}" />
           </Button>
+        </StackPanel>
 
+        <StackPanel Grid.Column="1"
+                    Classes="toolbarCenter"
+                    Orientation="Horizontal"
+                    Spacing="5"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    IsVisible="{Binding IsDocumentOpen}">
+          <Button Classes="icon"
+                  Command="{Binding NavigateBackCommand}"
+                  IsVisible="{Binding CanNavigateBack}"
+                  AutomationProperties.Name="{DynamicResource L.NavigateBack}"
+                  ToolTip.Tip="{DynamicResource L.NavigateBack}">
+            <Path Classes="icon" Data="{StaticResource IconHistory}" />
+          </Button>
           <Button Classes="icon"
                   Command="{Binding UndoAnnotationCommand}"
                   IsVisible="{Binding IsDocumentOpen}"

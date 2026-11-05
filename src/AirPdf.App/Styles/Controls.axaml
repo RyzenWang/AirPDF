@@ -366,6 +366,9 @@
   <Style Selector="Border.toolbar.compact StackPanel.toolbarCenter">
     <Setter Property="Spacing" Value="2" />
   </Style>
+  <Style Selector="Border.toolbar.compact StackPanel.toolbarNav">
+    <Setter Property="Spacing" Value="2" />
+  </Style>
   <Style Selector="Border.toolbar.compact StackPanel.toolbarRight">
     <Setter Property="Spacing" Value="0" />
   </Style>

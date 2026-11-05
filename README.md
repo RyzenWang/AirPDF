@@ -64,6 +64,8 @@ share the top row. macOS and Linux keep their native window frame and the tab ba
   maximize, and hover the maximize button for Windows 11 Snap Layouts. Right-click the empty
   titlebar area or press `Alt+Space` for the native window menu, and the window buttons dim
   while the window is inactive. macOS and Linux keep their native window frame.
+- **Page navigation on the left** — previous/next and the current-page box sit at the far
+  left of the toolbar, aligned with the thumbnail rail; editing and zoom tools stay centred.
 - **Thumbnail rail and document outline** for fast navigation.
 - **Full-text search** with page-grouped results, in-page match highlights, and progress
   while a long document is scanned.
@@ -168,7 +170,7 @@ dotnet build AirPdf.sln -c Release
 dotnet test AirPdf.sln -c Release
 ```
 
-The suite currently has **221 tests** (103 Core, 118 App). It uses
+The suite currently has **222 tests** (103 Core, 119 App). It uses
 `tests/Assets/sample.pdf`, an eight-page document that exercises Latin and Chinese text,
 mixed typography, and search geometry. `AirPdf.App.Tests` adds headless Avalonia coverage
 for the XAML and tab strip, opening, search, selection, zoom, language switching,

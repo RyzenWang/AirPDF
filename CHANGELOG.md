@@ -12,6 +12,11 @@ semantic versioning once it reaches 1.0.
   `Alt+Space`.
 - Caption buttons dim while the window is inactive.
 
+### Changed
+
+- Page navigation now sits at the far left of the toolbar, aligned with the thumbnail rail;
+  the remaining document tools stay centred.
+
 ## [0.6.0] - 2026-11-05
 
 ### Changed

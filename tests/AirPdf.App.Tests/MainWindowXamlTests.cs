@@ -10,6 +10,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
+using Avalonia.Layout;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Xunit;
@@ -123,6 +124,25 @@ public sealed class MainWindowXamlTests : IDisposable
         Assert.Equal(
             ScrollBarVisibility.Auto,
             ScrollViewer.GetHorizontalScrollBarVisibility(list));
+    }
+
+    /// <summary>
+    /// Page navigation has its own left-hand group above the thumbnail rail; the document
+    /// tools stay in the centred group. A regression here would silently move the page box
+    /// back into the middle of the toolbar.
+    /// </summary>
+    [AvaloniaFact]
+    public void ToolbarNavigation_StaysAtTheLeftWithThePageBox()
+    {
+        var window = CreateWindow();
+        var navigation = window.FindControl<StackPanel>("ToolbarNavigation");
+        var pageBox = window.FindControl<TextBox>("PageNumberBox");
+
+        Assert.NotNull(navigation);
+        Assert.NotNull(pageBox);
+        Assert.Equal(0, Grid.GetColumn(navigation!));
+        Assert.Equal(HorizontalAlignment.Left, navigation!.HorizontalAlignment);
+        Assert.Contains(pageBox, navigation.GetVisualDescendants().OfType<TextBox>());
     }
 
     /// <summary>
