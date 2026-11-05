@@ -2125,7 +2125,8 @@ public partial class MainWindow : Window
         if (!_closeConfirmed)
         {
             var unsaved = _tabs.Tabs.Where(tab => tab.HasUnsavedAnnotations).ToList();
-            if (unsaved.Count > 0)
+            var hasDocuments = _tabs.Tabs.Any(tab => tab.IsDocumentOpen);
+            if (unsaved.Count > 0 || hasDocuments)
             {
                 e.Cancel = true;
                 _closePromptInProgress = true;

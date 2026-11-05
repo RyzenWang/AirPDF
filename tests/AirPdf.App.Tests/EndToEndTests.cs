@@ -7,6 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Xunit;
 
@@ -50,6 +51,16 @@ public sealed class EndToEndTests : IDisposable
     public void Dispose()
     {
         _window.Close();
+
+        // Closing releases document sessions asynchronously. Pump until the window is gone so
+        // the services are not disposed underneath that release.
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (_window.IsVisible && DateTime.UtcNow < deadline)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(5);
+        }
+
         _services.Dispose();
 
         if (Directory.Exists(_settingsDirectory))
