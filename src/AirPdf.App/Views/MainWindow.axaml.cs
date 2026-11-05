@@ -10,6 +10,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -73,6 +74,19 @@ public partial class MainWindow : Window
         var settings = services.Settings;
 
         _initialFile = initialFile;
+
+        if (OperatingSystem.IsWindows())
+        {
+            // Windows-only managed chrome spike: drop the non-client caption while keeping
+            // the resizable border, then provide the caption controls in the workspace bar.
+            SystemDecorations = SystemDecorations.BorderOnly;
+            ExtendClientAreaToDecorationsHint = true;
+            ExtendClientAreaChromeHints = ExtendClientAreaChromeHints.NoChrome;
+            TabStrip.Padding = new Thickness(12, 0, 0, 0);
+            WindowCaptionButtons.IsVisible = true;
+            TitleDragRegion.IsVisible = true;
+            UpdateWindowStateVisuals();
+        }
 
         // The tab list binds to the host, not to the active document's view model. The
         // surrounding workspace bar stays on the document because it also carries Open/Home.
@@ -362,19 +376,85 @@ public partial class MainWindow : Window
 
     private void UpdateTabStripWidth()
     {
+        var captionWidth = WindowCaptionButtons.IsVisible ? WindowCaptionButtons.Bounds.Width : 0;
+        var dragWidth = TitleDragRegion.IsVisible ? TitleDragRegion.MinWidth : 0;
         var width = TabStrip.Bounds.Width
             - TabStrip.Padding.Left
             - TabStrip.Padding.Right
             - BrandPanel.Bounds.Width
             - TabList.Margin.Left
             - NewTabButton.Bounds.Width
-            - NewTabButton.Margin.Left;
+            - NewTabButton.Margin.Left
+            - captionWidth
+            - dragWidth;
         var maxWidth = Math.Max(0, width);
 
         // Setting the same value again would schedule another layout pass for nothing.
         if (Math.Abs(TabList.MaxWidth - maxWidth) > 0.5)
         {
             TabList.MaxWidth = maxWidth;
+        }
+    }
+
+    private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        if (e.ClickCount == 2)
+        {
+            ToggleMaximize();
+        }
+        else
+        {
+            BeginMoveDrag(e);
+        }
+
+        e.Handled = true;
+    }
+
+    private void OnMinimizeWindowClick(object? sender, RoutedEventArgs e) =>
+        WindowState = WindowState.Minimized;
+
+    private void OnToggleMaximizeWindowClick(object? sender, RoutedEventArgs e) =>
+        ToggleMaximize();
+
+    private void OnCloseWindowClick(object? sender, RoutedEventArgs e) => Close();
+
+    private void ToggleMaximize()
+    {
+        if (WindowState == WindowState.Maximized)
+        {
+            WindowState = WindowState.Normal;
+        }
+        else if (WindowState == WindowState.Normal && CanMaximize)
+        {
+            WindowState = WindowState.Maximized;
+        }
+    }
+
+    private void UpdateWindowStateVisuals()
+    {
+        if (this.FindControl<Avalonia.Controls.Shapes.Path>("MaximizeGlyph") is { } maximize)
+        {
+            maximize.IsVisible = WindowState != WindowState.Maximized;
+        }
+
+        if (this.FindControl<Avalonia.Controls.Shapes.Path>("RestoreGlyph") is { } restore)
+        {
+            restore.IsVisible = WindowState == WindowState.Maximized;
+        }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+
+        if (change.Property == WindowStateProperty)
+        {
+            UpdateWindowStateVisuals();
         }
     }
 
