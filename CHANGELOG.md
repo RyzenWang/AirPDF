@@ -4,7 +4,7 @@ All notable changes to AirPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning once it reaches 1.0.
 
-## [Unreleased]
+## [0.6.0-preview.1] - 2026-11-05
 
 ### Changed
 
@@ -26,6 +26,10 @@ semantic versioning once it reaches 1.0.
   minimum window width the two fit shortcuts fold into the existing zoom menu.
 - The new-tab button now follows the last tab, then pins to the visible edge of the tab
   strip once the tabs start scrolling, so it never scrolls out of reach.
+- Windows now uses a managed custom titlebar: the 44px workspace bar also carries the
+  minimise, maximise/restore and close controls, with a drag region and double-click
+  maximise. macOS and Linux keep their native decorations. Preview gaps: native Snap
+  Layouts and the titlebar system menu are not wired yet.
 - The info panel's update button is hidden in Store and portable builds, where Velopack
   has no installed app to update.
 
