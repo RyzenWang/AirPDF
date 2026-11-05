@@ -16,6 +16,9 @@ semantic versioning once it reaches 1.0.
 
 - Page navigation now sits at the far left of the toolbar, aligned with the thumbnail rail;
   the remaining document tools stay centred.
+- The app icon now uses the orange brand tile and white paper plane from the titlebar
+  instead of the dark navy tile. Windows ICO, macOS ICNS, Linux PNG and Store artwork were
+  regenerated from the same mark.
 
 ## [0.6.0] - 2026-11-05
 
