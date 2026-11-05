@@ -4,15 +4,7 @@ All notable changes to AirPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning once it reaches 1.0.
 
-## [0.6.0-preview.2] - 2026-11-05
-
-### Fixed
-
-- Windows 11 Snap Layouts are restored for the custom titlebar: the maximize/restore
-  button now participates in non-client hit testing as `HTMAXBUTTON`, while its custom
-  hover state is preserved.
-
-## [0.6.0-preview.1] - 2026-11-05
+## [0.6.0] - 2026-11-05
 
 ### Changed
 
@@ -36,13 +28,15 @@ semantic versioning once it reaches 1.0.
   strip once the tabs start scrolling, so it never scrolls out of reach.
 - Windows now uses a managed custom titlebar: the 44px workspace bar also carries the
   minimise, maximise/restore and close controls, with a drag region and double-click
-  maximise. macOS and Linux keep their native decorations. Preview gaps: native Snap
-  Layouts and the titlebar system menu are not wired yet.
+  maximise. Windows 11 Snap Layouts are enabled on the maximize control. The titlebar
+  system menu is not wired yet. macOS and Linux keep their native decorations.
 - The info panel's update button is hidden in Store and portable builds, where Velopack
   has no installed app to update.
 
 ### Fixed
 
+- Windows 11 Snap Layouts work for the custom titlebar: the maximize/restore button is
+  marked as `HTMAXBUTTON` and keeps its custom hover state.
 - Closing a tab or window, or replacing the open file from a bookmark, now asks before
   discarding unsaved highlights, ink or notes. **Save** must succeed before the document is
   closed; **Discard** and **Cancel** are explicit choices.
