@@ -8,6 +8,10 @@ semantic versioning once it reaches 1.0.
 
 ### Changed
 
+- Page renders now go through one process-wide priority lane: visible pages run before
+  thumbnails, and one worker keeps PDFium calls serialized without a FIFO queue.
+- Search reports progress while it scans and says when the result list was cut off at 250
+  matches.
 - Closing a tab or window now releases its PDFium session off the UI thread. Opening a
   several-thousand-page document measures page sizes in chunks instead of holding the
   process-wide PDFium gate for the whole open.

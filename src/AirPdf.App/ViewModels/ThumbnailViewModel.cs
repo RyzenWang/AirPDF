@@ -2,6 +2,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using AirPdf.App.Rendering;
 using AirPdf.Core.Models;
+using AirPdf.Core.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AirPdf.App.ViewModels;
@@ -144,7 +145,11 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
             await Task.Delay(70, cancellation.Token);
             IsRendering = true;
 
-            using var skiaBitmap = await _renderer.RenderAsync(Number, RenderWidth, cancellation.Token);
+            using var skiaBitmap = await _renderer.RenderAsync(
+                Number,
+                RenderWidth,
+                cancellation.Token,
+                PdfRenderPriority.Thumbnail);
             cancellation.Token.ThrowIfCancellationRequested();
 
             var bitmap = await Dispatcher.UIThread.InvokeAsync(() => BitmapHelper.CreateBitmap(skiaBitmap));

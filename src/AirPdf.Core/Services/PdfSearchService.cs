@@ -24,7 +24,8 @@ public sealed partial class PdfSearchService
         string filePath,
         string query,
         string? password = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<PdfSearchProgress>? progress = null)
     {
         var normalizedQuery = NormalizeWhitespace(query);
         if (normalizedQuery.Length == 0)
@@ -51,10 +52,16 @@ public sealed partial class PdfSearchService
             catch
             {
                 // One unreadable page must not abort the search.
+                progress?.Report(new PdfSearchProgress(pageNumber, pageCount, hits.Count, false));
                 continue;
             }
 
             hits.AddRange(SearchPage(page, normalizedQuery, MaxResults - hits.Count));
+            progress?.Report(new PdfSearchProgress(
+                pageNumber,
+                pageCount,
+                hits.Count,
+                hits.Count >= MaxResults && pageNumber < pageCount));
         }
 
         return hits;

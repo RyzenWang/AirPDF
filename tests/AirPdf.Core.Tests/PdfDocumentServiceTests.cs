@@ -218,6 +218,25 @@ public sealed class PdfDocumentServiceTests
     }
 
     [Fact]
+    public async Task SearchAsync_ReportsPageProgress()
+    {
+        using var documents = new PdfDocumentService();
+        await documents.OpenAsync(SamplePath);
+        var service = new PdfSearchService(documents);
+        var progress = new List<PdfSearchProgress>();
+
+        var hits = await service.SearchAsync(
+            SamplePath,
+            "AirPDF",
+            progress: new InlineProgress<PdfSearchProgress>(progress.Add));
+
+        Assert.NotEmpty(hits);
+        Assert.NotEmpty(progress);
+        Assert.Equal(documents.OpenPageCount, progress[^1].PageCount);
+        Assert.Equal(documents.OpenPageCount, progress[^1].PagesScanned);
+    }
+
+    [Fact]
     public async Task SearchAsync_HandlesNonAsciiText()
     {
         using var documents = new PdfDocumentService();

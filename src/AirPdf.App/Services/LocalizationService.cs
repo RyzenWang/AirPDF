@@ -156,6 +156,8 @@ public sealed class LocalizationService : IDisposable
             ["L.PageCountOne"] = ("1 page", "1 页"),
             ["L.PageCountMany"] = ("{0} pages", "{0} 页"),
             ["L.Searching"] = ("Searching…", "正在搜索…"),
+            ["L.SearchProgressFormat"] = ("{0} / {1} pages", "{0} / {1} 页"),
+            ["L.SearchTruncated"] = ("(showing the first 250 matches)", "（仅显示前 250 条）"),
             ["L.NoMatches"] = ("No matches found", "没有找到匹配"),
             ["L.MatchOne"] = ("1 match", "1 个匹配"),
             ["L.MatchMany"] = ("{0} matches", "{0} 个匹配"),

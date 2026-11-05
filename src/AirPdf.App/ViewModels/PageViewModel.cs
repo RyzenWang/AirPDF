@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using AirPdf.App.Rendering;
 using AirPdf.App.Services;
 using AirPdf.Core.Models;
+using AirPdf.Core.Services;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace AirPdf.App.ViewModels;
@@ -480,7 +481,8 @@ public sealed class PageViewModel : ObservableObject, IDisposable
             IsRendering = true;
             RenderError = null;
 
-            using var skiaBitmap = await _renderer.RenderAsync(Number, targetWidth, cancellation.Token);
+            var priority = _isActive ? PdfRenderPriority.Visible : PdfRenderPriority.Page;
+            using var skiaBitmap = await _renderer.RenderAsync(Number, targetWidth, cancellation.Token, priority);
             cancellation.Token.ThrowIfCancellationRequested();
 
             var bitmap = await Dispatcher.UIThread.InvokeAsync(() => BitmapHelper.CreateBitmap(skiaBitmap));

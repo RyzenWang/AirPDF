@@ -331,6 +331,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private string _searchSummary = string.Empty;
 
     [ObservableProperty]
+    private bool _searchResultsTruncated;
+
+    [ObservableProperty]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -2146,6 +2149,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IsSearching = true;
         HasSearched = true;
         HasSearchResults = false;
+        SearchResultsTruncated = false;
         _searchFailed = false;
         SetSearchSummary();
         SearchResults = [];
@@ -2153,9 +2157,29 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ClearAllHighlights();
         OnPropertyChanged(nameof(HasNoSearchResults));
 
+        var progress = new Progress<PdfSearchProgress>(value =>
+        {
+            if (!IsSearching ||
+                cancellation.IsCancellationRequested ||
+                !ReferenceEquals(_searchCancellation, cancellation))
+            {
+                return;
+            }
+
+            SearchSummary = _localization.Format(
+                "L.SearchProgressFormat",
+                value.PagesScanned,
+                value.PageCount);
+        });
+
         try
         {
-            var hits = await _searchService.SearchAsync(_document.FilePath, query, _password, cancellation.Token);
+            var hits = await _searchService.SearchAsync(
+                _document.FilePath,
+                query,
+                _password,
+                cancellation.Token,
+                progress);
             if (cancellation.IsCancellationRequested)
             {
                 return;
@@ -2165,6 +2189,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 .Select((hit, index) => new SearchResultViewModel(hit, index + 1, _localization))
                 .ToList();
 
+            SearchResultsTruncated = results.Count >= 250;
             SearchResults = results;
             HasSearchResults = results.Count > 0;
             OnPropertyChanged(nameof(HasNoSearchResults));
@@ -2794,6 +2819,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SelectedSearchResult = null;
         HasSearchResults = false;
         HasSearched = false;
+        SearchResultsTruncated = false;
         SearchSummary = string.Empty;
         IsSearching = false;
         IsSearchOpen = false;
@@ -2985,6 +3011,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         SelectedSearchResult = null;
         HasSearchResults = false;
         HasSearched = false;
+        SearchResultsTruncated = false;
         SearchSummary = string.Empty;
         IsSearching = false;
         ClearAllHighlights();
@@ -3017,6 +3044,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             1 => _localization.T("L.MatchOne"),
             _ => _localization.Format("L.MatchMany", SearchResults.Count)
         };
+
+        if (SearchResultsTruncated)
+        {
+            SearchSummary = $"{SearchSummary} {_localization.T("L.SearchTruncated")}";
+        }
     }
 
     private void SetError(string key)

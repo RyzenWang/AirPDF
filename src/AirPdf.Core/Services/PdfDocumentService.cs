@@ -17,6 +17,7 @@ namespace AirPdf.Core.Services;
 public sealed class PdfDocumentService : IDisposable
 {
     private static readonly SemaphoreSlim RenderGate = new(1, 1);
+    private static readonly RenderPriorityQueue RenderQueue = new();
 
     private static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
         ? StringComparison.OrdinalIgnoreCase
@@ -51,7 +52,8 @@ public sealed class PdfDocumentService : IDisposable
         int pageNumber,
         int targetWidth,
         string? password = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        PdfRenderPriority priority = PdfRenderPriority.Page)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -59,33 +61,42 @@ public sealed class PdfDocumentService : IDisposable
         var fullPath = NormalizePath(filePath);
         var width = Math.Clamp(targetWidth, 160, 2600);
 
-        // Rendering is CPU bound, so it must not run on the caller's thread: the gate can
-        // be acquired synchronously and would otherwise block the UI thread.
-        return Task.Run(
-            async () =>
+        // Rendering is CPU bound and must not run on the caller's thread. The priority lane
+        // orders renders before they take the native gate, so a visible page is not stuck
+        // behind thumbnails queued earlier.
+        return RenderQueue.Enqueue(
+            priority,
+            cancellationToken,
+            token => RenderPageCoreAsync(fullPath, pageNumber, width, password, token));
+    }
+
+    private async Task<SKBitmap> RenderPageCoreAsync(
+        string fullPath,
+        int pageNumber,
+        int width,
+        string? password,
+        CancellationToken cancellationToken)
+    {
+        await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var session = _session;
+            if (session is not null && string.Equals(_sessionPath, fullPath, PathComparison))
             {
-                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
-                try
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
+                return session.RenderPage(pageNumber, width);
+            }
 
-                    var session = _session;
-                    if (session is not null && string.Equals(_sessionPath, fullPath, PathComparison))
-                    {
-                        return session.RenderPage(pageNumber, width);
-                    }
-
-                    // No resident handle for this file — for example a render that raced a
-                    // document switch. Render from a short-lived handle instead of failing.
-                    using var fallback = PdfiumDocument.Open(fullPath, password);
-                    return fallback.RenderPage(pageNumber, width);
-                }
-                finally
-                {
-                    RenderGate.Release();
-                }
-            },
-            cancellationToken);
+            // No resident handle for this file — for example a render that raced a
+            // document switch. Render from a short-lived handle instead of failing.
+            using var fallback = PdfiumDocument.Open(fullPath, password);
+            return fallback.RenderPage(pageNumber, width);
+        }
+        finally
+        {
+            RenderGate.Release();
+        }
     }
 
     /// <summary>

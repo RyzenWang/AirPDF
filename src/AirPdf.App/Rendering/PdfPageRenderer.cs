@@ -17,8 +17,12 @@ public sealed class PdfPageRenderer
         _password = password;
     }
 
-    public Task<SKBitmap> RenderAsync(int pageNumber, int pixelWidth, CancellationToken cancellationToken) =>
-        _service.RenderPageAsync(_filePath, pageNumber, pixelWidth, _password, cancellationToken);
+    public Task<SKBitmap> RenderAsync(
+        int pageNumber,
+        int pixelWidth,
+        CancellationToken cancellationToken,
+        PdfRenderPriority priority = PdfRenderPriority.Page) =>
+        _service.RenderPageAsync(_filePath, pageNumber, pixelWidth, _password, cancellationToken, priority);
 
     public Task<IReadOnlyList<PdfLink>> GetLinksAsync(int pageNumber, CancellationToken cancellationToken) =>
         _service.GetLinksAsync(_filePath, pageNumber, cancellationToken);
