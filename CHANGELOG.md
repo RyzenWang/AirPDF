@@ -4,12 +4,13 @@ All notable changes to AirPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning once it reaches 1.0.
 
-## [Unreleased]
+## [0.6.0-preview.2] - 2026-11-05
 
 ### Fixed
 
-- The Windows custom titlebar now exposes its maximize/restore button as `HTMAXBUTTON`,
-  so Windows 11 shows Snap Layouts while the custom hover state is preserved.
+- Windows 11 Snap Layouts are restored for the custom titlebar: the maximize/restore
+  button now participates in non-client hit testing as `HTMAXBUTTON`, while its custom
+  hover state is preserved.
 
 ## [0.6.0-preview.1] - 2026-11-05
 
