@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using AirPdf.App.Layout;
+using Avalonia.Animation;
+using Avalonia.Animation.Easings;
 using AirPdf.App.Services;
 using AirPdf.App.ViewModels;
 using AirPdf.Core.Models;
@@ -27,6 +29,10 @@ public partial class MainWindow : Window
     private readonly SettingsService _settingsService;
     private readonly string? _initialFile;
     private MainWindowViewModel _viewModel = null!;
+    private ScrollViewer? _tabScrollViewer;
+    private DispatcherTimer? _tabAutoScrollTimer;
+    private int _tabAutoScrollDirection;
+    private double _tabDragPointerX;
     private bool _suppressScrollSync;
     private int _scrollIntent;
     private bool _suppressThumbnailSync;
@@ -41,6 +47,8 @@ public partial class MainWindow : Window
     private bool _isSelectingText;
     private bool _selectionPressInProgress;
     private (int Page, double X, double Y)? _contextPoint;
+    private static readonly TimeSpan TabReorderDuration = TimeSpan.FromMilliseconds(180);
+    private const double TabAutoScrollEdge = 28;
     private (PageViewModel Page, Control View, List<(double X, double Y)> Points)? _inkStroke;
     private (PageViewModel Page, int Number)? _erasing;
     private bool _selectionMoved;
@@ -348,6 +356,8 @@ public partial class MainWindow : Window
             _dragPointer.Capture(TabList);
         }
 
+        _tabDragPointerX = position.X;
+        UpdateTabAutoScroll(position.X);
         ReorderTab(position.X);
         e.Handled = true;
     }
@@ -379,6 +389,8 @@ public partial class MainWindow : Window
         _dragTabBorder = null;
         _dragPointer = null;
         _tabDragStarted = false;
+        _tabAutoScrollDirection = 0;
+        _tabAutoScrollTimer?.Stop();
         border?.Classes.Remove("tabDragging");
 
         if (releaseCapture)
@@ -424,7 +436,145 @@ public partial class MainWindow : Window
             ? _tabs.Tabs.IndexOf(tabs[^1].Tab)
             : _tabs.Tabs.IndexOf(next.Tab);
 
-        _tabs.MoveTab(_dragTab, targetIndex);
+        MoveTabWithAnimation(_dragTab, targetIndex);
+    }
+
+    /// <summary>
+    /// Reorders the collection first, then offsets every realized tab by the distance it
+    /// jumped. A short transition slides each tab from its old position into the new layout
+    /// instead of making the strip snap.
+    /// </summary>
+    private void MoveTabWithAnimation(MainWindowViewModel tab, int targetIndex)
+    {
+        var sourceIndex = _tabs.Tabs.IndexOf(tab);
+        if (sourceIndex < 0 || sourceIndex == targetIndex)
+        {
+            return;
+        }
+
+        TabList.UpdateLayout();
+        var before = new Dictionary<MainWindowViewModel, double>();
+        foreach (var container in TabList.GetRealizedContainers().OfType<ListBoxItem>())
+        {
+            if (container.DataContext is MainWindowViewModel candidate &&
+                container.TranslatePoint(new Point(0, 0), TabList) is { } origin)
+            {
+                before[candidate] = origin.X;
+            }
+        }
+
+        _tabs.MoveTab(tab, targetIndex);
+        TabList.UpdateLayout();
+
+        foreach (var container in TabList.GetRealizedContainers().OfType<ListBoxItem>())
+        {
+            if (container.DataContext is not MainWindowViewModel candidate ||
+                !before.TryGetValue(candidate, out var oldX) ||
+                container.TranslatePoint(new Point(0, 0), TabList) is not { } newOrigin)
+            {
+                continue;
+            }
+
+            var delta = oldX - newOrigin.X;
+            if (Math.Abs(delta) < 0.5)
+            {
+                continue;
+            }
+
+            var transform = new TranslateTransform
+            {
+                X = delta,
+                Transitions = new Transitions
+                {
+                    new DoubleTransition
+                    {
+                        Property = TranslateTransform.XProperty,
+                        Duration = TabReorderDuration,
+                        Easing = new CubicEaseOut()
+                    }
+                }
+            };
+            container.RenderTransform = transform;
+            transform.X = 0;
+        }
+    }
+
+    private void UpdateTabAutoScroll(double pointerX)
+    {
+        if (_dragTab is null || !_tabDragStarted)
+        {
+            StopTabAutoScroll();
+            return;
+        }
+
+        var width = TabList.Bounds.Width;
+        var direction = pointerX <= TabAutoScrollEdge
+            ? -1
+            : pointerX >= width - TabAutoScrollEdge
+                ? 1
+                : 0;
+
+        if (direction == 0)
+        {
+            StopTabAutoScroll();
+            return;
+        }
+
+        _tabAutoScrollDirection = direction;
+        _tabAutoScrollTimer ??= CreateTabAutoScrollTimer();
+        if (!_tabAutoScrollTimer.IsEnabled)
+        {
+            _tabAutoScrollTimer.Start();
+        }
+    }
+
+    private DispatcherTimer CreateTabAutoScrollTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+        timer.Tick += OnTabAutoScrollTick;
+        return timer;
+    }
+
+    private void OnTabAutoScrollTick(object? sender, EventArgs e)
+    {
+        if (_dragTab is null || _tabAutoScrollDirection == 0)
+        {
+            StopTabAutoScroll();
+            return;
+        }
+
+        var viewer = GetTabScrollViewer();
+        if (viewer is null)
+        {
+            return;
+        }
+
+        var maxOffset = Math.Max(0, viewer.Extent.Width - viewer.Viewport.Width);
+        if (maxOffset <= 0)
+        {
+            StopTabAutoScroll();
+            return;
+        }
+
+        var step = Math.Max(12, viewer.Viewport.Width * 0.05) * _tabAutoScrollDirection;
+        var next = Math.Clamp(viewer.Offset.X + step, 0, maxOffset);
+        if (Math.Abs(next - viewer.Offset.X) < 0.5)
+        {
+            return;
+        }
+
+        viewer.Offset = new Vector(next, viewer.Offset.Y);
+        TabList.UpdateLayout();
+        ReorderTab(_tabDragPointerX);
+    }
+
+    private ScrollViewer? GetTabScrollViewer() =>
+        _tabScrollViewer ??= TabList.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault();
+
+    private void StopTabAutoScroll()
+    {
+        _tabAutoScrollDirection = 0;
+        _tabAutoScrollTimer?.Stop();
     }
 
     private async void OnCloseTabClick(object? sender, RoutedEventArgs e)
