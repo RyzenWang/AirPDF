@@ -49,6 +49,9 @@ semantic versioning once it reaches 1.0.
   reused rail container deactivates its previous thumbnail.
 - A superseded scroll callback can no longer clear the scroll-sync guard or write its old
   position after a newer navigation.
+- The tab strip's horizontal scrollbar is capped at a 4px hairline instead of expanding
+  over the tabs while scrolling.
+- The fit-width toolbar icon is now vertically centred like the other toolbar glyphs.
 
 ## [0.5.0] - 2026-11-04
 

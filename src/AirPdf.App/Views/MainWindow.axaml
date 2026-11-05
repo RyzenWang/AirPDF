@@ -348,7 +348,12 @@
                   Command="{Binding FitWidthCommand}"
                   AutomationProperties.Name="{DynamicResource L.FitWidth}"
                   ToolTip.Tip="{DynamicResource L.FitWidth}">
-            <Path Classes="icon small" Data="{StaticResource IconFitWidth}" />
+            <!-- A wide, short glyph in a square Path box letterboxes to the top; give
+                 this one a short box so its own vertical centre matches the other icons. -->
+            <Path Classes="icon small"
+                  Height="8"
+                  Stretch="Fill"
+                  Data="{StaticResource IconFitWidth}" />
           </Button>
           <Button x:Name="FitPageButton"
                   Classes="zoom"

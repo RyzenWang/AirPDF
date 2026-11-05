@@ -228,6 +228,14 @@
     <Setter Property="BorderThickness" Value="0" />
     <Setter Property="Padding" Value="0" />
   </Style>
+  <!-- The default Fluent horizontal bar grows on hover/drag; the tab strip only needs a
+       hairline. Capping the ScrollBar itself keeps every visual state at this height. -->
+  <Style Selector="ListBox.tabStrip ScrollBar:horizontal">
+    <Setter Property="Height" Value="4" />
+    <Setter Property="MinHeight" Value="4" />
+    <Setter Property="Margin" Value="0,0,0,1" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
   <Style Selector="ListBox.tabStrip ListBoxItem">
     <Setter Property="Padding" Value="0" />
     <Setter Property="Margin" Value="0" />
