@@ -261,7 +261,8 @@
     <Setter Property="Background" Value="Transparent" />
   </Style>
   <Style Selector="ListBox.tabStrip Border.tabPill.tabDragging">
-    <Setter Property="Opacity" Value="0.55" />
+    <Setter Property="Opacity" Value="0.72" />
+    <Setter Property="RenderTransform" Value="scale(1.03)" />
   </Style>
   <Style Selector="ListBox.tabStrip ListBoxItem:pointerover Border.tabPill">
     <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />

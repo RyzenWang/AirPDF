@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using AirPdf.App.Controls;
 using AirPdf.App.Layout;
 using Avalonia.Animation;
 using Avalonia.Animation.Easings;
@@ -44,10 +45,12 @@ public partial class MainWindow : Window
     private IPointer? _dragPointer;
     private Point _dragTabStart;
     private bool _tabDragStarted;
+    private readonly List<double> _tabDragRightEdges = [];
+    private int _tabDragDocumentOffset;
     private bool _isSelectingText;
     private bool _selectionPressInProgress;
     private (int Page, double X, double Y)? _contextPoint;
-    private static readonly TimeSpan TabReorderDuration = TimeSpan.FromMilliseconds(180);
+    private static readonly TimeSpan TabReorderDuration = TimeSpan.FromMilliseconds(160);
     private const double TabAutoScrollEdge = 28;
     private (PageViewModel Page, Control View, List<(double X, double Y)> Points)? _inkStroke;
     private (PageViewModel Page, int Number)? _erasing;
@@ -352,6 +355,7 @@ public partial class MainWindow : Window
             }
 
             _tabDragStarted = true;
+            SnapshotTabSlots();
             _dragTabBorder?.Classes.Add("tabDragging");
             _dragPointer.Capture(TabList);
         }
@@ -389,6 +393,8 @@ public partial class MainWindow : Window
         _dragTabBorder = null;
         _dragPointer = null;
         _tabDragStarted = false;
+        _tabDragRightEdges.Clear();
+        _tabDragDocumentOffset = 0;
         _tabAutoScrollDirection = 0;
         _tabAutoScrollTimer?.Stop();
         border?.Classes.Remove("tabDragging");
@@ -400,41 +406,64 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Moves the dragged tab when the pointer crosses the midpoint of another document tab.
-    /// Home is a hidden placeholder at index zero, so it is never a drop target.
+    /// Records where every document tab sits before the drag reorders anything, in content
+    /// coordinates so the slots stay valid while the strip auto-scrolls.
+    /// </summary>
+    private void SnapshotTabSlots()
+    {
+        _tabDragRightEdges.Clear();
+        _tabDragDocumentOffset = CountLeadingHomeTabs();
+
+        var scroll = GetTabScrollViewer()?.Offset.X ?? 0;
+        var ordered = TabList.GetRealizedContainers()
+            .OfType<ListBoxItem>()
+            .Where(container => container.DataContext is MainWindowViewModel { IsHomeTab: false })
+            .Select(container => new
+            {
+                Container = container,
+                Index = _tabs.Tabs.IndexOf((MainWindowViewModel)container.DataContext!)
+            })
+            .Where(item => item.Index >= 0)
+            .OrderBy(item => item.Index)
+            .ToList();
+
+        if (ordered.Count == 0)
+        {
+            return;
+        }
+
+        var left = ordered[0].Container.TranslatePoint(new Point(0, 0), TabList)?.X ?? 0;
+        var widths = ordered
+            .Select(item => item.Container.Bounds.Width)
+            .ToList();
+
+        _tabDragRightEdges.AddRange(TabDragSlots.BuildEdges(left + scroll, widths));
+    }
+
+    /// <summary>Home occupies index zero and is never a drop target.</summary>
+    private int CountLeadingHomeTabs() =>
+        _tabs.Tabs.Count > 0 && _tabs.Tabs[0].IsHomeTab ? 1 : 0;
+
+    /// <summary>
+    /// Moves the dragged tab into the slot the pointer is over. Slots come from the snapshot
+    /// taken at drag start, so crossing one boundary reorders once and crossing back undoes it.
     /// </summary>
     private void ReorderTab(double pointerX)
     {
-        if (_dragTab is null)
+        if (_dragTab is null || _tabDragRightEdges.Count < 2)
         {
             return;
         }
 
-        var tabs = new List<(MainWindowViewModel Tab, double Center)>();
-        foreach (var container in TabList.GetRealizedContainers().OfType<ListBoxItem>())
-        {
-            if (container.DataContext is not MainWindowViewModel tab ||
-                tab.IsHomeTab ||
-                container.TranslatePoint(new Point(0, 0), TabList) is not { } origin)
-            {
-                continue;
-            }
+        var contentX = pointerX + (GetTabScrollViewer()?.Offset.X ?? 0);
+        var slot = TabDragSlots.Resolve(_tabDragRightEdges, contentX);
+        var targetIndex = _tabDragDocumentOffset + slot;
 
-            tabs.Add((tab, origin.X + (container.Bounds.Width / 2)));
-        }
-
-        if (tabs.Count < 2)
+        var sourceIndex = _tabs.Tabs.IndexOf(_dragTab);
+        if (sourceIndex < 0 || sourceIndex == targetIndex)
         {
             return;
         }
-
-        tabs.Sort((left, right) =>
-            _tabs.Tabs.IndexOf(left.Tab).CompareTo(_tabs.Tabs.IndexOf(right.Tab)));
-
-        var next = tabs.FirstOrDefault(candidate => pointerX < candidate.Center);
-        var targetIndex = next.Tab is null
-            ? _tabs.Tabs.IndexOf(tabs[^1].Tab)
-            : _tabs.Tabs.IndexOf(next.Tab);
 
         MoveTabWithAnimation(_dragTab, targetIndex);
     }
