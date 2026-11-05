@@ -124,6 +124,29 @@ public sealed class MainWindowXamlTests : IDisposable
             ScrollBarVisibility.Auto,
             ScrollViewer.GetHorizontalScrollBarVisibility(list));
     }
+
+    /// <summary>
+    /// Windows 11 only shows Snap Layouts when the custom maximize button participates in
+    /// non-client hit testing as HTMAXBUTTON. This pins the marker so the button cannot
+    /// silently fall back to a plain client button.
+    /// </summary>
+    [AvaloniaFact]
+    public void WindowsCustomChrome_MarksMaximizeAsNonClient()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var window = CreateWindow();
+        var button = window.FindControl<Button>("MaximizeWindowButton");
+
+        Assert.NotNull(button);
+        Assert.Equal(
+            Win32Properties.Win32HitTestValue.MaxButton,
+            Win32Properties.GetNonClientHitTestResult(button!));
+    }
+
     /// <summary>
     /// The high-contrast palette is compiled into a class rather than loaded by resource URI,
     /// because the URI form is annotated as requiring unreferenced code and a trimmed build

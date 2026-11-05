@@ -399,6 +399,9 @@
   <Style Selector="Button.windowControl:pointerover /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
   </Style>
+  <Style Selector="Button.windowControl.nonClientHover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+  </Style>
   <Style Selector="Button.windowControl:pressed /template/ ContentPresenter#PART_ContentPresenter">
     <Setter Property="Background" Value="{DynamicResource SurfacePressedBrush}" />
   </Style>

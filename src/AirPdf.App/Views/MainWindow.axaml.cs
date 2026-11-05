@@ -85,6 +85,10 @@ public partial class MainWindow : Window
             TabStrip.Padding = new Thickness(12, 0, 0, 0);
             WindowCaptionButtons.IsVisible = true;
             TitleDragRegion.IsVisible = true;
+            Win32Properties.SetNonClientHitTestResult(
+                MaximizeWindowButton,
+                Win32Properties.Win32HitTestValue.MaxButton);
+            Win32Properties.AddWndProcHookCallback(this, OnWindowsMessage);
             UpdateWindowStateVisuals();
         }
 
@@ -393,6 +397,45 @@ public partial class MainWindow : Window
         if (Math.Abs(TabList.MaxWidth - maxWidth) > 0.5)
         {
             TabList.MaxWidth = maxWidth;
+        }
+    }
+
+    /// <summary>
+    /// WA: the maximize button is a non-client HTMAXBUTTON so Windows 11 can raise Snap
+    /// Layouts. Non-client messages no longer reach Avalonia's pointer pipeline, so mirror
+    /// the hover background for that one button here.
+    /// </summary>
+    private IntPtr OnWindowsMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const uint WmMouseMove = 0x0200;
+        const uint WmNcMouseMove = 0x00A0;
+        const uint WmNcMouseLeave = 0x02A3;
+        const int HtMaxButton = 9;
+
+        if (message == WmNcMouseMove)
+        {
+            SetMaximizeHover(wParam.ToInt32() == HtMaxButton);
+        }
+        else if (message == WmNcMouseLeave || message == WmMouseMove)
+        {
+            SetMaximizeHover(false);
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private void SetMaximizeHover(bool hovered)
+    {
+        if (hovered)
+        {
+            if (!MaximizeWindowButton.Classes.Contains("nonClientHover"))
+            {
+                MaximizeWindowButton.Classes.Add("nonClientHover");
+            }
+        }
+        else
+        {
+            MaximizeWindowButton.Classes.Remove("nonClientHover");
         }
     }
 
