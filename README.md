@@ -13,7 +13,9 @@
 </p>
 
 <p align="center">
-  <a href="https://apps.microsoft.com/detail/9pnsx3223qh1"><strong>Download for Windows from the Microsoft Store</strong></a>
+  <a href="https://apps.microsoft.com/detail/9pnsx3223qh1"><strong>Microsoft Store</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/RyzenWang/AirPDF/releases/latest">Latest releases</a>
 </p>
 
 <p align="center">
@@ -30,10 +32,12 @@ AirPDF opens PDFs quickly, renders them natively, and stays out of the way. It
 has no account, no cloud, no telemetry, and no web view. The whole reader is a
 small .NET application with a hand-built Avalonia interface.
 
-> **Status:** 0.6. Windows builds are in the
-> [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1); macOS and Linux ship as
-> portable archives. Highlights, ink, notes, bookmarks, undo/redo, and saving are in; printing is
-> not. See the [roadmap](#roadmap).
+> **Status:** 0.6.0. Windows builds are available from the
+> [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1) and
+> [GitHub Releases](https://github.com/RyzenWang/AirPDF/releases/latest); macOS and Linux
+> ship as portable archives. The Store listing can trail the GitHub release. Highlights,
+> ink, notes, bookmarks, tabs, a custom Windows titlebar, undo/redo, and saving are in;
+> printing is not. See the [roadmap](#roadmap).
 
 ---
 
@@ -45,12 +49,23 @@ small .NET application with a hand-built Avalonia interface.
 
 ![Search with page highlights](docs/search.png)
 
+The Windows screenshots show the 0.6 titlebar, where the document tabs and window controls
+share the top row. macOS and Linux keep their native window frame and the tab bar below it.
+
 ## Features
 
 - **Native PDFium rendering** at the exact display scale, with high-DPI support.
-- **Continuous, virtualized pages** — only pages near the viewport are decoded.
+- **Continuous, virtualized pages** — only pages near the viewport are decoded. Visible pages
+  render before thumbnails, bitmaps are bounded by count and memory, and closing a tab
+  releases its PDFium session off the UI thread.
+- **Windows titlebar, with the tabs in it** — on Windows the 44px workspace bar also carries
+  the window controls. Brand, Open, document tabs and minimize/maximize/close share one row;
+  the toolbar below is unchanged. Drag the empty area to move the window, double-click it to
+  maximize, and hover the maximize button for Windows 11 Snap Layouts. macOS and Linux keep
+  their native window frame.
 - **Thumbnail rail and document outline** for fast navigation.
-- **Full-text search** with page-grouped results and in-page match highlights.
+- **Full-text search** with page-grouped results, in-page match highlights, and progress
+  while a long document is scanned.
 - **Text selection and copy** — drag across words and pages, double-click a
   word, `Ctrl+A` selects the document (up to 1,000 pages), and `Ctrl+C` copies the result.
 - **Remembers your place** in every document, including the offset within the
@@ -75,9 +90,11 @@ small .NET application with a hand-built Avalonia interface.
   links open in your browser or mail client, and the cursor turns into a hand.
 - **Multiple windows** (`Ctrl+N`, or open the current file in a new window) sharing
   one settings store, theme, and language.
-- **Tabs** — `Ctrl+T` adds a document to the same window, and each tab keeps its own
-  zoom, scroll position, search results, and reading position. The first tab is **Home**,
-  so the strip exists from the start and going home never closes an open document.
+- **Tabs keep the whole document session** — `Ctrl+T` adds a document to the same window,
+  and each tab keeps its own zoom, scroll position, search results, and reading position.
+  The active tab is a warm pill, the strip scrolls when it runs out of room, and `+` follows
+  the last tab before pinning to the visible edge. The brand block is Home; there is no
+  separate visible Home tab.
 - **NativeAOT** — every release is compiled ahead of time, so the
   window appears in well under a second instead of several.
 - **Back navigation** with `Alt+Left` after any outline, thumbnail, search, or
@@ -88,10 +105,11 @@ small .NET application with a hand-built Avalonia interface.
 - **English by default, Simplified Chinese on demand** — switch live from the
   toolbar or with `Ctrl+Shift+L`.
 - **Drag and drop**, command-line opening, and a recent-files shelf.
-- **Automatic updates** in installed Windows and macOS builds, including
-  background download and a restart action.
+- **Automatic updates** in installed Velopack builds: they check GitHub, download in the
+  background, and offer a restart. Microsoft Store builds update through the Store; portable
+  and source builds do not self-update.
 - **Keyboard-first navigation** and a quiet, information-dense status bar.
-- **No network access on the reading path**; installed builds only contact
+- **No network access on the reading path**; installed Velopack builds only contact
   GitHub when checking for updates.
 
 ## Tech stack
@@ -100,6 +118,7 @@ small .NET application with a hand-built Avalonia interface.
 | --- | --- | --- |
 | Runtime | .NET 10 (LTS) | One modern runtime for Windows, macOS, and Linux. |
 | UI | Avalonia 11 | Native desktop windows from a single XAML codebase. |
+| Window chrome | Avalonia + `Win32Properties` | The Windows tab bar doubles as a managed titlebar; `HTMAXBUTTON` restores Windows 11 Snap Layouts. macOS and Linux keep native decorations. |
 | Rendering | PDFium | The same open-source engine used by browsers; one document handle stays open while reading. |
 | Raster transport | SkiaSharp | Fast, predictable pixel handling. |
 | Text layer | PDFium (`FPDFText_*`) | Characters arrive in reading order from the engine that renders the page, so search, selection, and rotated pages agree with what is drawn. PdfPig supplies metadata and the outline. |
@@ -109,7 +128,9 @@ small .NET application with a hand-built Avalonia interface.
 ## Requirements
 
 - [.NET 10 SDK](https://dotnet.microsoft.com/download) for building.
-- Windows 10/11, macOS 13+, or a modern Linux desktop (X11 or Wayland).
+- Windows 10/11, macOS 13+, or a modern Linux desktop (X11 or Wayland). Windows 11 is
+  required for Snap Layouts from the custom maximize button; Windows 10 uses the same
+  titlebar without the Snap flyout.
 - On Linux, the usual Avalonia desktop dependencies (X11/Wayland, fontconfig,
   and OpenGL or a software renderer) must be installed. Rendering uses the
   fontconfig-enabled SkiaSharp build, so system fonts are required. Install a CJK
@@ -146,10 +167,11 @@ dotnet build AirPdf.sln -c Release
 dotnet test AirPdf.sln -c Release
 ```
 
-The tests use `tests/Assets/sample.pdf`, an eight-page document that exercises
-Latin and Chinese text, mixed typography, and search geometry. `AirPdf.App.Tests`
-adds headless Avalonia coverage for opening, search, selection, zoom, language
-switching, and reading-position restore.
+The suite currently has **221 tests** (103 Core, 118 App). It uses
+`tests/Assets/sample.pdf`, an eight-page document that exercises Latin and Chinese text,
+mixed typography, and search geometry. `AirPdf.App.Tests` adds headless Avalonia coverage
+for the XAML and tab strip, opening, search, selection, zoom, language switching,
+reading-position restore, and the Windows Snap Layout hit-test marker.
 
 ## Publish
 
@@ -196,9 +218,9 @@ in the reader rather than in its distribution. The portable archives stay availa
 launch may still need *More info → Run anyway* on Windows, or right-click → *Open* on macOS.
 The installers return once a signing certificate is configured.
 
-Installed Windows and macOS builds check GitHub for a newer stable release,
-download it in the background, and show a **Restart to update** action. Portable
-and source builds do not self-update.
+Installed Velopack builds check GitHub for a newer stable release, download it in the
+background, and show a **Restart to update** action. Microsoft Store builds update through
+the Store. Portable and source builds do not self-update.
 
 The workflow also contains optional Windows code-signing and macOS
 codesign/notarization steps. See [docs/SIGNING.md](docs/SIGNING.md) for how to
@@ -278,6 +300,10 @@ the whole document, and showing the file in its folder.
   outside a small window around the current page.
 - The page list is a virtualizing `ListBox` with a custom template; the scroll
   position drives current-page detection and thumbnail selection.
+- On Windows, `SystemDecorations.BorderOnly` plus an extended client area replace
+  the non-client caption with the existing top bar. The maximize button is exposed
+  as `HTMAXBUTTON`, and a small `WM_NCMOUSEMOVE` hook keeps its hover state while
+  Windows 11 handles Snap Layouts. Other platforms leave window chrome alone.
 - Search reads the PDF text layer once, groups matches by page, and maps word
   bounding boxes back to normalized overlay rectangles.
 
@@ -302,8 +328,14 @@ docs/                   Screenshots and architecture notes
 - No form filling, printing, or PDF text editing.
 - Only `http`, `https`, and `mailto` link targets are followed; `Launch` and
   remote-`GoTo` actions are ignored so a document cannot start a program.
-- One document per tab, plus a Home tab that is always there. `Ctrl+W` closes the tab and
-  returns to Home; the Home tab itself cannot be closed.
+- Tabs are document sessions. The brand block returns to Home and is not a separate tab;
+  closing the last document tab returns to Home. `Ctrl+W` asks before discarding unsaved
+  markup.
+- The Windows custom titlebar does not yet expose the system menu (right-click or
+  `Alt+Space`), and its caption buttons do not dim when the window is inactive. Windows 11
+  Snap Layouts are supported; Windows 10 has the same custom buttons but no Snap flyout.
+- Custom titlebar integration is Windows-only. macOS and Linux keep their native
+  decorations and place the tab bar below them.
 - Release binaries are signed only when the maintainer signing secrets are
   configured. Unsigned Windows/macOS builds may show platform warnings.
 - Mobile and browser targets are out of scope for the desktop reader.
@@ -318,6 +350,8 @@ docs/                   Screenshots and architecture notes
 - [x] Ink and sticky-note annotations
 - [x] Multiple windows
 - [x] Tabs
+- [x] Unified tab/title bar with Windows 11 Snap Layouts
+- [ ] Windows titlebar system menu and inactive caption states
 - [ ] Additional UI languages (English and Simplified Chinese are available)
 - [ ] Configure production Windows signing and Apple notarization credentials
 - [x] NativeAOT (Windows, Linux, and macOS)
