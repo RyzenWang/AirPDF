@@ -4,6 +4,11 @@
     <ResourceDictionary x:Key="Light">
       <SolidColorBrush x:Key="AppBackgroundBrush" Color="#F1EEE7" />
       <SolidColorBrush x:Key="ToolbarBackgroundBrush" Color="#F9F7F2" />
+      <SolidColorBrush x:Key="TabBarBackgroundBrush" Color="#F4F0E8" />
+      <SolidColorBrush x:Key="TabActiveBackgroundBrush" Color="#FBFAF7" />
+      <SolidColorBrush x:Key="TabActiveBorderBrush" Color="#D9D1C4" />
+      <SolidColorBrush x:Key="TabActiveIconBrush" Color="#E3563B" />
+      <SolidColorBrush x:Key="TabCloseBrush" Color="#B7AEA1" />
       <SolidColorBrush x:Key="StatusBackgroundBrush" Color="#F9F7F2" />
       <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#EAE5DC" />
       <SolidColorBrush x:Key="SurfaceBrush" Color="#FBFAF7" />
@@ -48,6 +53,11 @@
     <ResourceDictionary x:Key="Dark">
       <SolidColorBrush x:Key="AppBackgroundBrush" Color="#13171C" />
       <SolidColorBrush x:Key="ToolbarBackgroundBrush" Color="#181D23" />
+      <SolidColorBrush x:Key="TabBarBackgroundBrush" Color="#14191F" />
+      <SolidColorBrush x:Key="TabActiveBackgroundBrush" Color="#232C36" />
+      <SolidColorBrush x:Key="TabActiveBorderBrush" Color="#46525F" />
+      <SolidColorBrush x:Key="TabActiveIconBrush" Color="#FF6B4E" />
+      <SolidColorBrush x:Key="TabCloseBrush" Color="#7B756D" />
       <SolidColorBrush x:Key="StatusBackgroundBrush" Color="#181D23" />
       <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#171C22" />
       <SolidColorBrush x:Key="SurfaceBrush" Color="#1C222A" />

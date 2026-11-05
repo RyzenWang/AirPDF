@@ -16,26 +16,68 @@
   <Window.Resources>
   </Window.Resources>
   <Grid RowDefinitions="Auto,Auto,*,Auto">
-    <!-- Tab strip. Its DataContext is the WindowViewModel (the tab host), set in code,
-         which is why compiled bindings are opted out: the window's DataContext is the
-         active document's view model. Hidden while only one tab exists. -->
+    <!-- Workspace bar: brand, Open, and document tabs share one row. The tab list binds to
+         the tab host (set in code) while the brand and Open button stay on the active
+         document's view model. The bar is always visible: it also carries the home action. -->
     <Border x:Name="TabStrip"
             Grid.Row="0"
-            IsVisible="False"
-            Background="{DynamicResource ToolbarBackgroundBrush}"
+            Height="44"
+            Background="{DynamicResource TabBarBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
-            Padding="8,4">
-      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+            Padding="12,0">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,*">
+        <StackPanel x:Name="BrandPanel"
+                    Grid.Column="0"
+                    Orientation="Horizontal"
+                    Spacing="10"
+                    VerticalAlignment="Center">
+          <!-- Logo and wordmark are one button: the whole brand block goes home. -->
+          <Button x:Name="HomeButton"
+                  Classes="home"
+                  Command="{Binding GoHomeCommand}"
+                  ToolTip.Tip="{DynamicResource L.HomeTooltip}"
+                  AutomationProperties.Name="{DynamicResource L.HomeTooltip}">
+            <StackPanel Orientation="Horizontal" Spacing="9" VerticalAlignment="Center">
+              <Border Width="28" Height="28" CornerRadius="7" Background="{DynamicResource AccentBrush}">
+                <Path Data="{StaticResource IconPlane}"
+                      Fill="White"
+                      Stretch="Uniform"
+                      Width="16"
+                      Height="16"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center" />
+              </Border>
+              <TextBlock Text="AirPDF"
+                         FontSize="14.5"
+                         FontWeight="Bold"
+                         VerticalAlignment="Center"
+                         LetterSpacing="-0.2" />
+            </StackPanel>
+          </Button>
+          <Border Width="1" Height="18" Background="{DynamicResource BorderBrush}" VerticalAlignment="Center" />
+          <Button Classes="soft tabOpen"
+                  Command="{Binding OpenCommand}"
+                  AutomationProperties.Name="{DynamicResource L.OpenPdf}"
+                  ToolTip.Tip="{DynamicResource L.OpenTooltip}">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <Path Classes="icon small"
+                    Data="{StaticResource IconFolderOpen}"
+                    Stroke="{DynamicResource AccentTextBrush}" />
+              <TextBlock Text="{DynamicResource L.Open}" FontWeight="SemiBold" FontSize="12.5" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+
         <!-- The strip binds to the tab host, not to the active document, so it declares its
-             own data type instead of opting out of compiled bindings. -->
+             own data type. TabList.DataContext is set to the host in code. -->
         <ListBox x:Name="TabList"
-                 Grid.Column="0"
+                 Grid.Column="1"
                  x:DataType="vm:WindowViewModel"
-                 Background="Transparent"
-                 BorderThickness="0"
-                 Padding="0"
-                 HorizontalAlignment="Stretch"
+                 Classes="tabStrip"
+                 Margin="12,0,0,0"
+                 HorizontalAlignment="Left"
+                 VerticalAlignment="Stretch"
                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
                  ScrollViewer.VerticalScrollBarVisibility="Disabled"
                  ItemsSource="{Binding Tabs}"
@@ -43,98 +85,61 @@
                  SelectionChanged="OnTabSelectionChanged">
           <ListBox.ItemsPanel>
             <ItemsPanelTemplate>
-              <StackPanel Orientation="Horizontal" Spacing="2" />
+              <StackPanel Orientation="Horizontal" />
             </ItemsPanelTemplate>
           </ListBox.ItemsPanel>
           <ListBox.ItemTemplate>
             <DataTemplate x:DataType="vm:MainWindowViewModel">
-              <StackPanel Orientation="Horizontal" Spacing="6" Margin="8,2">
-                <TextBlock Text="{Binding TabTitle}"
-                           MaxWidth="200"
-                           TextTrimming="CharacterEllipsis"
-                           VerticalAlignment="Center"
-                           FontSize="12" />
-                <Button Classes="icon"
-                        Width="18"
-                        Height="18"
-                        MinHeight="18"
-                        Padding="0"
-                        IsVisible="{Binding IsNotHomeTab}"
-                        Click="OnCloseTabClick"
-                        ToolTip.Tip="{DynamicResource L.CloseTab}"
-                        AutomationProperties.Name="{DynamicResource L.CloseTab}">
-                  <Path Data="{StaticResource IconClose}"
-                        Stroke="{DynamicResource TextTertiaryBrush}"
-                        StrokeThickness="1.8"
-                        StrokeLineCap="Round"
-                        Stretch="Uniform"
-                        Width="8"
-                        Height="8" />
-                </Button>
-              </StackPanel>
+              <Border Classes="tabPill" IsVisible="{Binding IsNotHomeTab}">
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                  <Path Classes="tabDocIcon"
+                        Data="{StaticResource IconDocumentTab}" />
+                  <TextBlock Classes="tabTitle"
+                             Text="{Binding TabTitle}"
+                             MaxWidth="180" />
+                  <Button Classes="icon tabClose"
+                          Click="OnCloseTabClick"
+                          ToolTip.Tip="{DynamicResource L.CloseTab}"
+                          AutomationProperties.Name="{DynamicResource L.CloseTab}">
+                    <Path Classes="tabCloseIcon"
+                          Data="{StaticResource IconClose}" />
+                  </Button>
+                </StackPanel>
+              </Border>
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>
-        <Button Grid.Column="1"
-                Classes="icon"
-                Width="24"
-                Height="24"
-                MinHeight="24"
-                Padding="0"
+
+        <!-- Sits immediately after the last tab. The list is capped to the available
+             width in code, so a full strip pins this button to the visible right edge
+             instead of letting it scroll out of reach. -->
+        <Button x:Name="NewTabButton"
+                Grid.Column="2"
+                Classes="icon tabNew"
+                Margin="8,0,0,0"
+                VerticalAlignment="Center"
                 Click="OnNewTabClick"
                 ToolTip.Tip="{DynamicResource L.NewTabHint}"
                 AutomationProperties.Name="{DynamicResource L.NewTabHint}">
-          <Path Classes="icon small" Data="{StaticResource IconPlus}" />
+          <Path Classes="tabNewIcon" Data="{StaticResource IconPlus}" />
         </Button>
       </Grid>
     </Border>
 
-    <!-- Top bar -->
-    <Border Grid.Row="1"
+    <!-- Toolbar. At normal sizes its controls are unchanged; the brand and Open action
+         moved up into the workspace bar. Equal star columns keep the navigation group
+         truly centred. At the minimum width the two fit shortcuts fold into the zoom menu. -->
+    <Border x:Name="Toolbar"
+            Grid.Row="1"
+            Classes="toolbar"
             Background="{DynamicResource ToolbarBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="14,9">
-      <Grid ColumnDefinitions="Auto,*,Auto">
-        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-          <!-- Logo and wordmark are one button: the whole brand block goes home. -->
-          <Button x:Name="HomeButton"
-                  Classes="home"
-                  Command="{Binding GoHomeCommand}"
-                  ToolTip.Tip="{DynamicResource L.HomeTooltip}"
-                  AutomationProperties.Name="{DynamicResource L.HomeTooltip}">
-            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-              <Border Width="31" Height="31" CornerRadius="8" Background="{DynamicResource AccentBrush}">
-                <Path Data="{StaticResource IconPlane}"
-                      Fill="White"
-                      Stretch="Uniform"
-                      Width="18"
-                      Height="18"
-                      HorizontalAlignment="Center"
-                      VerticalAlignment="Center" />
-              </Border>
-              <TextBlock Text="AirPDF"
-                         FontSize="15.5"
-                         FontWeight="Bold"
-                         VerticalAlignment="Center"
-                         LetterSpacing="-0.2" />
-            </StackPanel>
-          </Button>
-          <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="4,0" VerticalAlignment="Center" />
-          <Button Classes="soft"
-                  Command="{Binding OpenCommand}"
-                  AutomationProperties.Name="{DynamicResource L.OpenPdf}"
-                  ToolTip.Tip="{DynamicResource L.OpenTooltip}">
-            <StackPanel Orientation="Horizontal" Spacing="7">
-              <Path Classes="icon small"
-                    Data="{StaticResource IconFolderOpen}"
-                    Stroke="{DynamicResource AccentTextBrush}" />
-              <TextBlock Text="{DynamicResource L.Open}" FontWeight="SemiBold" />
-            </StackPanel>
-          </Button>
-        </StackPanel>
+      <Grid ColumnDefinitions="*,Auto,*">
 
         <StackPanel Grid.Column="1"
+                    Classes="toolbarCenter"
                     Orientation="Horizontal"
                     Spacing="5"
                     HorizontalAlignment="Center"
@@ -338,13 +343,15 @@
                   ToolTip.Tip="{DynamicResource L.ZoomIn}">
             <Path Classes="icon small" Data="{StaticResource IconPlus}" />
           </Button>
-          <Button Classes="zoom"
+          <Button x:Name="FitWidthButton"
+                  Classes="zoom"
                   Command="{Binding FitWidthCommand}"
                   AutomationProperties.Name="{DynamicResource L.FitWidth}"
                   ToolTip.Tip="{DynamicResource L.FitWidth}">
             <Path Classes="icon small" Data="{StaticResource IconFitWidth}" />
           </Button>
-          <Button Classes="zoom"
+          <Button x:Name="FitPageButton"
+                  Classes="zoom"
                   Command="{Binding FitPageCommand}"
                   AutomationProperties.Name="{DynamicResource L.FitPage}"
                   ToolTip.Tip="{DynamicResource L.FitPage}">
@@ -352,7 +359,12 @@
           </Button>
         </StackPanel>
 
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="3" VerticalAlignment="Center">
+        <StackPanel Grid.Column="2"
+                    Classes="toolbarRight"
+                    Orientation="Horizontal"
+                    Spacing="3"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center">
           <Button Classes="icon"
                   Command="{Binding ToggleSearchCommand}"
                   IsVisible="{Binding IsDocumentOpen}"

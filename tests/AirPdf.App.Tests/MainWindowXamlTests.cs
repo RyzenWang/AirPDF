@@ -137,7 +137,9 @@ public sealed class MainWindowXamlTests : IDisposable
 
         string[] required =
         [
-            "AppBackgroundBrush", "ToolbarBackgroundBrush", "StatusBackgroundBrush",
+            "AppBackgroundBrush", "ToolbarBackgroundBrush", "TabBarBackgroundBrush",
+            "TabActiveBackgroundBrush", "TabActiveBorderBrush", "TabActiveIconBrush",
+            "TabCloseBrush", "StatusBackgroundBrush",
             "SidebarBackgroundBrush", "SurfaceBrush", "SurfaceAltBrush", "SurfaceHoverBrush",
             "SurfacePressedBrush", "PagePlaceholderBrush", "BorderBrush", "BorderStrongBrush",
             "TextPrimaryBrush", "TextSecondaryBrush", "TextTertiaryBrush", "InverseTextBrush",

@@ -12,6 +12,11 @@
   -->
   <SolidColorBrush x:Key="AppBackgroundBrush" Color="#000000" />
   <SolidColorBrush x:Key="ToolbarBackgroundBrush" Color="#000000" />
+  <SolidColorBrush x:Key="TabBarBackgroundBrush" Color="#000000" />
+  <SolidColorBrush x:Key="TabActiveBackgroundBrush" Color="#000033" />
+  <SolidColorBrush x:Key="TabActiveBorderBrush" Color="#FFFFFF" />
+  <SolidColorBrush x:Key="TabActiveIconBrush" Color="#66B3FF" />
+  <SolidColorBrush x:Key="TabCloseBrush" Color="#E0E0E0" />
   <SolidColorBrush x:Key="StatusBackgroundBrush" Color="#000000" />
   <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="#000000" />
   <SolidColorBrush x:Key="SurfaceBrush" Color="#000000" />

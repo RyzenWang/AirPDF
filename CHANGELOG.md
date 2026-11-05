@@ -21,6 +21,11 @@ semantic versioning once it reaches 1.0.
   page on every step.
 - The tab strip scrolls horizontally when there are more tabs than fit, and `Ctrl+N` now
   opens a new window as documented.
+- The brand, Open button, and document tabs now share one workspace bar above the
+  toolbar. The selected tab is a warm pill with light/dark/high-contrast tokens; at the
+  minimum window width the two fit shortcuts fold into the existing zoom menu.
+- The new-tab button now follows the last tab, then pins to the visible edge of the tab
+  strip once the tabs start scrolling, so it never scrolls out of reach.
 - The info panel's update button is hidden in Store and portable builds, where Velopack
   has no installed app to update.
 

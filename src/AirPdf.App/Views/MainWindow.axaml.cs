@@ -30,6 +30,7 @@ public partial class MainWindow : Window
     private bool _suppressThumbnailSync;
     private bool _thumbnailSyncPending;
     private bool _handlingScrollChanged;
+    private bool _tabStripWidthUpdatePending;
     private bool _isSelectingText;
     private bool _selectionPressInProgress;
     private (int Page, double X, double Y)? _contextPoint;
@@ -73,10 +74,11 @@ public partial class MainWindow : Window
 
         _initialFile = initialFile;
 
-        // The tab strip binds to the host, not to the active document's view model.
+        // The tab list binds to the host, not to the active document's view model. The
+        // surrounding workspace bar stays on the document because it also carries Open/Home.
         _tabs = new WindowViewModel(CreateTabViewModel);
         _tabs.PropertyChanged += OnTabsPropertyChanged;
-        TabStrip.DataContext = _tabs;
+        TabList.DataContext = _tabs;
 
         // The host selects its home tab during construction, before this window could
         // subscribe, so point the content at it explicitly.
@@ -103,6 +105,8 @@ public partial class MainWindow : Window
         }
 
         PagesList.SizeChanged += (_, _) => UpdateViewport();
+        SizeChanged += OnWindowSizeChanged;
+        BrandPanel.SizeChanged += (_, _) => ScheduleTabStripWidthUpdate();
 
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
         AddHandler(PointerPressedEvent, OnSelectionPointerPressed, RoutingStrategies.Tunnel);
@@ -144,16 +148,15 @@ public partial class MainWindow : Window
                 ShowTab(_tabs.SelectedTab ?? _tabs.HomeTab);
                 break;
             case nameof(WindowViewModel.HasTabs):
-                UpdateTabStripVisibility();
+                SyncTabSelection();
                 break;
         }
     }
 
-    private void UpdateTabStripVisibility()
+    private void SyncTabSelection()
     {
-        TabStrip.IsVisible = _tabs.HasTabs;
-
-        // Selecting the tab the user clicked has to survive the ListBox re-binding.
+        // The workspace bar is always visible because it also carries the brand and Open
+        // action. Only the list selection needs to follow the host when tabs arrive/leave.
         if (!ReferenceEquals(TabList.SelectedItem, _tabs.SelectedTab))
         {
             TabList.SelectedItem = _tabs.SelectedTab;
@@ -189,7 +192,7 @@ public partial class MainWindow : Window
         _viewModel = tab;
         DataContext = tab;
         HookViewModel(tab);
-        UpdateTabStripVisibility();
+        SyncTabSelection();
 
         if (InfoButton.Flyout is Flyout { Content: Control infoContent })
         {
@@ -307,6 +310,74 @@ public partial class MainWindow : Window
         _tabs.Dispose();
     }
 
+    /// <summary>
+    /// Keeps the toolbar usable at the minimum window width: the outer rhythm tightens
+    /// and fit-width/fit-page fold into the existing zoom menu. At normal sizes the
+    /// design spacing and every control are left alone.
+    /// </summary>
+    private void OnWindowSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        var compact = e.NewSize.Width < 1000;
+        if (compact)
+        {
+            if (!Toolbar.Classes.Contains("compact"))
+            {
+                Toolbar.Classes.Add("compact");
+            }
+        }
+        else
+        {
+            Toolbar.Classes.Remove("compact");
+        }
+
+        // Fit width/page remain in the zoom menu, so the two shortcuts fold away rather
+        // than pushing the right-hand controls past the window edge at the minimum width.
+        FitWidthButton.IsVisible = !compact;
+        FitPageButton.IsVisible = !compact;
+
+        ScheduleTabStripWidthUpdate();
+    }
+
+    /// <summary>
+    /// Caps the tab list at the space left between the brand and the new-tab button. In an
+    /// Auto column that makes + follow the last tab while the tabs fit, and pins it to the
+    /// visible right edge once the list starts scrolling.
+    /// </summary>
+    private void ScheduleTabStripWidthUpdate()
+    {
+        if (_tabStripWidthUpdatePending)
+        {
+            return;
+        }
+
+        _tabStripWidthUpdatePending = true;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                _tabStripWidthUpdatePending = false;
+                UpdateTabStripWidth();
+            },
+            DispatcherPriority.Loaded);
+    }
+
+    private void UpdateTabStripWidth()
+    {
+        var width = TabStrip.Bounds.Width
+            - TabStrip.Padding.Left
+            - TabStrip.Padding.Right
+            - BrandPanel.Bounds.Width
+            - TabList.Margin.Left
+            - NewTabButton.Bounds.Width
+            - NewTabButton.Margin.Left;
+        var maxWidth = Math.Max(0, width);
+
+        // Setting the same value again would schedule another layout pass for nothing.
+        if (Math.Abs(TabList.MaxWidth - maxWidth) > 0.5)
+        {
+            TabList.MaxWidth = maxWidth;
+        }
+    }
+
     private void OnOpened(object? sender, EventArgs e)
     {
         // Screens and the native window handle are only guaranteed once the window is
@@ -314,6 +385,7 @@ public partial class MainWindow : Window
         // validate it yet.
         TryApplyPendingPosition();
         UpdateViewport();
+        ScheduleTabStripWidthUpdate();
         if (!string.IsNullOrWhiteSpace(_initialFile))
         {
             _ = _viewModel.OpenPathAsync(_initialFile);

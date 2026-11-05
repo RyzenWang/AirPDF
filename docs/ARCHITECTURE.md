@@ -320,8 +320,9 @@ position that would land off every screen is dropped rather than applied.
 A window hosts a `WindowViewModel` that owns an `ObservableCollection` of tabs, and each
 tab is a complete `MainWindowViewModel` — its own document, page view models, renderer,
 search state, and reading position. The window's `DataContext` is the *active tab*, so the
-existing markup and input handling keep binding to a document view model; the tab strip is
-the only control bound to the host, which is why it opts out of compiled bindings.
+existing markup and input handling keep binding to a document view model. The tab list
+gets its own `DataContext` and compiled data type from the host; the workspace bar around
+it stays on the document so its brand and Open action use the active tab's commands.
 
 Switching tabs swaps the `DataContext`, moves the event subscriptions in
 `HookViewModel`/`UnhookViewModel`, and restores that tab's scroll position from

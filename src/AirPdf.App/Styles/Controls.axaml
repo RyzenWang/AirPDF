@@ -220,6 +220,155 @@
     <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
   </Style>
 
+  <!-- The document tab strip. The selected pill is drawn by the Border in the item
+       template; the ListBoxItem itself stays transparent so Fluent's blue selection
+       chrome never leaks through. -->
+  <Style Selector="ListBox.tabStrip">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="ListBox.tabStrip ListBoxItem">
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="Margin" Value="0" />
+    <Setter Property="MinHeight" Value="0" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Template">
+      <ControlTemplate>
+        <ContentPresenter Content="{TemplateBinding Content}"
+                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                          HorizontalContentAlignment="Left"
+                          VerticalContentAlignment="Center" />
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="ListBox.tabStrip Border.tabPill">
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="Margin" Value="0,0,4,0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="ListBox.tabStrip ListBoxItem:pointerover Border.tabPill">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+  </Style>
+  <Style Selector="ListBox.tabStrip ListBoxItem:pressed Border.tabPill">
+    <Setter Property="Background" Value="{DynamicResource SurfacePressedBrush}" />
+  </Style>
+  <Style Selector="ListBox.tabStrip ListBoxItem:selected Border.tabPill">
+    <Setter Property="Background" Value="{DynamicResource TabActiveBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TabActiveBorderBrush}" />
+  </Style>
+  <Style Selector="ListBox.tabStrip ListBoxItem:selected:pointerover Border.tabPill">
+    <Setter Property="Background" Value="{DynamicResource TabActiveBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TabActiveBorderBrush}" />
+  </Style>
+  <Style Selector="ListBox.tabStrip ListBoxItem:selected:pressed Border.tabPill">
+    <Setter Property="Background" Value="{DynamicResource TabActiveBackgroundBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource TabActiveBorderBrush}" />
+  </Style>
+  <Style Selector="ListBox.tabStrip TextBlock.tabTitle">
+    <Setter Property="FontSize" Value="12.5" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ListBox.tabStrip ListBoxItem:pointerover TextBlock.tabTitle">
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+  <Style Selector="ListBox.tabStrip ListBoxItem:selected TextBlock.tabTitle">
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+  <Style Selector="Path.tabDocIcon">
+    <Setter Property="Width" Value="13" />
+    <Setter Property="Height" Value="13" />
+    <Setter Property="Stroke" Value="{DynamicResource TextTertiaryBrush}" />
+    <Setter Property="StrokeThickness" Value="1.7" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="Stretch" Value="Uniform" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="ListBox.tabStrip ListBoxItem:pointerover Path.tabDocIcon">
+    <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
+  </Style>
+  <Style Selector="ListBox.tabStrip ListBoxItem:selected Path.tabDocIcon">
+    <Setter Property="Stroke" Value="{DynamicResource TabActiveIconBrush}" />
+  </Style>
+  <Style Selector="Button.tabClose">
+    <Setter Property="Width" Value="16" />
+    <Setter Property="Height" Value="16" />
+    <Setter Property="MinHeight" Value="16" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Path.tabCloseIcon">
+    <Setter Property="Width" Value="9" />
+    <Setter Property="Height" Value="9" />
+    <Setter Property="Stroke" Value="{DynamicResource TabCloseBrush}" />
+    <Setter Property="StrokeThickness" Value="1.8" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="Stretch" Value="Uniform" />
+  </Style>
+  <Style Selector="ListBox.tabStrip ListBoxItem:pointerover Button.tabClose Path.tabCloseIcon">
+    <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
+  </Style>
+  <Style Selector="ListBox.tabStrip ListBoxItem:selected Button.tabClose Path.tabCloseIcon">
+    <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
+  </Style>
+  <Style Selector="Button.tabClose:pointerover Path.tabCloseIcon">
+    <Setter Property="Stroke" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+  <Style Selector="Button.tabClose:pressed Path.tabCloseIcon">
+    <Setter Property="Stroke" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+  <Style Selector="Button.tabNew">
+    <Setter Property="Width" Value="28" />
+    <Setter Property="Height" Value="28" />
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Path.tabNewIcon">
+    <Setter Property="Width" Value="14" />
+    <Setter Property="Height" Value="14" />
+    <Setter Property="Stroke" Value="{DynamicResource TextSecondaryBrush}" />
+    <Setter Property="StrokeThickness" Value="2" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="Stretch" Value="Uniform" />
+  </Style>
+  <Style Selector="Button.tabNew:pointerover Path.tabNewIcon">
+    <Setter Property="Stroke" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+  <Style Selector="Button.tabNew:pressed Path.tabNewIcon">
+    <Setter Property="Stroke" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+  <!-- At the minimum window width the toolbar tightens its rhythm. The two fit
+       shortcuts fold into the existing zoom menu so the right-hand controls stay
+       inside the window. -->
+  <Style Selector="Border.toolbar.compact">
+    <Setter Property="Padding" Value="6,9" />
+  </Style>
+  <Style Selector="Border.toolbar.compact StackPanel.toolbarCenter">
+    <Setter Property="Spacing" Value="2" />
+  </Style>
+  <Style Selector="Border.toolbar.compact StackPanel.toolbarRight">
+    <Setter Property="Spacing" Value="0" />
+  </Style>
+  <Style Selector="Button.soft.tabOpen">
+    <Setter Property="Height" Value="28" />
+    <Setter Property="MinHeight" Value="28" />
+    <Setter Property="Padding" Value="9,0,10,0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="FontSize" Value="12.5" />
+  </Style>
+
   <Style Selector="Button.chip">
     <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}" />
