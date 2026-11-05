@@ -61,8 +61,9 @@ share the top row. macOS and Linux keep their native window frame and the tab ba
 - **Windows titlebar, with the tabs in it** — on Windows the 44px workspace bar also carries
   the window controls. Brand, Open, document tabs and minimize/maximize/close share one row;
   the toolbar below is unchanged. Drag the empty area to move the window, double-click it to
-  maximize, and hover the maximize button for Windows 11 Snap Layouts. macOS and Linux keep
-  their native window frame.
+  maximize, and hover the maximize button for Windows 11 Snap Layouts. Right-click the empty
+  titlebar area or press `Alt+Space` for the native window menu, and the window buttons dim
+  while the window is inactive. macOS and Linux keep their native window frame.
 - **Thumbnail rail and document outline** for fast navigation.
 - **Full-text search** with page-grouped results, in-page match highlights, and progress
   while a long document is scanned.
@@ -257,6 +258,7 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl+Y` / `Cmd+Y` | Redo |
 | `F3` / `Shift+F3` | Next / previous search match |
 | `Alt+Left` | Return to the previous position |
+| `Alt+Space` | Open the window system menu (Windows) |
 | Drag on text | Select words |
 | Double-click | Select a word |
 | `Ctrl+C` / `Cmd+C` | Copy the selected text |
@@ -303,7 +305,10 @@ the whole document, and showing the file in its folder.
 - On Windows, `SystemDecorations.BorderOnly` plus an extended client area replace
   the non-client caption with the existing top bar. The maximize button is exposed
   as `HTMAXBUTTON`, and a small `WM_NCMOUSEMOVE` hook keeps its hover state while
-  Windows 11 handles Snap Layouts. Other platforms leave window chrome alone.
+  Windows 11 handles Snap Layouts. Right-clicking the caption strip or pressing `Alt+Space`
+  opens the native system menu through `GetSystemMenu`/`TrackPopupMenu`, and the
+  `Activated`/`Deactivated` events drive caption opacity. Other platforms leave window
+  chrome alone.
 - Search reads the PDF text layer once, groups matches by page, and maps word
   bounding boxes back to normalized overlay rectangles.
 
@@ -331,9 +336,8 @@ docs/                   Screenshots and architecture notes
 - Tabs are document sessions. The brand block returns to Home and is not a separate tab;
   closing the last document tab returns to Home. `Ctrl+W` asks before discarding unsaved
   markup.
-- The Windows custom titlebar does not yet expose the system menu (right-click or
-  `Alt+Space`), and its caption buttons do not dim when the window is inactive. Windows 11
-  Snap Layouts are supported; Windows 10 has the same custom buttons but no Snap flyout.
+- Windows 11 Snap Layouts are supported; Windows 10 has the same custom buttons but no Snap
+  flyout.
 - Custom titlebar integration is Windows-only. macOS and Linux keep their native
   decorations and place the tab bar below them.
 - Release binaries are signed only when the maintainer signing secrets are
@@ -351,7 +355,7 @@ docs/                   Screenshots and architecture notes
 - [x] Multiple windows
 - [x] Tabs
 - [x] Unified tab/title bar with Windows 11 Snap Layouts
-- [ ] Windows titlebar system menu and inactive caption states
+- [x] Windows titlebar system menu and inactive caption states
 - [ ] Additional UI languages (English and Simplified Chinese are available)
 - [ ] Configure production Windows signing and Apple notarization credentials
 - [x] NativeAOT (Windows, Linux, and macOS)

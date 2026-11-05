@@ -42,7 +42,8 @@ Windows 截图展示 0.6 的标题栏：文档标签和窗口按钮共享顶部�
   内存上限淘汰，关闭标签页时 PDFium 会话在 UI 线程之外释放。
 - **Windows 标题栏即标签栏**：44px 顶部栏同时承载品牌、打开、文档标签和最小化/最大化/关闭；
   下方工具栏不变。拖动空白区域移动窗口，双击最大化，悬停最大化按钮可使用 Windows 11
-  Snap Layouts。macOS 与 Linux 保留原生窗口边框。
+  Snap Layouts。右键空白标题栏或按 `Alt+Space` 打开原生窗口菜单；窗口非活动时按钮自动淡化。
+  macOS 与 Linux 保留原生窗口边框。
 - **缩略图侧栏与文档目录**，长文档也能快速跳转。
 - **全文搜索**，结果按页分组，在页面上绘制匹配框，并在扫描长文档时显示进度。
 - **文本选择与复制**：拖动选择单词或跨页文本，双击选词，`Ctrl+A` 全选（最多 1,000 页），
@@ -194,6 +195,7 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl+Y` / `Cmd+Y` | 重做 |
 | `F3` / `Shift+F3` | 下一个 / 上一个匹配 |
 | `Alt+Left` | 返回上一个位置 |
+| `Alt+Space` | 打开窗口系统菜单（Windows） |
 | 在文字上拖动 | 选择单词 |
 | 双击文字 | 选择一个单词 |
 | `Ctrl+C` / `Cmd+C` | 复制选中文本 |
@@ -230,7 +232,9 @@ docs/                   截图与架构说明
 
 Windows 上使用 `SystemDecorations.BorderOnly` 和扩展客户区替换系统标题栏；
 最大化按钮通过 `Win32Properties` 暴露为 `HTMAXBUTTON`，由一个小型 `WM_NCMOUSEMOVE`
-钩子维护 hover 状态，Windows 11 负责显示 Snap Layouts。其他平台不启用这层自定义窗口。
+钩子维护 hover 状态，Windows 11 负责显示 Snap Layouts。右键标题栏空白处或按
+`Alt+Space` 时，通过 `GetSystemMenu` / `TrackPopupMenu` 打开原生系统菜单；
+`Activated` / `Deactivated` 事件控制窗口按钮的淡化。其他平台不启用这层自定义窗口。
 
 ## 已知限制
 
@@ -240,8 +244,7 @@ Windows 上使用 `SystemDecorations.BorderOnly` 和扩展客户区替换系统�
   文档无法借此启动程序。
 - 标签页就是文档会话；品牌区域是主页入口，不是单独标签。关闭最后一个文档标签会回到主页，
   `Ctrl+W` 会先确认是否丢弃未保存的标注。
-- Windows 自定义标题栏尚未接入右键 / `Alt+Space` 系统菜单，窗口非活动时按钮也不会自动淡化。
-  Windows 11 支持 Snap Layouts；Windows 10 只有同样的自定义按钮，没有 Snap 弹层。
+- Windows 11 支持 Snap Layouts；Windows 10 只有同样的自定义按钮，没有 Snap 弹层。
 - 自定义标题栏目前只在 Windows 启用；macOS 与 Linux 保留原生窗口装饰，标签栏位于其下。
 - 只有配置维护者签名密钥后，发布包才会签名；未签名版本可能触发平台警告。
 - 移动端与浏览器端不在本项目范围内。
@@ -257,7 +260,7 @@ Windows 上使用 `SystemDecorations.BorderOnly` 和扩展客户区替换系统�
 - [x] 多窗口
 - [x] 标签页
 - [x] 标签栏 / 标题栏合一，并支持 Windows 11 Snap Layouts
-- [ ] Windows 标题栏系统菜单与非活动窗口按钮状态
+- [x] Windows 标题栏系统菜单与非活动窗口按钮状态
 - [ ] 更多界面语言（当前已有英文与简体中文）
 - [ ] 配置正式 Windows 签名与 Apple 公证凭据
 - [x] NativeAOT（Windows、Linux、macOS 均已使用）

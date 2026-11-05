@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using AirPdf.App.Layout;
 using AirPdf.App.Services;
 using AirPdf.App.ViewModels;
@@ -88,8 +89,11 @@ public partial class MainWindow : Window
             Win32Properties.SetNonClientHitTestResult(
                 MaximizeWindowButton,
                 Win32Properties.Win32HitTestValue.MaxButton);
+            // BorderOnly drops WS_SYSMENU; add it back so the native system menu exists.
+            Win32Properties.AddWindowStylesCallback(this, AddSystemMenuStyle);
             Win32Properties.AddWndProcHookCallback(this, OnWindowsMessage);
             UpdateWindowStateVisuals();
+            SetCaptionActivity(IsActive);
         }
 
         // The tab list binds to the host, not to the active document's view model. The
@@ -125,6 +129,8 @@ public partial class MainWindow : Window
         PagesList.SizeChanged += (_, _) => UpdateViewport();
         SizeChanged += OnWindowSizeChanged;
         BrandPanel.SizeChanged += (_, _) => ScheduleTabStripWidthUpdate();
+        Activated += (_, _) => SetCaptionActivity(true);
+        Deactivated += (_, _) => SetCaptionActivity(false);
 
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
         AddHandler(PointerPressedEvent, OnSelectionPointerPressed, RoutingStrategies.Tunnel);
@@ -410,7 +416,10 @@ public partial class MainWindow : Window
         const uint WmMouseMove = 0x0200;
         const uint WmNcMouseMove = 0x00A0;
         const uint WmNcMouseLeave = 0x02A3;
+        const uint WmSysCommand = 0x0112;
         const int HtMaxButton = 9;
+        const int ScKeyMenu = 0xF100;
+        const int VkSpace = 0x20;
 
         if (message == WmNcMouseMove)
         {
@@ -419,6 +428,13 @@ public partial class MainWindow : Window
         else if (message == WmNcMouseLeave || message == WmMouseMove)
         {
             SetMaximizeHover(false);
+        }
+        else if (message == WmSysCommand
+                 && (wParam.ToInt32() & 0xFFF0) == ScKeyMenu
+                 && lParam.ToInt32() == VkSpace)
+        {
+            ShowSystemMenu(hwnd, Avalonia.VisualExtensions.PointToScreen(this, new Point(8, 44)));
+            handled = true;
         }
 
         return IntPtr.Zero;
@@ -439,9 +455,38 @@ public partial class MainWindow : Window
         }
     }
 
+    private static (uint Style, uint ExStyle) AddSystemMenuStyle(uint style, uint exStyle) =>
+        (style | 0x00080000u, exStyle);
+
+    private void SetCaptionActivity(bool active)
+    {
+        if (WindowCaptionButtons is not null)
+        {
+            WindowCaptionButtons.Opacity = active ? 1 : 0.55;
+        }
+
+        if (!active)
+        {
+            SetMaximizeHover(false);
+        }
+    }
+
     private void OnTitleBarPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        var properties = e.GetCurrentPoint(this).Properties;
+
+        if (properties.IsRightButtonPressed)
+        {
+            if (TryGetPlatformHandle()?.Handle is { } hwnd)
+            {
+                ShowSystemMenu(hwnd, Avalonia.VisualExtensions.PointToScreen(this, e.GetPosition(this)));
+            }
+
+            e.Handled = true;
+            return;
+        }
+
+        if (!properties.IsLeftButtonPressed)
         {
             return;
         }
@@ -456,6 +501,56 @@ public partial class MainWindow : Window
         }
 
         e.Handled = true;
+    }
+
+    private void ShowSystemMenu(IntPtr hwnd, PixelPoint point)
+    {
+        const uint WmSysCommand = 0x0112;
+        const uint TpmReturnCmd = 0x0100;
+        const uint TpmRightButton = 0x0002;
+
+        var menu = NativeMenu.GetSystemMenu(hwnd, false);
+        if (menu == IntPtr.Zero)
+        {
+            return;
+        }
+
+        NativeMenu.SetForegroundWindow(hwnd);
+        var command = NativeMenu.TrackPopupMenu(
+            menu,
+            TpmReturnCmd | TpmRightButton,
+            point.X,
+            point.Y,
+            0,
+            hwnd,
+            IntPtr.Zero);
+
+        if (command != 0)
+        {
+            NativeMenu.PostMessage(hwnd, WmSysCommand, (IntPtr)command, IntPtr.Zero);
+        }
+    }
+
+    private static class NativeMenu
+    {
+        [DllImport("user32.dll")]
+        internal static extern IntPtr GetSystemMenu(IntPtr hWnd, bool bRevert);
+
+        [DllImport("user32.dll")]
+        internal static extern int TrackPopupMenu(
+            IntPtr hMenu,
+            uint uFlags,
+            int x,
+            int y,
+            int nReserved,
+            IntPtr hWnd,
+            IntPtr prcRect);
+
+        [DllImport("user32.dll")]
+        internal static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        internal static extern bool SetForegroundWindow(IntPtr hWnd);
     }
 
     private void OnMinimizeWindowClick(object? sender, RoutedEventArgs e) =>
