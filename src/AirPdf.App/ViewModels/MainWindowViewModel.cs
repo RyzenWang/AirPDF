@@ -41,6 +41,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>Pages within this distance of the current page keep their parsed words.</summary>
     private const int TextCacheRadius = 4;
 
+    /// <summary>
+    /// Total budget for page bitmaps. At the 7 MP cap a single page is about 28 MB, so a
+    /// page-count-only rule can retain well over 200 MB; this keeps the working set bounded
+    /// while always preserving the current page and its immediate neighbours.
+    /// </summary>
+    private const long PageBitmapBudgetBytes = 128L * 1024 * 1024;
+
     /// <summary>Must match <c>SettingsService.MaxRecentFiles</c> so nothing stored is unreachable.</summary>
     private const int MaxRecentFilesShown = 10;
 
@@ -415,6 +422,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public bool CanApplyUpdate => HasUpdate && !IsUpdating;
 
+    /// <summary>Store and portable builds have no Velopack updater, so the button is hidden.</summary>
+    public bool CanCheckForUpdates => _updateService.IsInstalled;
+
     public string UpdateButtonText
     {
         get
@@ -606,6 +616,32 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         CancelSafely(_searchCancellation);
         CloseDocumentCore();
         _documentService.CloseDocument();
+    }
+
+    /// <summary>
+    /// Releases the PDFium session without blocking the UI thread. Close paths await this
+    /// before disposing the tab; the subsequent Dispose then has no handle left to close.
+    /// </summary>
+    public async Task ReleaseDocumentAsync()
+    {
+        if (!IsDocumentOpen || _disposed)
+        {
+            return;
+        }
+
+        SaveReadingPositionNow();
+        CancelSafely(_loadCancellation);
+        CancelSafely(_searchCancellation);
+
+        try
+        {
+            await _documentService.CloseDocumentAsync();
+        }
+        catch (Exception unexpected)
+        {
+            // The fallback sync close in Dispose still has a chance to release the handle.
+            CrashLog.Write("CloseDocument", unexpected);
+        }
     }
 
     /// <summary>
@@ -2867,10 +2903,33 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         foreach (var page in Pages)
         {
-            if (Math.Abs(page.Number - _currentPage) > 4)
+            if (Math.Abs(page.Number - _currentPage) > 6)
             {
                 page.TrimImage();
             }
+        }
+
+        var total = Pages.Sum(page => page.BitmapBytes);
+        if (total <= PageBitmapBudgetBytes)
+        {
+            return;
+        }
+
+        // Evict farthest pages first. The current page and its immediate neighbours are kept
+        // even if they alone exceed the budget: evicting what the reader is looking at would
+        // trade memory for a blank screen.
+        foreach (var page in Pages
+                     .Where(page => Math.Abs(page.Number - _currentPage) > 1)
+                     .OrderByDescending(page => Math.Abs(page.Number - _currentPage)))
+        {
+            if (total <= PageBitmapBudgetBytes)
+            {
+                break;
+            }
+
+            var before = page.BitmapBytes;
+            page.TrimImage();
+            total -= before - page.BitmapBytes;
         }
     }
 
@@ -2880,6 +2939,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             page.ApplyZoom(_zoom);
         }
+
+        TrimPageImages();
     }
 
     private void ApplySearchHighlights(SearchResultViewModel? active)

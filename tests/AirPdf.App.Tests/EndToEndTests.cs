@@ -30,13 +30,14 @@ public sealed class EndToEndTests : IDisposable
     private readonly MainWindow _window;
     private readonly MainWindowViewModel _home;
     private readonly StubDialogService _dialogs = new();
+    private readonly StubWindowService _windows = new();
 
     public EndToEndTests()
     {
         _services = new AppServices(_settingsDirectory);
         _window = new MainWindow(
             _services,
-            new StubWindowService(),
+            _windows,
             null,
             restoreWindowPosition: false,
             _dialogs);
@@ -128,6 +129,14 @@ public sealed class EndToEndTests : IDisposable
         var before = document.CurrentPage;
         _window.KeyPressQwerty(PhysicalKey.F3, RawInputModifiers.None);
         await WaitAsync(() => document.CurrentPage != before || document.SearchResults.Count == 1);
+    }
+
+    [AvaloniaFact]
+    public void CtrlN_OpensANewWindow()
+    {
+        _window.KeyPressQwerty(PhysicalKey.N, RawInputModifiers.Control);
+
+        Assert.Single(_windows.NewWindows);
     }
 
     [AvaloniaFact]
@@ -618,12 +627,10 @@ public sealed class EndToEndTests : IDisposable
 
     private sealed class StubWindowService : IWindowService
     {
-        public void OpenNewWindow(string? filePath = null)
-        {
-        }
+        public List<string?> NewWindows { get; } = [];
 
-        public void OpenInNewWindow(string filePath)
-        {
-        }
+        public void OpenNewWindow(string? filePath = null) => NewWindows.Add(filePath);
+
+        public void OpenInNewWindow(string filePath) => NewWindows.Add(filePath);
     }
 }

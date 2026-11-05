@@ -26,14 +26,18 @@
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
             Padding="8,4">
-      <StackPanel Orientation="Horizontal" Spacing="4">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
         <!-- The strip binds to the tab host, not to the active document, so it declares its
              own data type instead of opting out of compiled bindings. -->
         <ListBox x:Name="TabList"
+                 Grid.Column="0"
                  x:DataType="vm:WindowViewModel"
                  Background="Transparent"
                  BorderThickness="0"
                  Padding="0"
+                 HorizontalAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                 ScrollViewer.VerticalScrollBarVisibility="Disabled"
                  ItemsSource="{Binding Tabs}"
                  SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
                  SelectionChanged="OnTabSelectionChanged">
@@ -71,7 +75,8 @@
             </DataTemplate>
           </ListBox.ItemTemplate>
         </ListBox>
-        <Button Classes="icon"
+        <Button Grid.Column="1"
+                Classes="icon"
                 Width="24"
                 Height="24"
                 MinHeight="24"
@@ -81,7 +86,7 @@
                 AutomationProperties.Name="{DynamicResource L.NewTabHint}">
           <Path Classes="icon small" Data="{StaticResource IconPlus}" />
         </Button>
-      </StackPanel>
+      </Grid>
     </Border>
 
     <!-- Top bar -->
@@ -414,6 +419,7 @@
                       </ItemsControl.ItemTemplate>
                     </ItemsControl>
                     <Button Content="{DynamicResource L.CheckForUpdates}"
+                            IsVisible="{Binding CanCheckForUpdates}"
                             Command="{Binding CheckForUpdatesCommand}"
                             Classes="chip"
                             HorizontalAlignment="Stretch"

@@ -98,6 +98,22 @@ public sealed class PdfDocumentServiceTests
         await Assert.ThrowsAsync<ObjectDisposedException>(() => service.OpenAsync(SamplePath));
     }
 
+    [Fact]
+    public async Task CloseDocumentAsync_ReleasesTheResidentSession()
+    {
+        using var service = new PdfDocumentService();
+        await service.OpenAsync(SamplePath);
+        Assert.True(service.OpenPageCount > 0);
+
+        await service.CloseDocumentAsync();
+
+        Assert.Equal(0, service.OpenPageCount);
+
+        // The same service can open another document after the asynchronous close.
+        await service.OpenAsync(SamplePath);
+        Assert.True(service.OpenPageCount > 0);
+    }
+
     /// <summary>
     /// When another handle prevents the temporary file from replacing the original, the edits
     /// must survive. The service keeps the saved copy, opens it so the document is still

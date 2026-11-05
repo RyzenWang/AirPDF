@@ -841,20 +841,47 @@ public sealed class PdfDocumentService : IDisposable
         RenderGate.Wait();
         try
         {
-            var session = _session;
-            var recovery = _sessionRecoveryPath;
-            _session = null;
-            _sessionPath = null;
-            _sessionPassword = null;
-            _sessionRecoveryPath = null;
-            RecoveryPath = null;
-            session?.Dispose();
-            TryDeleteFile(recovery);
+            ReleaseSession();
         }
         finally
         {
             RenderGate.Release();
         }
+    }
+
+    /// <summary>
+    /// Releases the resident handle without blocking the caller's thread. UI close paths use
+    /// this so a slow PDFium call in another window cannot freeze the window being closed.
+    /// </summary>
+    public Task CloseDocumentAsync(CancellationToken cancellationToken = default)
+    {
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    ReleaseSession();
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
+    private void ReleaseSession()
+    {
+        var session = _session;
+        var recovery = _sessionRecoveryPath;
+        _session = null;
+        _sessionPath = null;
+        _sessionPassword = null;
+        _sessionRecoveryPath = null;
+        RecoveryPath = null;
+        session?.Dispose();
+        TryDeleteFile(recovery);
     }
 
     public void Dispose()
@@ -884,6 +911,7 @@ public sealed class PdfDocumentService : IDisposable
         List<PdfPageSize> pageSizes = [];
 
         RenderGate.Wait(cancellationToken);
+        var gateHeld = true;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -911,6 +939,16 @@ public sealed class PdfDocumentService : IDisposable
                 pageSizes = new List<PdfPageSize>(pageCount);
                 for (var page = 1; page <= pageCount; page++)
                 {
+                    // A several-thousand-page open must not hold the process-wide PDFium gate
+                    // for its whole duration; give queued renders a chance between chunks.
+                    if (page > 1 && (page - 1) % 256 == 0)
+                    {
+                        RenderGate.Release();
+                        gateHeld = false;
+                        RenderGate.Wait(cancellationToken);
+                        gateHeld = true;
+                    }
+
                     pageSizes.Add(session.GetPageSize(page));
                 }
             }
@@ -932,7 +970,10 @@ public sealed class PdfDocumentService : IDisposable
         }
         finally
         {
-            RenderGate.Release();
+            if (gateHeld)
+            {
+                RenderGate.Release();
+            }
         }
 
         cancellationToken.ThrowIfCancellationRequested();

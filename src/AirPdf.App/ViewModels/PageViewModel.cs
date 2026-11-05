@@ -85,6 +85,11 @@ public sealed class PageViewModel : ObservableObject, IDisposable
 
     public bool ShowPlaceholder => Image is null;
 
+    /// <summary>Bytes held by this page's bitmap, or zero when nothing is rendered.</summary>
+    public long BitmapBytes => _image is { } image
+        ? (long)image.PixelSize.Width * image.PixelSize.Height * 4
+        : 0;
+
     public bool IsRendering
     {
         get => _isRendering;
@@ -451,7 +456,12 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     {
         try
         {
-            await Task.Delay(90, cancellation.Token);
+            // Debounce re-renders caused by zoom/resize, but do not make a page that has no
+            // bitmap at all wait 90 ms before it can show anything.
+            if (Image is not null)
+            {
+                await Task.Delay(90, cancellation.Token);
+            }
 
             var scaleWidth = (int)Math.Ceiling(DisplayWidth * _renderScale);
             var areaWidth = (int)Math.Sqrt(MaxRenderPixels * (WidthPoints / Math.Max(1, HeightPoints)));

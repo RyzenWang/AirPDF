@@ -6,6 +6,20 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- Closing a tab or window now releases its PDFium session off the UI thread. Opening a
+  several-thousand-page document measures page sizes in chunks instead of holding the
+  process-wide PDFium gate for the whole open.
+- Page bitmaps are capped at 128 MB in addition to the page-distance rule, and the first
+  render of a page no longer waits 90 ms before showing anything.
+- Zooming keeps the reader's position within the current page instead of re-centring the
+  page on every step.
+- The tab strip scrolls horizontally when there are more tabs than fit, and `Ctrl+N` now
+  opens a new window as documented.
+- The info panel's update button is hidden in Store and portable builds, where Velopack
+  has no installed app to update.
+
 ### Fixed
 
 - Closing a tab or window, or replacing the open file from a bookmark, now asks before
@@ -24,6 +38,8 @@ semantic versioning once it reaches 1.0.
   documents above 1,000 pages rather than loading every page at once.
 - Thumbnail rail items release their bitmaps once they are far from the current page, and a
   reused rail container deactivates its previous thumbnail.
+- A superseded scroll callback can no longer clear the scroll-sync guard or write its old
+  position after a newer navigation.
 
 ## [0.5.0] - 2026-11-04
 

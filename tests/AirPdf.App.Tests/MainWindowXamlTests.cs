@@ -8,6 +8,7 @@ using AirPdf.App.Views;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -119,6 +120,9 @@ public sealed class MainWindowXamlTests : IDisposable
         var home = Assert.Single(tabs);
         Assert.True(home.IsHomeTab);
         Assert.Same(home, list.SelectedItem);
+        Assert.Equal(
+            ScrollBarVisibility.Auto,
+            ScrollViewer.GetHorizontalScrollBarVisibility(list));
     }
     /// <summary>
     /// The high-contrast palette is compiled into a class rather than loaded by resource URI,

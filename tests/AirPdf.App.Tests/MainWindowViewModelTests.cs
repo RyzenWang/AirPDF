@@ -811,9 +811,6 @@ public sealed class MainWindowViewModelTests : IDisposable
         await context.ViewModel.UndoAnnotationCommand.ExecuteAsync(null);
 
         // Colour comes back from the snapshot, so a black stroke here means the read-back lost it.
-        var page = context.ViewModel.Pages[0];
-        Assert.True(page.HasLiveInk || true);
-
         using var probe = new PdfDocumentService();
         var path = context.ViewModel.FilePath;
         await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
@@ -1073,6 +1070,22 @@ public sealed class MainWindowViewModelTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task PageBitmapBytes_TracksTheRenderedBitmap()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+        var page = context.ViewModel.Pages[0];
+        page.Activate(1);
+        await WaitForAsync(() => page.Image is not null);
+        Assert.True(page.BitmapBytes > 0);
+
+        page.Deactivate();
+        page.TrimImage();
+
+        Assert.Equal(0, page.BitmapBytes);
+    }
+
+    [AvaloniaFact]
     public async Task TextLayer_IsReleasedForPagesFarFromTheCurrentPage()
     {
         using var context = new TestContext();
@@ -1134,6 +1147,8 @@ public sealed class MainWindowViewModelTests : IDisposable
 
             await Task.Delay(50);
         }
+
+        throw new TimeoutException($"Condition was not met within {timeoutMs} ms.");
     }
     [AvaloniaFact]
     public void GoHome_WithoutADocument_DoesNothing()

@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private readonly string? _initialFile;
     private MainWindowViewModel _viewModel = null!;
     private bool _suppressScrollSync;
+    private int _scrollIntent;
     private bool _suppressThumbnailSync;
     private bool _thumbnailSyncPending;
     private bool _handlingScrollChanged;
@@ -285,6 +286,9 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Release PDFium off the UI thread before the tab's Dispose runs; Dispose still closes
+        // synchronously and used to freeze the window behind another document's render.
+        await tab.ReleaseDocumentAsync();
         _tabs.CloseTab(tab);
     }
 
@@ -460,15 +464,17 @@ public partial class MainWindow : Window
             return;
         }
 
+        var position = _viewModel.CurrentPosition;
         RebuildPageLayout();
         var viewModel = _viewModel;
-        var page = viewModel.CurrentPage;
         Dispatcher.UIThread.Post(
             () =>
             {
                 if (ReferenceEquals(_viewModel, viewModel))
                 {
-                    ScrollToPage(page);
+                    // Keep the reader's place within the page; ScrollToPage would re-centre
+                    // the whole page on every zoom step.
+                    ScrollToReadingPosition(position.Page, position.PageOffset);
                 }
             },
             DispatcherPriority.Loaded);
@@ -767,10 +773,19 @@ public partial class MainWindow : Window
         // document ended up saved as page one.
         var viewModel = _viewModel;
         var pageBeforeScroll = viewModel.CurrentPage;
+        var intent = ++_scrollIntent;
 
         PagesList.ScrollToVerticalOffset(target);
         DispatcherTimer.RunOnce(() =>
         {
+            // A newer scroll (or a different document) owns the viewport now. Do not clear the
+            // suppression flag or report this older position; the newer ApplyScrollOffset will
+            // do both when its own timer expires.
+            if (intent != _scrollIntent)
+            {
+                return;
+            }
+
             _suppressScrollSync = false;
             if (ReferenceEquals(_viewModel, viewModel) && viewModel.CurrentPage == pageBeforeScroll)
             {
@@ -1776,6 +1791,13 @@ public partial class MainWindow : Window
         var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control) ||
                    e.KeyModifiers.HasFlag(KeyModifiers.Meta);
 
+        if (ctrl && e.Key == Key.N)
+        {
+            _windows.OpenNewWindow();
+            e.Handled = true;
+            return;
+        }
+
         if (!ctrl && e.KeyModifiers.HasFlag(KeyModifiers.Alt) && e.Key == Key.Left)
         {
             if (_viewModel.CanNavigateBack)
@@ -2118,6 +2140,13 @@ public partial class MainWindow : Window
                         {
                             return;
                         }
+                    }
+
+                    // Release every document handle off the UI thread before the window's
+                    // Dispose path runs its synchronous fallback close.
+                    foreach (var tab in _tabs.Tabs)
+                    {
+                        await tab.ReleaseDocumentAsync();
                     }
 
                     canClose = true;
