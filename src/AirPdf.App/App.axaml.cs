@@ -33,12 +33,18 @@ public partial class App : Application
         // windows own their document and view models only.
         var services = new AppServices();
         var windows = new WindowService(services);
-        desktop.Exit += (_, _) => services.Dispose();
 
         // A help or version request should not try to open a document as well.
         var initialFile = options.ShowHelp || options.ShowVersion ? null : options.FilePath;
         var window = windows.CreateFirstWindow(initialFile);
         desktop.MainWindow = window;
+
+        var tray = TrayIconService.TryCreate(this, desktop, windows, services.Localization);
+        desktop.Exit += (_, _) =>
+        {
+            tray?.Dispose();
+            services.Dispose();
+        };
 
         var message = BuildStartupMessage(options);
         if (message is not null)

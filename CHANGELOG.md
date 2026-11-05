@@ -11,6 +11,8 @@ semantic versioning once it reaches 1.0.
 - The Windows custom titlebar now opens the native window system menu on right-click or
   `Alt+Space`.
 - Caption buttons dim while the window is inactive.
+- A system tray icon can restore, hide, or open a new AirPDF window, and exit the app.
+  Closing a window still exits; use **Hide to tray** to keep reading sessions alive.
 
 ### Changed
 

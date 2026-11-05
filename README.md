@@ -93,6 +93,10 @@ share the top row. macOS and Linux keep their native window frame and the tab ba
   links open in your browser or mail client, and the cursor turns into a hand.
 - **Multiple windows** (`Ctrl+N`, or open the current file in a new window) sharing
   one settings store, theme, and language.
+- **System tray** — the AirPDF tray icon restores a hidden window; its menu can hide all
+  windows, open a new window, or exit. Closing a window still exits the app; choose
+  **Hide to tray** to keep documents open. On Linux, tray support depends on
+  StatusNotifier/AppIndicator availability.
 - **Tabs keep the whole document session** — `Ctrl+T` adds a document to the same window,
   and each tab keeps its own zoom, scroll position, search results, and reading position.
   The active tab is a warm pill, the strip scrolls when it runs out of room, and `+` follows
