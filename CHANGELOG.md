@@ -67,6 +67,12 @@ semantic versioning once it reaches 1.0.
   contrast → System, and a dark system through Light → Dark → high contrast → System.
 - High contrast now has its own yin-yang contrast glyph instead of reusing the dark-mode
   sun.
+- In fullscreen, the top edge of the custom titlebar now starts a window drag and leaves
+  fullscreen instead of being consumed by the resize border.
+- The maximize control becomes an exit-fullscreen button in fullscreen. Exiting via that
+  button, `Esc`, or `F11` restores the previous normal or maximized state.
+- Entering fullscreen shows a top-centre, click-through hint for 3.5 seconds with the exit
+  shortcuts and the exit button, on every entry.
 - Closing a tab or window, or replacing the open file from a bookmark, now asks before
   discarding unsaved highlights, ink or notes. **Save** must succeed before the document is
   closed; **Discard** and **Cancel** are explicit choices.

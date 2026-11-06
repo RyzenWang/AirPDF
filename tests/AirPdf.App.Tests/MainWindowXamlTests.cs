@@ -167,6 +167,34 @@ public sealed class MainWindowXamlTests : IDisposable
             Win32Properties.GetNonClientHitTestResult(button!));
     }
 
+    [AvaloniaFact]
+    public void Fullscreen_ShowsExitControlInsteadOfMaximize()
+    {
+        var window = CreateWindow();
+        var maximize = window.FindControl<Button>("MaximizeWindowButton");
+        var exitFullScreen = window.FindControl<Button>("ExitFullScreenButton");
+        var hint = window.FindControl<Border>("FullscreenHint");
+
+        Assert.NotNull(maximize);
+        Assert.NotNull(exitFullScreen);
+        Assert.NotNull(hint);
+        Assert.True(maximize!.IsVisible);
+        Assert.False(exitFullScreen!.IsVisible);
+        Assert.False(hint!.IsVisible);
+
+        window.WindowState = WindowState.FullScreen;
+
+        Assert.False(maximize.IsVisible);
+        Assert.True(exitFullScreen.IsVisible);
+        Assert.True(hint.IsVisible);
+
+        window.WindowState = WindowState.Normal;
+
+        Assert.True(maximize.IsVisible);
+        Assert.False(exitFullScreen.IsVisible);
+        Assert.False(hint.IsVisible);
+    }
+
     /// <summary>
     /// The high-contrast palette is compiled into a class rather than loaded by resource URI,
     /// because the URI form is annotated as requiring unreferenced code and a trimmed build

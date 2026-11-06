@@ -129,6 +129,10 @@ public sealed class LocalizationService : IDisposable
             ["L.MinimizeWindow"] = ("Minimize", "最小化"),
             ["L.MaximizeRestoreWindow"] = ("Maximize / restore", "最大化 / 还原"),
             ["L.CloseWindow"] = ("Close window", "关闭窗口"),
+            ["L.ExitFullScreen"] = ("Exit full screen", "退出全屏"),
+            ["L.FullscreenHint"] = (
+                "Full-screen reading. Press Esc or F11, or use the top-right button to exit.",
+                "已进入全屏阅读。按 Esc、F11，或点击右上角按钮退出。"),
             ["L.TrayShow"] = ("Show AirPDF", "显示 AirPDF"),
             ["L.TrayHide"] = ("Hide to tray", "隐藏到托盘"),
             ["L.TrayNewWindow"] = ("New window", "新建窗口"),

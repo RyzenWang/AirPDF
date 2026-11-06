@@ -169,6 +169,14 @@
               <Path x:Name="RestoreGlyph" Classes="windowGlyph" Data="{StaticResource IconWindowRestore}" IsVisible="False" />
             </Panel>
           </Button>
+          <Button x:Name="ExitFullScreenButton"
+                  Classes="windowControl"
+                  IsVisible="False"
+                  Click="OnExitFullScreenClick"
+                  ToolTip.Tip="{DynamicResource L.ExitFullScreen}"
+                  AutomationProperties.Name="{DynamicResource L.ExitFullScreen}">
+            <Path Classes="windowGlyph" Data="{StaticResource IconWindowExitFullScreen}" />
+          </Button>
           <Button x:Name="CloseWindowButton"
                   Classes="windowControl windowClose"
                   Click="OnCloseWindowClick"
@@ -1278,6 +1286,28 @@
         </Grid>
       </Border>
     </Grid>
+
+    <!-- Fullscreen exit hint: click-through, auto-dismisses, shown on every entry. -->
+    <Border x:Name="FullscreenHint"
+            Grid.RowSpan="4"
+            IsVisible="False"
+            IsHitTestVisible="False"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            Margin="16,104,16,0"
+            Padding="16,9"
+            MaxWidth="720"
+            CornerRadius="10"
+            Background="{DynamicResource SurfaceBrush}"
+            BorderBrush="{DynamicResource BorderStrongBrush}"
+            BorderThickness="1"
+            ZIndex="200">
+      <TextBlock Text="{DynamicResource L.FullscreenHint}"
+                 TextWrapping="Wrap"
+                 TextAlignment="Center"
+                 FontSize="12.5"
+                 Foreground="{DynamicResource TextPrimaryBrush}" />
+    </Border>
 
     <!-- Status bar -->
     <Border Grid.Row="3"

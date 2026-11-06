@@ -40,6 +40,8 @@ public partial class MainWindow : Window
     private bool _thumbnailSyncPending;
     private bool _handlingScrollChanged;
     private bool _tabStripWidthUpdatePending;
+    private WindowState _windowStateBeforeFullScreen = WindowState.Normal;
+    private DispatcherTimer? _fullscreenHintTimer;
     private MainWindowViewModel? _dragTab;
     private Border? _dragTabBorder;
     private IPointer? _dragPointer;
@@ -686,6 +688,8 @@ public partial class MainWindow : Window
 
     private void OnClosed(object? sender, EventArgs e)
     {
+        _fullscreenHintTimer?.Stop();
+
         // The host owns every tab, so disposing it disposes each document handle.
         _tabs.PropertyChanged -= OnTabsPropertyChanged;
         _tabs.Dispose();
@@ -771,14 +775,25 @@ public partial class MainWindow : Window
     private IntPtr OnWindowsMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         const uint WmMouseMove = 0x0200;
+        const uint WmNcHitTest = 0x0084;
         const uint WmNcMouseMove = 0x00A0;
         const uint WmNcMouseLeave = 0x02A3;
         const uint WmSysCommand = 0x0112;
+        const int HtClient = 1;
         const int HtMaxButton = 9;
         const int ScKeyMenu = 0xF100;
         const int VkSpace = 0x20;
 
-        if (message == WmNcMouseMove)
+        if (message == WmNcHitTest &&
+            WindowState == WindowState.FullScreen &&
+            IsFullscreenTopEdge(hwnd, lParam))
+        {
+            // Fullscreen keeps the resizable top border. Treat that strip as client
+            // space so the custom titlebar can start a drag from the very top edge.
+            handled = true;
+            return new IntPtr(HtClient);
+        }
+        else if (message == WmNcMouseMove)
         {
             SetMaximizeHover(wParam.ToInt32() == HtMaxButton);
         }
@@ -795,6 +810,27 @@ public partial class MainWindow : Window
         }
 
         return IntPtr.Zero;
+    }
+
+    private static bool IsFullscreenTopEdge(IntPtr hwnd, IntPtr lParam)
+    {
+        // The resize frame is DPI-scaled; cover a little more than the measured 8px so
+        // high-DPI fullscreen windows do not keep a dead strip at the very top.
+        const int topEdgeHeight = 16;
+
+        var packed = lParam.ToInt64();
+        var point = new NativeMenu.POINT
+        {
+            X = unchecked((short)(packed & 0xFFFF)),
+            Y = unchecked((short)((packed >> 16) & 0xFFFF))
+        };
+
+        return NativeMenu.ScreenToClient(hwnd, ref point) &&
+               NativeMenu.GetClientRect(hwnd, out var client) &&
+               point.X >= 0 &&
+               point.X < client.Right &&
+               point.Y >= 0 &&
+               point.Y < topEdgeHeight;
     }
 
     private void SetMaximizeHover(bool hovered)
@@ -846,6 +882,13 @@ public partial class MainWindow : Window
         if (!properties.IsLeftButtonPressed)
         {
             return;
+        }
+
+        if (WindowState == WindowState.FullScreen)
+        {
+            // BeginMoveDrag needs a normal window to move; leaving fullscreen first also
+            // matches the expected "drag the top edge out of fullscreen" gesture.
+            WindowState = WindowState.Normal;
         }
 
         if (e.ClickCount == 2)
@@ -908,15 +951,67 @@ public partial class MainWindow : Window
 
         [DllImport("user32.dll")]
         internal static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        internal static extern bool ScreenToClient(IntPtr hWnd, ref POINT point);
+
+        [DllImport("user32.dll")]
+        internal static extern bool GetClientRect(IntPtr hWnd, out RECT rectangle);
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct POINT
+        {
+            public int X;
+            public int Y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct RECT
+        {
+            public int Left;
+            public int Top;
+            public int Right;
+            public int Bottom;
+        }
     }
 
     private void OnMinimizeWindowClick(object? sender, RoutedEventArgs e) =>
         WindowState = WindowState.Minimized;
 
-    private void OnToggleMaximizeWindowClick(object? sender, RoutedEventArgs e) =>
-        ToggleMaximize();
+    private void OnToggleMaximizeWindowClick(object? sender, RoutedEventArgs e)
+    {
+        if (WindowState == WindowState.FullScreen)
+        {
+            ExitFullScreen();
+        }
+        else
+        {
+            ToggleMaximize();
+        }
+    }
+
+    private void OnExitFullScreenClick(object? sender, RoutedEventArgs e) => ExitFullScreen();
 
     private void OnCloseWindowClick(object? sender, RoutedEventArgs e) => Close();
+
+    private void ToggleFullScreen()
+    {
+        if (WindowState == WindowState.FullScreen)
+        {
+            ExitFullScreen();
+            return;
+        }
+
+        _windowStateBeforeFullScreen = WindowState == WindowState.Maximized
+            ? WindowState.Maximized
+            : WindowState.Normal;
+        WindowState = WindowState.FullScreen;
+    }
+
+    private void ExitFullScreen() =>
+        WindowState = _windowStateBeforeFullScreen == WindowState.Maximized && CanMaximize
+            ? WindowState.Maximized
+            : WindowState.Normal;
 
     private void ToggleMaximize()
     {
@@ -932,14 +1027,26 @@ public partial class MainWindow : Window
 
     private void UpdateWindowStateVisuals()
     {
+        var fullScreen = WindowState == WindowState.FullScreen;
+
+        if (this.FindControl<Button>("MaximizeWindowButton") is { } maximizeButton)
+        {
+            maximizeButton.IsVisible = !fullScreen;
+        }
+
+        if (this.FindControl<Button>("ExitFullScreenButton") is { } exitFullScreenButton)
+        {
+            exitFullScreenButton.IsVisible = fullScreen;
+        }
+
         if (this.FindControl<Avalonia.Controls.Shapes.Path>("MaximizeGlyph") is { } maximize)
         {
-            maximize.IsVisible = WindowState != WindowState.Maximized;
+            maximize.IsVisible = !fullScreen && WindowState != WindowState.Maximized;
         }
 
         if (this.FindControl<Avalonia.Controls.Shapes.Path>("RestoreGlyph") is { } restore)
         {
-            restore.IsVisible = WindowState == WindowState.Maximized;
+            restore.IsVisible = !fullScreen && WindowState == WindowState.Maximized;
         }
     }
 
@@ -950,6 +1057,46 @@ public partial class MainWindow : Window
         if (change.Property == WindowStateProperty)
         {
             UpdateWindowStateVisuals();
+
+            if (WindowState == WindowState.FullScreen)
+            {
+                ShowFullscreenHint();
+            }
+            else
+            {
+                HideFullscreenHint();
+            }
+        }
+    }
+
+    private void ShowFullscreenHint()
+    {
+        if (FullscreenHint is null)
+        {
+            return;
+        }
+
+        if (_fullscreenHintTimer is null)
+        {
+            _fullscreenHintTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(3.5)
+            };
+            _fullscreenHintTimer.Tick += (_, _) => HideFullscreenHint();
+        }
+
+        FullscreenHint.IsVisible = true;
+        _fullscreenHintTimer.Stop();
+        _fullscreenHintTimer.Start();
+    }
+
+    private void HideFullscreenHint()
+    {
+        _fullscreenHintTimer?.Stop();
+
+        if (FullscreenHint is not null)
+        {
+            FullscreenHint.IsVisible = false;
         }
     }
 
@@ -2682,7 +2829,7 @@ public partial class MainWindow : Window
             }
             else if (WindowState == WindowState.FullScreen)
             {
-                WindowState = WindowState.Normal;
+                ExitFullScreen();
             }
 
             e.Handled = true;
@@ -2691,7 +2838,7 @@ public partial class MainWindow : Window
 
         if (e.Key == Key.F11)
         {
-            WindowState = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
+            ToggleFullScreen();
             e.Handled = true;
         }
     }

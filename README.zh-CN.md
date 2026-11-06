@@ -42,8 +42,10 @@ Windows 截图展示 0.6 的标题栏：文档标签和窗口按钮共享顶部�
   内存上限淘汰，关闭标签页时 PDFium 会话在 UI 线程之外释放。
 - **Windows 标题栏即标签栏**：44px 顶部栏同时承载品牌、打开、文档标签和最小化/最大化/关闭；
   下方工具栏不变。拖动空白区域移动窗口，双击最大化，悬停最大化按钮可使用 Windows 11
-  Snap Layouts。右键空白标题栏或按 `Alt+Space` 打开原生窗口菜单；窗口非活动时按钮自动淡化。
-  macOS 与 Linux 保留原生窗口边框。
+  Snap Layouts。全屏时最大化按钮会变成退出全屏按钮，从屏幕最顶部拖动也可以移出全屏并移动
+  窗口，不会卡在缩放边框上；退出后会恢复到进入全屏前的普通或最大化状态。进入全屏时顶部居中
+  会短暂显示退出方式和按钮提示。右键空白标题栏或按 `Alt+Space` 打开原生窗口菜单；窗口非活动时
+  按钮自动淡化。macOS 与 Linux 保留原生窗口边框。
 - **页码导航靠左**：上一页 / 下一页和当前页输入框位于工具栏最左侧，与缩略图栏对齐；
   标注与缩放工具组仍在中间。
 - **缩略图侧栏与文档目录**，长文档也能快速跳转。
@@ -127,7 +129,7 @@ NativeAOT 会链接构建机的 glibc，更老的发行版无法启动该二进�
 发布 NativeAOT 版本还需要 C++ 工具链：Windows 上需要 MSVC 生成工具与 Windows SDK，
 macOS 上需要 Xcode，Linux 上需要 clang。普通的 `dotnet build` 不需要。
 
-测试目前共 **230 个**（Core 103 个，App 127 个）。测试使用 `tests/Assets/sample.pdf`，
+测试目前共 **231 个**（Core 103 个，App 128 个）。测试使用 `tests/Assets/sample.pdf`，
 一份八页的示例文档，覆盖英文、中文、混合排版和搜索坐标。`AirPdf.App.Tests` 还包含
 Headless Avalonia 测试，覆盖 XAML 与标签栏、打开、搜索、选择、缩放、语言切换、
 阅读位置恢复，以及 Windows Snap Layouts 的 hit-test 标记。

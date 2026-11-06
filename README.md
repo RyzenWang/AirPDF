@@ -61,9 +61,13 @@ share the top row. macOS and Linux keep their native window frame and the tab ba
 - **Windows titlebar, with the tabs in it** — on Windows the 44px workspace bar also carries
   the window controls. Brand, Open, document tabs and minimize/maximize/close share one row;
   the toolbar below is unchanged. Drag the empty area to move the window, double-click it to
-  maximize, and hover the maximize button for Windows 11 Snap Layouts. Right-click the empty
-  titlebar area or press `Alt+Space` for the native window menu, and the window buttons dim
-  while the window is inactive. macOS and Linux keep their native window frame.
+  maximize, and hover the maximize button for Windows 11 Snap Layouts. In fullscreen the
+  maximize control becomes an exit-fullscreen button, and the top edge also starts a drag
+  and leaves fullscreen instead of hitting a resize border. Exiting restores the previous
+  normal or maximized state. Entering fullscreen shows a short top-centre hint with the
+  exit shortcuts and button. Right-click the empty titlebar area or press `Alt+Space` for
+  the native window menu, and the window buttons dim while the window is inactive. macOS
+  and Linux keep their native window frame.
 - **Page navigation on the left** — previous/next and the current-page box sit at the far
   left of the toolbar, aligned with the thumbnail rail; editing and zoom tools stay centred.
 - **Thumbnail rail and document outline** for fast navigation.
@@ -176,7 +180,7 @@ dotnet build AirPdf.sln -c Release
 dotnet test AirPdf.sln -c Release
 ```
 
-The suite currently has **230 tests** (103 Core, 127 App). It uses
+The suite currently has **231 tests** (103 Core, 128 App). It uses
 `tests/Assets/sample.pdf`, an eight-page document that exercises Latin and Chinese text,
 mixed typography, and search geometry. `AirPdf.App.Tests` adds headless Avalonia coverage
 for the XAML and tab strip, opening, search, selection, zoom, language switching,
