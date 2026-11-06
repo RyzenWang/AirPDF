@@ -488,6 +488,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     public bool IsSystemTheme => _theme.IsSystem;
 
+    public bool IsHighContrastTheme =>
+        string.Equals(_theme.Mode, ThemeService.HighContrastMode, StringComparison.Ordinal);
+
+    public bool ShowLightThemeIcon => !IsSystemTheme && !IsDarkTheme;
+
+    public bool ShowDarkThemeIcon => !IsSystemTheme && !IsHighContrastTheme && IsDarkTheme;
+
+    public bool ShowHighContrastThemeIcon => IsHighContrastTheme;
+
     public string ThemeTooltip => _localization.Format(
         "L.ThemeTooltipFormat",
         _localization.T(ThemeService.ModeLabelKey(_theme.Mode)));
@@ -3217,6 +3226,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsDarkTheme));
         OnPropertyChanged(nameof(IsLightTheme));
         OnPropertyChanged(nameof(IsSystemTheme));
+        OnPropertyChanged(nameof(IsHighContrastTheme));
+        OnPropertyChanged(nameof(ShowLightThemeIcon));
+        OnPropertyChanged(nameof(ShowDarkThemeIcon));
+        OnPropertyChanged(nameof(ShowHighContrastThemeIcon));
         OnPropertyChanged(nameof(ThemeTooltip));
     }
 

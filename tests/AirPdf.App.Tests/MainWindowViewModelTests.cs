@@ -1259,23 +1259,66 @@ public sealed class MainWindowViewModelTests : IDisposable
         using var context = new TestContext();
 
         context.Services.Theme.Set(ThemeService.SystemMode, persist: false);
+        var systemIsDark = context.ViewModel.IsDarkTheme;
         Assert.True(context.ViewModel.IsSystemTheme);
+        Assert.False(context.ViewModel.ShowLightThemeIcon);
+        Assert.False(context.ViewModel.ShowDarkThemeIcon);
         Assert.False(string.IsNullOrWhiteSpace(context.ViewModel.ThemeTooltip));
 
-        // The cycle is System → Light → Dark → High contrast → System.
+        // The system step deliberately skips the appearance that would look identical.
         context.ViewModel.ToggleThemeCommand.Execute(null);
+        var firstMode = systemIsDark ? ThemeService.LightMode : ThemeService.DarkMode;
+        Assert.Equal(firstMode, context.Services.Theme.Mode);
         Assert.False(context.ViewModel.IsSystemTheme);
-        Assert.False(context.ViewModel.IsDarkTheme);
+        Assert.NotEqual(systemIsDark, context.ViewModel.IsDarkTheme);
+        Assert.Equal(!systemIsDark, context.ViewModel.ShowDarkThemeIcon);
+        Assert.Equal(systemIsDark, context.ViewModel.ShowLightThemeIcon);
+
+        // The rest of the cycle still visits all four modes and returns to System.
+        context.ViewModel.ToggleThemeCommand.Execute(null);
+        Assert.Equal(systemIsDark ? ThemeService.DarkMode : ThemeService.LightMode, context.Services.Theme.Mode);
+        Assert.Equal(systemIsDark, context.ViewModel.IsDarkTheme);
 
         context.ViewModel.ToggleThemeCommand.Execute(null);
+        Assert.Equal(ThemeService.HighContrastMode, context.Services.Theme.Mode);
         Assert.True(context.ViewModel.IsDarkTheme);
+        Assert.True(context.ViewModel.IsHighContrastTheme);
+        Assert.True(context.ViewModel.ShowHighContrastThemeIcon);
+        Assert.False(context.ViewModel.ShowDarkThemeIcon);
 
         context.ViewModel.ToggleThemeCommand.Execute(null);
-        Assert.False(context.ViewModel.IsSystemTheme);
-        Assert.True(context.ViewModel.IsDarkTheme);
-
-        context.ViewModel.ToggleThemeCommand.Execute(null);
+        Assert.Equal(ThemeService.SystemMode, context.Services.Theme.Mode);
         Assert.True(context.ViewModel.IsSystemTheme);
+        Assert.False(context.ViewModel.IsHighContrastTheme);
+        Assert.False(context.ViewModel.ShowHighContrastThemeIcon);
+        Assert.False(context.ViewModel.ShowLightThemeIcon);
+        Assert.False(context.ViewModel.ShowDarkThemeIcon);
+    }
+
+    [Fact]
+    public void ThemeCycle_SkipsTheExplicitModeMatchingTheSystemAppearance()
+    {
+        var lightSystem = new[]
+        {
+            ThemeService.NextMode(ThemeService.SystemMode, systemIsDark: false),
+            ThemeService.NextMode(ThemeService.DarkMode, systemIsDark: false),
+            ThemeService.NextMode(ThemeService.LightMode, systemIsDark: false),
+            ThemeService.NextMode(ThemeService.HighContrastMode, systemIsDark: false)
+        };
+        Assert.Equal(
+            [ThemeService.DarkMode, ThemeService.LightMode, ThemeService.HighContrastMode, ThemeService.SystemMode],
+            lightSystem);
+
+        var darkSystem = new[]
+        {
+            ThemeService.NextMode(ThemeService.SystemMode, systemIsDark: true),
+            ThemeService.NextMode(ThemeService.LightMode, systemIsDark: true),
+            ThemeService.NextMode(ThemeService.DarkMode, systemIsDark: true),
+            ThemeService.NextMode(ThemeService.HighContrastMode, systemIsDark: true)
+        };
+        Assert.Equal(
+            [ThemeService.LightMode, ThemeService.DarkMode, ThemeService.HighContrastMode, ThemeService.SystemMode],
+            darkSystem);
     }
 
     /// <summary>

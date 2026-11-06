@@ -21,6 +21,12 @@ public sealed class ThemeService : IDisposable
     public const string DarkMode = "Dark";
     public const string HighContrastMode = "HighContrast";
 
+    private static readonly string[] SystemLightCycle =
+        [SystemMode, DarkMode, LightMode, HighContrastMode];
+
+    private static readonly string[] SystemDarkCycle =
+        [SystemMode, LightMode, DarkMode, HighContrastMode];
+
     private readonly SettingsService _settingsService;
     private readonly AppSettings _settings;
     private IResourceProvider? _highContrastPalette;
@@ -59,16 +65,20 @@ public sealed class ThemeService : IDisposable
         _ => "L.ThemeSystem"
     };
 
-    /// <summary>Cycles System → Light → Dark → High contrast → System.</summary>
-    public void Cycle() => Set(
-        Mode switch
-        {
-            SystemMode => LightMode,
-            LightMode => DarkMode,
-            DarkMode => HighContrastMode,
-            _ => SystemMode
-        },
-        persist: true);
+    /// <summary>
+    /// Returns the next mode for the current system appearance. The System step deliberately
+    /// skips the explicit mode that would resolve to the same light/dark palette, so every
+    /// click changes the appearance: light system → Dark → Light → high contrast → System,
+    /// dark system → Light → Dark → high contrast → System.
+    /// </summary>
+    public static string NextMode(string mode, bool systemIsDark)
+    {
+        var cycle = systemIsDark ? SystemDarkCycle : SystemLightCycle;
+        var index = Array.IndexOf(cycle, Normalize(mode));
+        return cycle[(index + 1) % cycle.Length];
+    }
+
+    public void Cycle() => Set(NextMode(Mode, SystemIsDark()), persist: true);
 
     public void Set(string mode, bool persist)
     {

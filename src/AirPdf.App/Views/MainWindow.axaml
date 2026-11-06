@@ -467,8 +467,31 @@
                   AutomationProperties.Name="{Binding ThemeTooltip}"
                   ToolTip.Tip="{Binding ThemeTooltip}">
             <Panel>
-              <Path Classes="icon" Data="{StaticResource IconMoon}" IsVisible="{Binding IsLightTheme}" />
-              <Path Classes="icon" Data="{StaticResource IconSun}" IsVisible="{Binding IsDarkTheme}" />
+              <Path Classes="icon" Data="{StaticResource IconSystemTheme}" IsVisible="{Binding IsSystemTheme}" />
+              <Path Classes="icon" Data="{StaticResource IconMoon}" IsVisible="{Binding ShowLightThemeIcon}" />
+              <Path Classes="icon" Data="{StaticResource IconSun}" IsVisible="{Binding ShowDarkThemeIcon}" />
+              <Viewbox Width="18"
+                       Height="18"
+                       Stretch="Uniform"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       IsVisible="{Binding ShowHighContrastThemeIcon}">
+                <Canvas Width="24" Height="24">
+                  <Path Width="24"
+                        Height="24"
+                        Stretch="None"
+                        Fill="{DynamicResource TextPrimaryBrush}"
+                        Data="{StaticResource IconHighContrastSplit}" />
+                  <Path Width="24"
+                        Height="24"
+                        Stretch="None"
+                        Stroke="{DynamicResource TextPrimaryBrush}"
+                        StrokeThickness="2.4"
+                        StrokeLineCap="Round"
+                        StrokeJoin="Round"
+                        Data="{StaticResource IconHighContrastCircle}" />
+                </Canvas>
+              </Viewbox>
             </Panel>
           </Button>
           <Button x:Name="InfoButton"

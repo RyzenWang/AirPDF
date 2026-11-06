@@ -61,6 +61,12 @@ semantic versioning once it reaches 1.0.
 - Microsoft Store/MSIX square logos are generated with the standard inset and include
   app-list `targetsize-*` assets. The old full-bleed 150×150 and 44×44 artwork made the
   installed app's Start icon look oversized.
+- The theme button shows a monitor glyph while following the system theme. Theme cycling
+  now skips the explicit light/dark mode that matches the current system appearance, so
+  every click changes the palette: a light system cycles through Dark → Light → high
+  contrast → System, and a dark system through Light → Dark → high contrast → System.
+- High contrast now has its own yin-yang contrast glyph instead of reusing the dark-mode
+  sun.
 - Closing a tab or window, or replacing the open file from a bookmark, now asks before
   discarding unsaved highlights, ink or notes. **Save** must succeed before the document is
   closed; **Discard** and **Cancel** are explicit choices.

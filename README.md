@@ -176,7 +176,7 @@ dotnet build AirPdf.sln -c Release
 dotnet test AirPdf.sln -c Release
 ```
 
-The suite currently has **223 tests** (103 Core, 120 App). It uses
+The suite currently has **230 tests** (103 Core, 127 App). It uses
 `tests/Assets/sample.pdf`, an eight-page document that exercises Latin and Chinese text,
 mixed typography, and search geometry. `AirPdf.App.Tests` adds headless Avalonia coverage
 for the XAML and tab strip, opening, search, selection, zoom, language switching,
