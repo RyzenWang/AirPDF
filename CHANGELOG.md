@@ -19,6 +19,10 @@ semantic versioning once it reaches 1.0.
 
 ### Changed
 
+- The arrow keys now scroll the page canvas by a small step, and `Home` / `End` jump to the
+  start and end of the document. The canvas is a list of pages, so its own keyboard handling
+  answered every arrow press by selecting the next item - a whole page - which threw the reader
+  off the line they were following. `Page Up` / `Page Down` still scroll one screen.
 - Page navigation now sits at the far left of the toolbar, aligned with the thumbnail rail;
   the remaining document tools stay centred.
 - The app icon now uses the orange brand tile and white paper plane from the titlebar

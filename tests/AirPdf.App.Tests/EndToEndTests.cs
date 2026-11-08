@@ -1,4 +1,6 @@
 using Avalonia;
+using AirPdf.App.Controls;
+using AirPdf.App.Layout;
 using AirPdf.App.Services;
 using AirPdf.App.ViewModels;
 using AirPdf.App.Views;
@@ -536,6 +538,92 @@ public sealed class EndToEndTests : IDisposable
                 // A leftover temporary directory must not fail the test.
             }
         }
+    }
+
+    /// <summary>
+    /// Issue #3: the canvas is a list, so its own keyboard handling moved the selection by one
+    /// item on every arrow press - and with one page per item that is a whole page, which threw
+    /// the reader off the line they were following. An arrow press has to scroll a small step,
+    /// and one press must not be able to reach the next page.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ArrowKeys_ScrollASmallStepInsteadOfTurningThePage()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 0 && document.Pages[0].Image is not null);
+
+        var (_, viewer) = await FocusFirstPageAsync();
+
+        var before = viewer.Offset.Y;
+        var step = ScrollNavigation.LineStep(viewer.Viewport.Height);
+
+        _window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None);
+        await WaitAsync(() => viewer.Offset.Y > before);
+        Assert.Equal(before + step, viewer.Offset.Y, 1);
+
+        // One page is far taller than one step, so the press cannot cross into the next page.
+        var pageHeight = document.Pages[0].DisplayHeight;
+        Assert.True(step < pageHeight);
+        Assert.True(
+            viewer.Offset.Y < pageHeight,
+            $"one arrow press moved {viewer.Offset.Y:F0}px, which is a page");
+        Assert.Equal(1, document.CurrentPage);
+
+        _window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None);
+        await WaitAsync(() => viewer.Offset.Y > before + step);
+        Assert.Equal(before + step * 2, viewer.Offset.Y, 1);
+        Assert.Equal(1, document.CurrentPage);
+
+        _window.KeyPressQwerty(PhysicalKey.ArrowUp, RawInputModifiers.None);
+        await WaitAsync(() => viewer.Offset.Y < before + step * 2);
+        Assert.Equal(before + step, viewer.Offset.Y, 1);
+    }
+
+    /// <summary>
+    /// Home and End belong to the same canvas scrolling as the arrows. The list used to answer
+    /// them by selecting the first or last page, which is a page-level jump; they now reach the
+    /// document's ends without touching the selection.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task HomeAndEnd_ScrollToTheEndsOfTheDocument()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 1 && document.Pages[0].Image is not null);
+
+        var (_, viewer) = await FocusFirstPageAsync();
+        var last = Math.Max(0, viewer.Extent.Height - viewer.Viewport.Height);
+
+        _window.KeyPressQwerty(PhysicalKey.End, RawInputModifiers.None);
+        await WaitAsync(() => viewer.Offset.Y > 0);
+        Assert.Equal(last, viewer.Offset.Y, 1);
+
+        _window.KeyPressQwerty(PhysicalKey.Home, RawInputModifiers.None);
+        await WaitAsync(() => viewer.Offset.Y <= 0.5);
+        Assert.Equal(0, viewer.Offset.Y, 1);
+    }
+
+    /// <summary>
+    /// Puts keyboard focus where a reader's click puts it: on the page under the pointer. The
+    /// list itself is not focusable, so its items are what receive the keys, and focusing one
+    /// scrolls it into view - that has to settle before a step is measured.
+    /// </summary>
+    private async Task<(PdfPageList Pages, ScrollViewer Viewer)> FocusFirstPageAsync()
+    {
+        var pages = _window.FindControl<PdfPageList>("PagesList");
+        Assert.NotNull(pages);
+        var viewer = pages!.Viewer;
+        Assert.NotNull(viewer);
+
+        var page = pages.GetVisualDescendants().OfType<ListBoxItem>().FirstOrDefault();
+        Assert.NotNull(page);
+        Assert.True(page!.Focus(), "the page never took keyboard focus");
+        await WaitAsync(() => page.IsFocused);
+        Assert.True(page.IsFocused, "the page never took keyboard focus");
+
+        // The bring-into-view request from the focus change lands on the next layout pass.
+        await Task.Delay(250);
+
+        return (pages, viewer!);
     }
 
     /// <summary>True when a rendered page carries anything other than paper white.</summary>

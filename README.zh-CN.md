@@ -218,7 +218,9 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl` + 滚轮 | 缩放 |
 | `Ctrl+Shift+L` | 切换英文 / 简体中文 |
 | `F11` | 全屏 |
-| `Page Up` / `Page Down` | 滚动页面 |
+| `↑` / `↓` | 向上 / 向下滚动一小段 |
+| `Page Up` / `Page Down` | 向上 / 向下滚动一屏 |
+| `Home` / `End` | 跳到文档开头 / 结尾 |
 
 在页面区域点击右键，可以复制选中内容、全选文档，或打开文件所在文件夹。
 

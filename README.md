@@ -284,7 +284,9 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `Ctrl` + wheel | Zoom |
 | `Ctrl+Shift+L` | Toggle English / 简体中文 |
 | `F11` | Toggle full screen |
-| `Page Up` / `Page Down` | Scroll the document |
+| `↑` / `↓` | Scroll up or down a step |
+| `Page Up` / `Page Down` | Scroll up or down a screen |
+| `Home` / `End` | Jump to the start or the end of the document |
 
 Right-clicking the page canvas opens a menu for copying the selection, selecting
 the whole document, and showing the file in its folder.
