@@ -18,8 +18,11 @@ The reserved name also sets `Package/Identity/Name`, which is the value passed t
 
 ## Short description (English)
 
-> A feather-light PDF reader for Windows. Opens fast, annotates without ceremony,
-> and stays out of the way.
+> PDF reader | opens instantly · free · no ads · no sign-in
+
+## Short description (简体中文)
+
+> PDF 阅读器｜秒开 · 免费 · 无广告 · 免登录
 
 ## Description (English)
 
@@ -71,8 +74,8 @@ source is on GitHub. It targets Windows 10 version 2004 and later on x64.
 ```
 AirPDF 是一个小巧、快速的 Windows PDF 阅读器。
 
-打开文档通常不到一秒，然后做一件少见的事:它让开。不需要账号，不上传云端，没有订阅，
-没有新手引导，也没有塞满推荐内容的首页。只有页面本身。
+一秒打开，完全免费。没有开屏广告，没有推荐首页；不需要账号，不连接云端，没有订阅，
+也没有新手引导。屏幕上只剩你正在读的那一页，和它原本的排版。
 
 主要功能
 
@@ -89,25 +92,25 @@ AirPDF 是一个小巧、快速的 Windows PDF 阅读器。
 
 阅读
 
-• 标签页与多窗口,技术手册和论文可以并排看
-• 全文搜索并高亮,F3 / Shift+F3 在结果间跳转
-• 选中并复制文本,Ctrl+A 全选整篇
-• 书签可重命名、可拖动排序,还能跨文档浏览
+• 标签页与多窗口，技术手册和论文可以并排看
+• 全文搜索并高亮，F3 / Shift+F3 在结果间跳转
+• 选中并复制文本，Ctrl+A 全选整篇
+• 书签可重命名、可拖动排序，还能跨文档浏览
 • 缩略图、文档目录、可点击的超链接
 • 适应宽度、适应整页、实际大小、Ctrl + 滚轮缩放
 • 浅色、深色、高对比度主题
-• 中文与 English,免重启切换
+• 中文与 English，免重启切换
 • 支持加密 PDF
 
 它不做的事
 
-• 不需要账号,不收集使用数据,阅读时不联网
+• 不需要账号，不收集使用数据，阅读时不联网
 • 没有广告、没有内购、不捆绑任何软件
 
 技术说明
 
-渲染与批注写入都使用 PDFium,文本与搜索同一引擎,所以高亮位置准确,写出的文件在其他
-PDF 应用里也能正常打开。应用以 MIT 许可证开源,源代码托管在 GitHub。支持 Windows 10
+渲染与批注写入都使用 PDFium，文本与搜索同一引擎，所以高亮位置准确，写出的文件在其他
+PDF 应用里也能正常打开。应用以 MIT 许可证开源，源代码托管在 GitHub。支持 Windows 10
 2004 及以上版本的 x64 设备。
 ```
 
@@ -118,39 +121,35 @@ Limit is about 1500 characters. Both languages below fit.
 English:
 
 ```
-AirPDF 0.6 is a faster, tidier reader.
+AirPDF 0.7 is a tidier workspace and a finer selection.
 
-• Page rendering now runs through one priority queue: the page you are looking at is
-  decoded before thumbnails, and the reader stays responsive on very large documents.
-• Battery and memory: page bitmaps are capped, thumbnails release their images once
-  they leave the rail, and closing a tab frees its PDF engine session off the UI thread.
-• Search reports progress while it scans and says when the result list was capped.
-• Zoom keeps your place inside the page instead of re-centring it on every step.
-• Tabs can be dragged to reorder, with a smooth slide instead of a jump, and the strip
-  scrolls horizontally when there are more tabs than fit.
-• A new workspace bar puts the brand, Open, and your document tabs on one line, with
-  Windows 11 Snap Layouts on the maximise button.
-• A tray icon keeps AirPDF reachable while it is minimised.
-• Closing a tab with unsaved highlights, ink, or notes asks first: Save, Discard, or
-  Cancel. If saving cannot replace the original file, the saved copy is kept and opened
-  so nothing is lost.
+• Tabs can be dragged into a new order: holding one near either edge scrolls a long
+  strip, and tabs slide into place instead of jumping. Right-click a tab to close it or
+  to close every other tab.
+• A tray icon keeps AirPDF reachable while it is hidden; Hide to tray leaves documents
+  open. Closing a window still exits.
+• The Windows titlebar opens the native window menu on right-click or Alt+Space, and its
+  buttons dim while the window is inactive.
+• Text selection is character-granular: a drag copies exactly what you highlighted, while
+  double-click still takes a whole word.
+• The arrow keys scroll a small step instead of turning a whole page, and Home / End jump
+  to the start and end of the document.
+• Page navigation moved to the far left of the toolbar, and the app icon is the orange
+  brand tile everywhere, including the Store artwork.
 ```
 
 简体中文：
 
 ```
-AirPDF 0.6 更快、更整齐。
+AirPDF 0.7 更整齐，也更精确。
 
-• 页面渲染改走单一优先级队列:正在看的页面先于缩略图解码,超大文档下界面依然跟手。
-• 更省内存:页面位图有上限,缩略图离开侧栏就释放位图,关闭标签时在 UI 线程之外释放
-  PDF 引擎会话。
-• 搜索扫描时显示进度,结果超过上限会明确提示。
-• 缩放时保持页内位置,不再每步重新居中。
-• 标签可拖动排序,带平滑滑动而不是瞬移;标签超过一屏时横向滚动。
-• 新的工作区栏把品牌、打开按钮和文档标签放在同一行,最大化按钮支持 Windows 11 吸附布局。
-• 最小化后可通过托盘图标回到应用。
-• 有未保存的高亮、墨迹或便签时关闭标签会先询问:保存、放弃或取消。若无法覆盖原文件,
-  保存的副本会被保留并打开,不会丢失。
+• 标签可拖动排序：拖到标签栏左右边缘会自动滚动，松手后平滑归位而不是瞬移。右键标签
+  可以关闭当前标签或关闭其他标签。
+• 隐藏窗口后托盘图标可随时找回应用；选择「隐藏到托盘」时文档保持打开。
+• Windows 标题栏支持右键或 Alt+Space 打开系统菜单；窗口失去焦点时按钮会变暗。
+• 文本选择精确到字符：拖动选中多少就复制多少，不会再带上旁边的字；双击仍然选中整词。
+• 方向键改为小步滚动，不再整页跳转；Home / End 直接跳到文档开头和结尾。
+• 页码导航移到工具栏最左侧，应用图标统一换成橙色品牌标，包内各尺寸商店图标一并更新。
 ```
 
 ## Screenshots
