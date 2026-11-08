@@ -275,6 +275,8 @@ Windows 上使用 `SystemDecorations.BorderOnly` 和扩展客户区替换系统�
 - [ ] 配置正式 Windows 签名与 Apple 公证凭据
 - [x] NativeAOT（Windows、Linux、macOS 均已使用）
 - [x] 缩放、搜索、语言切换和更新的 UI / 端到端测试
+- [ ] 扫描件 OCR：只有页面图片的 PDF 也能选中文字、进行搜索。目前这类文档完全没有
+  文本层，选择与搜索都静默地找不到任何内容。
 
 ## 参与贡献
 

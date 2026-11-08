@@ -373,6 +373,9 @@ docs/                   Screenshots and architecture notes
 - [ ] Configure production Windows signing and Apple notarization credentials
 - [x] NativeAOT (Windows, Linux, and macOS)
 - [x] UI/end-to-end coverage for zoom, search, language switching, and updates
+- [ ] OCR for scanned PDFs, so pages that are only page images can be selected and
+  searched. Today such a document has no text layer at all, and selection and search
+  silently find nothing.
 
 Contributions and issue reports are welcome. If you want to pick up a roadmap
 item, open an issue first so we can keep the design coherent.
