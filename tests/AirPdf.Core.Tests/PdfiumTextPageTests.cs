@@ -86,6 +86,72 @@ public sealed class PdfiumTextPageTests
         Assert.Contains("Reading", text, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Selection is character level, so the boxes PDFium reports per character have to survive
+    /// the grouping into words. The word box stays the union of them.
+    /// </summary>
+    [Fact]
+    public async Task Words_KeepOneBoxPerCharacter()
+    {
+        using var documents = new PdfDocumentService();
+        await documents.OpenAsync(SamplePath);
+
+        // Page 2 is Latin body text, so the words have several characters each.
+        var page = await documents.GetTextPageAsync(2);
+        Assert.NotEmpty(page.Words);
+
+        foreach (var word in page.Words)
+        {
+            Assert.Equal(
+                word.Text,
+                string.Concat(word.Chars.Select(character => character.Text)));
+
+            var left = word.Chars.Min(character => character.Bounds.X);
+            var top = word.Chars.Min(character => character.Bounds.Y);
+            var right = word.Chars.Max(character => character.Bounds.X + character.Bounds.Width);
+            var bottom = word.Chars.Max(character => character.Bounds.Y + character.Bounds.Height);
+
+            Assert.Equal(word.Bounds.X, left, 4);
+            Assert.Equal(word.Bounds.Y, top, 4);
+            Assert.Equal(word.Bounds.X + word.Bounds.Width, right, 4);
+            Assert.Equal(word.Bounds.Y + word.Bounds.Height, bottom, 4);
+        }
+    }
+
+    [Theory]
+    [InlineData(90)]
+    [InlineData(180)]
+    [InlineData(270)]
+    public async Task RotatedPages_KeepCharacterBoxesInReadingOrder(int rotation)
+    {
+        var path = WriteFixture(rotation);
+        try
+        {
+            using var documents = new PdfDocumentService();
+            await documents.OpenAsync(path);
+
+            var word = Assert.Single((await documents.GetTextPageAsync(1)).Words);
+
+            Assert.Equal(
+                RotatedPdfFixture.Word,
+                string.Concat(word.Chars.Select(character => character.Text)));
+
+            // A quarter turn maps each box onto another real rectangle, so none may collapse.
+            Assert.All(
+                word.Chars,
+                character =>
+                {
+                    Assert.True(
+                        character.Bounds.Width > 0 && character.Bounds.Height > 0,
+                        $"quarter turns {rotation / 90}: a character box is empty");
+                });
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Fact]
     public async Task ChineseText_KeepsItsCharactersWithoutInventingSpaces()
     {

@@ -19,6 +19,11 @@ semantic versioning once it reaches 1.0.
 
 ### Changed
 
+- Text selection is character-granular: dragging selects the characters between the two
+  points instead of snapping out to the words they fall in, so a copy takes exactly what was
+  highlighted. Double-click still takes a whole word. Each word keeps the box of every
+  character PDFium reported, and adjacent characters are merged into runs before they are
+  painted, so a highlight is still a few rectangles rather than one per glyph.
 - The arrow keys now scroll the page canvas by a small step, and `Home` / `End` jump to the
   start and end of the document. The canvas is a list of pages, so its own keyboard handling
   answered every arrow press by selecting the next item - a whole page - which threw the reader

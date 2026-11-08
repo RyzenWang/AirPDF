@@ -207,25 +207,73 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         }
     }
 
-    public int HitTestWord(double x, double y)
+    /// <summary>
+    /// The character under a normalized page point, or a miss when the point is not on text.
+    /// Selection is character level, so a word index alone is not precise enough to anchor on.
+    /// </summary>
+    public TextHit HitTestChar(double x, double y)
     {
         const double padding = 0.003;
-        for (var i = 0; i < _words.Count; i++)
+        for (var index = 0; index < _words.Count; index++)
         {
-            var bounds = _words[i].Bounds;
+            var bounds = _words[index].Bounds;
             if (x >= bounds.X - padding &&
                 x <= bounds.X + bounds.Width + padding &&
                 y >= bounds.Y - padding &&
                 y <= bounds.Y + bounds.Height + padding)
             {
-                return i;
+                return new TextHit(index, CharAtX(_words[index], x));
             }
         }
 
-        return -1;
+        return TextHit.Miss;
     }
 
-    public int NearestWord(double x, double y)
+    /// <summary>
+    /// The character closest to a point that is not on any text. Dragging past the end of a
+    /// line still has to extend the selection to something, which is what this provides.
+    /// </summary>
+    public TextHit NearestChar(double x, double y)
+    {
+        var index = NearestWordIndex(x, y);
+        return index < 0 ? TextHit.Miss : new TextHit(index, CharAtX(_words[index], x));
+    }
+
+    /// <summary>
+    /// The character whose box contains <paramref name="x"/>, or the closest one when the point
+    /// falls in the gap between two boxes.
+    /// </summary>
+    private static int CharAtX(PdfTextWord word, double x)
+    {
+        var chars = word.Chars;
+        if (chars.Count == 0)
+        {
+            return 0;
+        }
+
+        var best = 0;
+        var bestDistance = double.MaxValue;
+        for (var index = 0; index < chars.Count; index++)
+        {
+            var bounds = chars[index].Bounds;
+            if (x >= bounds.X && x <= bounds.X + bounds.Width)
+            {
+                return index;
+            }
+
+            var center = bounds.X + (bounds.Width / 2);
+            var distance = Math.Abs(x - center);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = index;
+            }
+        }
+
+        return best;
+    }
+
+    private int NearestWordIndex(double x, double y)
     {
         if (_words.Count == 0)
         {

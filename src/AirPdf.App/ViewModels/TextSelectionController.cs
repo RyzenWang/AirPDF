@@ -5,10 +5,20 @@ using AirPdf.Core.Models;
 namespace AirPdf.App.ViewModels;
 
 /// <summary>
-/// Word-level selection state shared by the view model and the pointer input
-/// layer. Selection geometry stays in normalized page coordinates so it can be
-/// painted by an overlay at any zoom level.
+/// Character-level selection state shared by the view model and the pointer input layer.
+/// Selection geometry stays in normalized page coordinates so it can be painted by an overlay
+/// at any zoom level.
 /// </summary>
+/// <remarks>
+/// Selection used to anchor on whole words, because the text layer only exposed word boxes:
+/// dragging across a line selected "the first word you touched up to the last word you touched",
+/// so copying a phrase always brought its neighbours along. PDFium already reports characters,
+/// and <see cref="PdfTextPageBuilder"/> now keeps their boxes, so a selection is stored as
+/// (word, character) positions and painted from the character boxes they cover.
+///
+/// Words still matter: they carry the reading order, and the rule that decides whether two
+/// selected words are separated by a space or a newline when the text is copied.
+/// </remarks>
 public sealed class TextSelectionController
 {
     private readonly Func<IReadOnlyList<PageViewModel>> _pages;
@@ -65,8 +75,8 @@ public sealed class TextSelectionController
             }
         }
 
-        var wordIndex = page.HitTestWord(x, y);
-        if (wordIndex < 0)
+        var hit = page.HitTestChar(x, y);
+        if (!hit.IsHit)
         {
             return false;
         }
@@ -75,18 +85,24 @@ public sealed class TextSelectionController
 
         if (clickCount >= 3)
         {
-            _anchor = new TextPosition(pageNumber, 0);
-            _focus = new TextPosition(pageNumber, page.Words.Count - 1);
+            _anchor = new TextPosition(pageNumber, 0, 0);
+            _focus = LastPosition(page);
             Apply();
             return true;
         }
 
-        _anchor = new TextPosition(pageNumber, wordIndex);
-        _focus = clickCount >= 2 ? _anchor : null;
-        if (_focus is not null)
+        if (clickCount >= 2)
         {
+            // A double click is still a word: that is the one gesture whose meaning the reader
+            // expects to stay coarse.
+            _anchor = new TextPosition(pageNumber, hit.WordIndex, 0);
+            _focus = new TextPosition(pageNumber, hit.WordIndex, LastChar(page.Words[hit.WordIndex]));
             Apply();
+            return true;
         }
+
+        _anchor = new TextPosition(pageNumber, hit.WordIndex, hit.CharIndex);
+        _focus = null;
 
         return true;
     }
@@ -112,18 +128,18 @@ public sealed class TextSelectionController
         }
 
         _pending = null;
-        var wordIndex = page.HitTestWord(x, y);
-        if (wordIndex < 0)
+        var hit = page.HitTestChar(x, y);
+        if (!hit.IsHit)
         {
-            wordIndex = page.NearestWord(x, y);
+            hit = page.NearestChar(x, y);
         }
 
-        if (wordIndex < 0)
+        if (!hit.IsHit)
         {
             return false;
         }
 
-        _focus = new TextPosition(pageNumber, wordIndex);
+        _focus = new TextPosition(pageNumber, hit.WordIndex, hit.CharIndex);
         Apply();
         return true;
     }
@@ -173,8 +189,8 @@ public sealed class TextSelectionController
         }
 
         _pending = null;
-        _anchor = new TextPosition(first.Number, 0);
-        _focus = new TextPosition(last.Number, last.Words.Count - 1);
+        _anchor = new TextPosition(first.Number, 0, 0);
+        _focus = LastPosition(last);
         Apply();
     }
 
@@ -230,19 +246,13 @@ public sealed class TextSelectionController
         }
 
         var pages = _pages();
-        var start = anchor;
-        var end = focus;
-        if (start.PageNumber > end.PageNumber ||
-            (start.PageNumber == end.PageNumber && start.WordIndex > end.WordIndex))
-        {
-            (start, end) = (end, start);
-        }
+        var (start, end) = Order(anchor, focus);
 
         var selectedPages = new HashSet<int>();
         foreach (var page in pages)
         {
             var inRange = page.Number >= start.PageNumber && page.Number <= end.PageNumber;
-            if (!inRange)
+            if (!inRange || page.Words.Count == 0)
             {
                 if (_selectedPages.Contains(page.Number))
                 {
@@ -252,32 +262,14 @@ public sealed class TextSelectionController
                 continue;
             }
 
-            if (page.Words.Count == 0)
-            {
-                if (_selectedPages.Contains(page.Number))
-                {
-                    page.ClearSelectionRects();
-                }
-
-                continue;
-            }
-
-            var from = page.Number == start.PageNumber ? start.WordIndex : 0;
-            var to = page.Number == end.PageNumber ? end.WordIndex : page.Words.Count - 1;
-            from = Math.Clamp(from, 0, page.Words.Count - 1);
-            to = Math.Clamp(to, 0, page.Words.Count - 1);
-            if (from > to)
+            var from = Clamp(page, page.Number == start.PageNumber ? start : StartPosition(page));
+            var to = Clamp(page, page.Number == end.PageNumber ? end : LastPosition(page));
+            if (Compare(from, to) > 0)
             {
                 (from, to) = (to, from);
             }
 
-            var rects = new List<PdfSearchRect>(to - from + 1);
-            for (var i = from; i <= to; i++)
-            {
-                rects.Add(page.Words[i].Bounds);
-            }
-
-            page.SetSelectionRects(rects);
+            page.SetSelectionRects(BuildRects(page, from, to));
             selectedPages.Add(page.Number);
         }
 
@@ -289,6 +281,94 @@ public sealed class TextSelectionController
 
         _selectedText = BuildSelectedText(start, end, pages);
         SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Paints a character range as one rectangle per run of characters instead of one per
+    /// character: a rectangle per letter outlines every glyph, and a saved highlight stores one
+    /// quad per rectangle, so the run is also what keeps a highlight from exploding in size.
+    /// </summary>
+    private static List<PdfSearchRect> BuildRects(
+        PageViewModel page,
+        TextPosition from,
+        TextPosition to)
+    {
+        var rects = new List<PdfSearchRect>(to.WordIndex - from.WordIndex + 1);
+        for (var index = from.WordIndex; index <= to.WordIndex; index++)
+        {
+            var word = page.Words[index];
+            AppendWordRects(
+                rects,
+                word,
+                index == from.WordIndex ? from.CharIndex : 0,
+                index == to.WordIndex ? to.CharIndex : word.CharCount - 1);
+        }
+
+        return rects;
+    }
+
+    private static void AppendWordRects(
+        List<PdfSearchRect> rects,
+        PdfTextWord word,
+        int from,
+        int to)
+    {
+        if (word.CharCount == 0)
+        {
+            rects.Add(word.Bounds);
+            return;
+        }
+
+        from = Math.Clamp(from, 0, word.CharCount - 1);
+        to = Math.Clamp(to, 0, word.CharCount - 1);
+        if (from > to)
+        {
+            (from, to) = (to, from);
+        }
+
+        var run = word.Chars[from].Bounds;
+        for (var index = from + 1; index <= to; index++)
+        {
+            var next = word.Chars[index].Bounds;
+            if (Joins(run, next))
+            {
+                run = Union(run, next);
+            }
+            else
+            {
+                rects.Add(run);
+                run = next;
+            }
+        }
+
+        rects.Add(run);
+    }
+
+    /// <summary>
+    /// True when two character boxes belong to the same run of text: they sit on the same line
+    /// and the gap between them is kerning rather than a break.
+    /// </summary>
+    private static bool Joins(PdfSearchRect run, PdfSearchRect next)
+    {
+        var verticalOverlap =
+            Math.Min(run.Y + run.Height, next.Y + next.Height) - Math.Max(run.Y, next.Y);
+        if (verticalOverlap < Math.Min(run.Height, next.Height) * 0.5)
+        {
+            return false;
+        }
+
+        var gap = next.X - (run.X + run.Width);
+        return gap <= Math.Max(0.004, run.Height * 0.35) &&
+               gap >= -Math.Max(0.004, next.Width);
+    }
+
+    private static PdfSearchRect Union(PdfSearchRect left, PdfSearchRect right)
+    {
+        var x = Math.Min(left.X, right.X);
+        var y = Math.Min(left.Y, right.Y);
+        var rightEdge = Math.Max(left.X + left.Width, right.X + right.Width);
+        var bottomEdge = Math.Max(left.Y + left.Height, right.Y + right.Height);
+        return new PdfSearchRect(x, y, rightEdge - x, bottomEdge - y);
     }
 
     private void Reset()
@@ -315,7 +395,8 @@ public sealed class TextSelectionController
         IReadOnlyList<PageViewModel> pages)
     {
         var builder = new StringBuilder();
-        PdfTextWord? previous = null;
+        string? previousText = null;
+        PdfSearchRect previousBounds = default;
         var previousPage = 0;
 
         foreach (var page in pages)
@@ -327,32 +408,39 @@ public sealed class TextSelectionController
                 continue;
             }
 
-            var from = page.Number == start.PageNumber ? start.WordIndex : 0;
-            var to = page.Number == end.PageNumber ? end.WordIndex : page.Words.Count - 1;
-            from = Math.Clamp(from, 0, page.Words.Count - 1);
-            to = Math.Clamp(to, 0, page.Words.Count - 1);
-            if (from > to)
+            var from = Clamp(page, page.Number == start.PageNumber ? start : StartPosition(page));
+            var to = Clamp(page, page.Number == end.PageNumber ? end : LastPosition(page));
+            if (Compare(from, to) > 0)
             {
                 (from, to) = (to, from);
             }
 
-            for (var i = from; i <= to; i++)
+            for (var index = from.WordIndex; index <= to.WordIndex; index++)
             {
-                var word = page.Words[i];
+                var word = page.Words[index];
+                var text = word.GetText(
+                    index == from.WordIndex ? from.CharIndex : 0,
+                    index == to.WordIndex ? to.CharIndex : word.CharCount - 1);
+                if (text.Length == 0)
+                {
+                    continue;
+                }
+
                 if (builder.Length > 0)
                 {
-                    if (page.Number != previousPage || IsNewLine(previous, word))
+                    if (page.Number != previousPage || IsNewLine(previousBounds, word.Bounds))
                     {
                         builder.Append('\n');
                     }
-                    else if (NeedsSpace(previous?.Text, word.Text))
+                    else if (NeedsSpace(previousText, text))
                     {
                         builder.Append(' ');
                     }
                 }
 
-                builder.Append(word.Text);
-                previous = word;
+                builder.Append(text);
+                previousText = text;
+                previousBounds = word.Bounds;
                 previousPage = page.Number;
             }
         }
@@ -360,18 +448,13 @@ public sealed class TextSelectionController
         return builder.ToString();
     }
 
-    private static bool IsNewLine(PdfTextWord? previous, PdfTextWord current)
+    private static bool IsNewLine(PdfSearchRect previous, PdfSearchRect current)
     {
-        if (previous is null)
-        {
-            return false;
-        }
-
-        var previousCenter = previous.Bounds.Y + (previous.Bounds.Height / 2);
-        var currentCenter = current.Bounds.Y + (current.Bounds.Height / 2);
-        var threshold = Math.Max(previous.Bounds.Height, current.Bounds.Height) * 0.65;
+        var previousCenter = previous.Y + (previous.Height / 2);
+        var currentCenter = current.Y + (current.Height / 2);
+        var threshold = Math.Max(previous.Height, current.Height) * 0.65;
         return Math.Abs(previousCenter - currentCenter) > threshold ||
-               current.Bounds.X + current.Bounds.Width < previous.Bounds.X + 0.002;
+               current.X + current.Width < previous.X + 0.002;
     }
 
     private static bool NeedsSpace(string? previous, string current)
@@ -389,7 +472,44 @@ public sealed class TextSelectionController
     private static bool IsCjk(char value) =>
         value is >= '\u2E80' and <= '\u9FFF' or >= '\uF900' and <= '\uFAFF';
 
-    private readonly record struct TextPosition(int PageNumber, int WordIndex);
+    private static TextPosition StartPosition(PageViewModel page) =>
+        new(page.Number, 0, 0);
+
+    private static TextPosition LastPosition(PageViewModel page) => new(
+        page.Number,
+        page.Words.Count - 1,
+        LastChar(page.Words[^1]));
+
+    private static int LastChar(PdfTextWord word) => Math.Max(0, word.CharCount - 1);
+
+    /// <summary>Keeps a stored position inside a page whose text layer was reloaded.</summary>
+    private static TextPosition Clamp(PageViewModel page, TextPosition position)
+    {
+        var word = Math.Clamp(position.WordIndex, 0, page.Words.Count - 1);
+        var count = page.Words[word].CharCount;
+        var character = count == 0 ? 0 : Math.Clamp(position.CharIndex, 0, count - 1);
+        return new TextPosition(page.Number, word, character);
+    }
+
+    private static (TextPosition Start, TextPosition End) Order(TextPosition anchor, TextPosition focus) =>
+        Compare(anchor, focus) <= 0 ? (anchor, focus) : (focus, anchor);
+
+    private static int Compare(TextPosition left, TextPosition right)
+    {
+        if (left.PageNumber != right.PageNumber)
+        {
+            return left.PageNumber.CompareTo(right.PageNumber);
+        }
+
+        if (left.WordIndex != right.WordIndex)
+        {
+            return left.WordIndex.CompareTo(right.WordIndex);
+        }
+
+        return left.CharIndex.CompareTo(right.CharIndex);
+    }
+
+    private readonly record struct TextPosition(int PageNumber, int WordIndex, int CharIndex);
 
     private readonly record struct PendingSelection(int PageNumber, double X, double Y);
 }

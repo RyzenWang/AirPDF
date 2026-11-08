@@ -626,6 +626,61 @@ public sealed class EndToEndTests : IDisposable
         return (pages, viewer!);
     }
 
+    /// <summary>
+    /// The whole pointer path, not just the selection controller: pressing inside a word and
+    /// dragging over part of it has to copy only the characters under the drag. The press
+    /// handler awaits the document service before it starts selecting, so the test pumps until
+    /// the selection exists instead of assuming the press finished synchronously.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task DraggingInsideAWord_SelectsOnlyTheCharactersCovered()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 1 && document.Pages[0].Image is not null);
+
+        // Page 2 is the body text, so its words have several characters to drag across.
+        Assert.True(await document.EnsureTextLayerAsync(2));
+        document.NavigateToPage(2);
+
+        var page = document.Pages[1];
+        var word = page.Words.First(candidate =>
+            candidate.CharCount >= 5 && candidate.Chars.All(character => character.Text.Length == 1));
+
+        PdfPageView? pageView = null;
+        await WaitAsync(() =>
+        {
+            pageView = _window.GetVisualDescendants().OfType<PdfPageView>()
+                .FirstOrDefault(view => ReferenceEquals(view.DataContext, page) && view.Bounds.Width > 1);
+            return pageView is not null;
+        });
+        Assert.NotNull(pageView);
+
+        var start = PagePoint(pageView!, word, 1);
+        var end = PagePoint(pageView!, word, 3);
+
+        _window.MouseDown(start, MouseButton.Left);
+
+        // The press handler is async: it checks for a note under the pointer first.
+        await Task.Delay(200);
+        _window.MouseMove(end);
+        await Task.Delay(100);
+        _window.MouseUp(end, MouseButton.Left);
+
+        await WaitAsync(() => document.HasSelection);
+        Assert.Equal(word.Text[1..4], document.GetSelectedText());
+
+        Point PagePoint(PdfPageView view, AirPdf.Core.Models.PdfTextWord textWord, int index)
+        {
+            var bounds = textWord.Chars[index].Bounds;
+            var local = new Point(
+                (bounds.X + (bounds.Width / 2)) * view.Bounds.Width,
+                (bounds.Y + (bounds.Height / 2)) * view.Bounds.Height);
+            var point = view.TranslatePoint(local, _window);
+            Assert.NotNull(point);
+            return point!.Value;
+        }
+    }
+
     /// <summary>True when a rendered page carries anything other than paper white.</summary>
     private static bool HasInk(Avalonia.Media.Imaging.WriteableBitmap bitmap)
     {

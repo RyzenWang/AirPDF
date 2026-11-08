@@ -73,7 +73,7 @@ share the top row. macOS and Linux keep their native window frame and the tab ba
 - **Thumbnail rail and document outline** for fast navigation.
 - **Full-text search** with page-grouped results, in-page match highlights, and progress
   while a long document is scanned.
-- **Text selection and copy** — drag across words and pages, double-click a
+- **Text selection and copy** — drag across text and pages, double-click a
   word, `Ctrl+A` selects the document (up to 1,000 pages), and `Ctrl+C` copies the result.
 - **Remembers your place** in every document, including the offset within the
   page; the position is restored on the next open.
@@ -271,7 +271,7 @@ gh workflow run signing-check.yml --repo RyzenWang/AirPDF
 | `F3` / `Shift+F3` | Next / previous search match |
 | `Alt+Left` | Return to the previous position |
 | `Alt+Space` | Open the window system menu (Windows) |
-| Drag on text | Select words |
+| Drag on text | Select characters |
 | Double-click | Select a word |
 | `Ctrl+C` / `Cmd+C` | Copy the selected text |
 | `Ctrl+A` / `Cmd+A` | Select all document text (up to 1,000 pages) |
@@ -343,7 +343,6 @@ docs/                   Screenshots and architecture notes
 
 ## Limitations
 
-- Text selection is word-granular rather than character-granular.
 - No form filling, printing, or PDF text editing.
 - Only `http`, `https`, and `mailto` link targets are followed; `Launch` and
   remote-`GoTo` actions are ignored so a document cannot start a program.

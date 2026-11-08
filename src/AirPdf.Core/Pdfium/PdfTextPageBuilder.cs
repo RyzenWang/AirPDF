@@ -5,13 +5,16 @@ using AirPdf.Core.Pdfium;
 namespace AirPdf.Core.Pdfium;
 
 /// <summary>
-/// Turns PDFium's per-character text into the word list the reader selects and searches on.
+/// Turns PDFium's per-character text into the word list the reader searches on, keeping each
+/// character's box so selection can be character-precise.
 /// </summary>
 /// <remarks>
 /// PDFium reports characters in reading order with boxes in the page's own unrotated space,
 /// which is what makes this rotation-proof: only the boxes need mapping. Characters are
 /// grouped into words on whitespace, on a noticeable gap, and at CJK boundaries — CJK is
-/// written without spaces, so each character stays its own selectable unit.
+/// written without spaces, so each character stays its own selectable unit. Every word keeps
+/// the mapped box of each character, so the reader never has to walk the page twice to select
+/// part of a word.
 /// </remarks>
 public static class PdfTextPageBuilder
 {
@@ -27,6 +30,7 @@ public static class PdfTextPageBuilder
     {
         var words = new List<PdfTextWord>();
         var current = new StringBuilder();
+        var currentChars = new List<PdfTextCharBox>();
         double left = 0, bottom = 0, right = 0, top = 0;
         PdfTextChar? previous = null;
 
@@ -44,11 +48,13 @@ public static class PdfTextPageBuilder
                 {
                     Index = words.Count,
                     Text = current.ToString(),
-                    Bounds = bounds
+                    Bounds = bounds,
+                    Chars = currentChars.ToArray()
                 });
             }
 
             current.Clear();
+            currentChars.Clear();
         }
 
         foreach (var item in chars)
@@ -79,6 +85,19 @@ public static class PdfTextPageBuilder
                 right = Math.Max(right, item.Right);
                 top = Math.Max(top, item.Top);
             }
+
+            // The reader selects characters, so the character box is mapped here even though
+            // the word rectangle is only the union of the same boxes.
+            currentChars.Add(new PdfTextCharBox(
+                item.Text,
+                PageGeometry.ToDisplayRect(
+                    item.Left,
+                    item.Top,
+                    item.Right,
+                    item.Bottom,
+                    pageWidth,
+                    pageHeight,
+                    rotation)));
 
             current.Append(item.Text);
             previous = item;

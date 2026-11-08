@@ -245,16 +245,23 @@ there — PDFium returns annotation bounds in unrotated page space.
 
 ## Text selection
 
-`PdfTextService` extracts ordered word geometry from PDFium on demand. Each
-`PdfTextPage` carries normalized word rectangles. Selection state is stored as
-`(page, word index)` pairs in `TextSelectionController`; dragging maps
-the pointer to a page through the realized `PdfPageView` controls and expands
-the range across pages. `TextSelectionOverlay` paints the selected word boxes,
-and the status bar exposes copy/select-all actions.
+`PdfTextService` extracts ordered geometry from PDFium on demand. Each `PdfTextPage`
+carries normalized word rectangles, and every word keeps the box of each character it was
+grouped from. Selection state is stored as `(page, word index, character index)` in
+`TextSelectionController`; dragging maps the pointer to a page through the realized
+`PdfPageView` controls and expands the range across pages. `TextSelectionOverlay` paints the
+selected characters, and the status bar exposes copy/select-all actions.
 
-The selection is word-granular by design: it keeps hit-testing deterministic
-and avoids a second character-level layout system. Rotated pages are skipped
-for now, matching the search-highlight limitation.
+The character boxes are free: PDFium reports characters in reading order, so grouping them into
+words already had the geometry in hand and only had to keep it. Hit-testing stays one scan over
+words followed by one over the characters of the word that was hit, which keeps a click
+deterministic even where two glyph boxes overlap.
+
+Adjacent characters are merged into runs before they are painted. A rectangle per glyph would
+outline every letter of a selection, and every rectangle becomes a quad in a saved highlight, so
+the run is what keeps a highlight from exploding in size. Words still decide where a copied line
+breaks and whether a space belongs between two pieces of text; CJK text is one word per
+character, so it is unaffected either way.
 
 ## Annotations and saving
 

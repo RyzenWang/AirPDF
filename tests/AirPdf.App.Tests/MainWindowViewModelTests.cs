@@ -91,6 +91,108 @@ public sealed class MainWindowViewModelTests : IDisposable
     }
 
     /// <summary>
+    /// Selection is the reader's own aim: dragging inside one word has to take the characters
+    /// between the two points, not the whole word. The text layer used to carry word boxes
+    /// only, so every drag snapped out to word boundaries and copying a phrase brought its
+    /// neighbours along.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TextSelection_SelectsCharacterRunsInsideAWord()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        // Page 2 is Latin body text, so a word has several characters to aim at.
+        const int pageNumber = 2;
+        Assert.True(await context.ViewModel.EnsureTextLayerAsync(pageNumber));
+        var page = context.ViewModel.Pages[pageNumber - 1];
+        var word = page.Words.First(candidate =>
+            candidate.CharCount >= 5 && candidate.Chars.All(character => character.Text.Length == 1));
+
+        Assert.True(await context.ViewModel.BeginTextSelectionAsync(
+            pageNumber,
+            CenterOfChar(word, 1).X,
+            CenterOfChar(word, 1).Y,
+            clickCount: 1));
+        Assert.True(context.ViewModel.UpdateTextSelection(
+            pageNumber,
+            CenterOfChar(word, 3).X,
+            CenterOfChar(word, 3).Y));
+        context.ViewModel.CompleteTextSelection();
+
+        Assert.Equal(word.Text[1..4], context.ViewModel.GetSelectedText());
+
+        // The four character boxes sit on one line, so they are painted as one run rather than
+        // four outlined glyphs.
+        var rect = Assert.Single(page.SelectionRects);
+        Assert.True(
+            rect.Width < word.Bounds.Width,
+            "the highlight covered the whole word instead of the selected characters");
+
+        static (double X, double Y) CenterOfChar(AirPdf.Core.Models.PdfTextWord word, int index)
+        {
+            var bounds = word.Chars[index].Bounds;
+            return (bounds.X + (bounds.Width / 2), bounds.Y + (bounds.Height / 2));
+        }
+    }
+
+    /// <summary>
+    /// A drag across two words still has to copy the space between them, even though neither
+    /// word is fully selected now.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TextSelection_AcrossTwoWords_KeepsTheSeparator()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        const int pageNumber = 2;
+        Assert.True(await context.ViewModel.EnsureTextLayerAsync(pageNumber));
+        var page = context.ViewModel.Pages[pageNumber - 1];
+
+        var (first, second) = page.Words
+            .Zip(page.Words.Skip(1))
+            .First(pair =>
+                IsLatin(pair.First) && IsLatin(pair.Second) &&
+                pair.First.CharCount >= 3 && pair.Second.CharCount >= 3 &&
+                SameLine(pair.First, pair.Second));
+
+        Assert.True(await context.ViewModel.BeginTextSelectionAsync(
+            pageNumber,
+            CenterOfChar(first, 2).X,
+            CenterOfChar(first, 2).Y,
+            clickCount: 1));
+        Assert.True(context.ViewModel.UpdateTextSelection(
+            pageNumber,
+            CenterOfChar(second, 2).X,
+            CenterOfChar(second, 2).Y));
+        context.ViewModel.CompleteTextSelection();
+
+        Assert.Equal(
+            string.Concat(first.GetText(2, first.CharCount - 1), " ", second.GetText(0, 2)),
+            context.ViewModel.GetSelectedText());
+
+        static bool IsLatin(AirPdf.Core.Models.PdfTextWord word) =>
+            word.Text.All(character => character < '\u0080');
+
+        static bool SameLine(
+            AirPdf.Core.Models.PdfTextWord left,
+            AirPdf.Core.Models.PdfTextWord right)
+        {
+            var leftCenter = left.Bounds.Y + (left.Bounds.Height / 2);
+            var rightCenter = right.Bounds.Y + (right.Bounds.Height / 2);
+            return Math.Abs(leftCenter - rightCenter) < Math.Min(left.Bounds.Height, right.Bounds.Height) * 0.5 &&
+                   right.Bounds.X > left.Bounds.X;
+        }
+
+        static (double X, double Y) CenterOfChar(AirPdf.Core.Models.PdfTextWord word, int index)
+        {
+            var bounds = word.Chars[index].Bounds;
+            return (bounds.X + (bounds.Width / 2), bounds.Y + (bounds.Height / 2));
+        }
+    }
+
+    /// <summary>
     /// Text selection is not a tool that can run beside drawing or erasing: the pointer belongs
     /// to exactly one of them. Leaving a selection highlighted while the eraser is on made it
     /// look as if both modes were active.
