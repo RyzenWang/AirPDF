@@ -2901,6 +2901,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             thumbnail.Dispose();
         }
 
+        PageBitmapPool.Reset();
         Pages = [];
         Thumbnails = [];
         OutlineItems = [];

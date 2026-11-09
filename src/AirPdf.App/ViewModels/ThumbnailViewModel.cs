@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using AirPdf.App.Rendering;
@@ -152,7 +153,11 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
                 PdfRenderPriority.Thumbnail);
             cancellation.Token.ThrowIfCancellationRequested();
 
-            var bitmap = await Dispatcher.UIThread.InvokeAsync(() => BitmapHelper.CreateBitmap(skiaBitmap));
+            var bitmap = await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var reusable = PageBitmapPool.Rent(new PixelSize(skiaBitmap.Width, skiaBitmap.Height));
+                return BitmapHelper.CreateBitmap(skiaBitmap, reusable);
+            });
             if (cancellation.IsCancellationRequested || generation != _generation)
             {
                 bitmap.Dispose();
@@ -194,11 +199,12 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
             return;
         }
 
+        var generation = PageBitmapPool.Generation;
         DispatcherTimer.RunOnce(() =>
         {
             try
             {
-                bitmap.Dispose();
+                PageBitmapPool.Return(bitmap, generation);
             }
             catch
             {

@@ -11,13 +11,20 @@ internal static class BitmapHelper
     /// Copies an Skia bitmap into an Avalonia writeable bitmap, staying in BGRA8888
     /// so no PNG encode/decode round-trip is needed.
     /// </summary>
-    public static WriteableBitmap CreateBitmap(SKBitmap source)
+    public static WriteableBitmap CreateBitmap(SKBitmap source, WriteableBitmap? reusable = null)
     {
         var width = source.Width;
         var height = source.Height;
         if (width <= 0 || height <= 0)
         {
             throw new InvalidOperationException("The renderer returned an empty page.");
+        }
+
+        var size = new PixelSize(width, height);
+        var target = reusable is not null && reusable.PixelSize == size ? reusable : null;
+        if (reusable is not null && target is null)
+        {
+            reusable.Dispose();
         }
 
         SKBitmap? normalized = null;
@@ -34,8 +41,8 @@ internal static class BitmapHelper
                 bitmap = normalized;
             }
 
-            var target = new WriteableBitmap(
-                new PixelSize(width, height),
+            target ??= new WriteableBitmap(
+                size,
                 new Vector(96, 96),
                 PixelFormat.Bgra8888,
                 AlphaFormat.Premul);
@@ -56,13 +63,25 @@ internal static class BitmapHelper
                 var targetRowBytes = framebuffer.RowBytes;
                 var copyBytes = Math.Min(sourceRowBytes, targetRowBytes);
 
-                for (var y = 0; y < height; y++)
+                if (sourceRowBytes == targetRowBytes)
                 {
+                    // The common BGRA case: one bulk copy instead of one call per row.
                     Buffer.MemoryCopy(
-                        sourceBase + (y * sourceRowBytes),
-                        targetBase + (y * targetRowBytes),
-                        targetRowBytes,
-                        copyBytes);
+                        sourceBase,
+                        targetBase,
+                        (long)targetRowBytes * height,
+                        (long)sourceRowBytes * height);
+                }
+                else
+                {
+                    for (var y = 0; y < height; y++)
+                    {
+                        Buffer.MemoryCopy(
+                            sourceBase + (y * sourceRowBytes),
+                            targetBase + (y * targetRowBytes),
+                            targetRowBytes,
+                            copyBytes);
+                    }
                 }
             }
 

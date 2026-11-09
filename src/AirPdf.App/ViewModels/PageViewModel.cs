@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -586,7 +587,11 @@ public sealed class PageViewModel : ObservableObject, IDisposable
             using var skiaBitmap = await _renderer.RenderAsync(Number, targetWidth, cancellation.Token, priority);
             cancellation.Token.ThrowIfCancellationRequested();
 
-            var bitmap = await Dispatcher.UIThread.InvokeAsync(() => BitmapHelper.CreateBitmap(skiaBitmap));
+            var bitmap = await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var reusable = PageBitmapPool.Rent(new PixelSize(skiaBitmap.Width, skiaBitmap.Height));
+                return BitmapHelper.CreateBitmap(skiaBitmap, reusable);
+            });
             if (cancellation.IsCancellationRequested || generation != _renderGeneration)
             {
                 bitmap.Dispose();
@@ -656,13 +661,13 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         }
 
         // Avalonia's compositor may still hold the previous bitmap for a frame.
-        // Disposing immediately during a zoom can tear down the image underneath
-        // the render thread, so let the visual tree release it first.
+        // Return it to the pool only after the visual tree has released it.
+        var generation = PageBitmapPool.Generation;
         DispatcherTimer.RunOnce(() =>
         {
             try
             {
-                bitmap.Dispose();
+                PageBitmapPool.Return(bitmap, generation);
             }
             catch
             {

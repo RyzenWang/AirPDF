@@ -17,6 +17,9 @@ semantic versioning once it reaches 1.0.
 - Scrolling and zooming now render new pages at 65% width and use medium-quality bitmap
   interpolation; once the reader pauses for 220ms, affected pages refine to the full
   target size and high-quality interpolation.
+- Retired page bitmaps go through a small generation-scoped pool instead of being
+  reallocated from scratch on every render. When the source and target strides match, the
+  pixel copy is one bulk block instead of one copy per row.
 
 ### Fixed
 
