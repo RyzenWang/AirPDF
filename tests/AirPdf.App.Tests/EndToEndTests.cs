@@ -174,6 +174,7 @@ public sealed class EndToEndTests : IDisposable
         _window.KeyTextInput(word);
         await WaitAsync(() => string.Equals(document.SearchQuery, word, StringComparison.Ordinal));
         Assert.Equal(word, document.SearchQuery);
+        Assert.False(document.ShowSearchNavigation);
 
         // Enter in the search box runs the search.
         _window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
@@ -181,6 +182,12 @@ public sealed class EndToEndTests : IDisposable
 
         Assert.True(document.HasSearchResults, $"no results for '{word}'");
         Assert.NotEmpty(document.SearchResults);
+        Assert.True(document.ShowSearchNavigation);
+
+        document.IsSearching = true;
+        Assert.False(document.ShowSearchNavigation);
+        document.IsSearching = false;
+        Assert.True(document.ShowSearchNavigation);
 
         // Highlights are pushed into the page view models, which is what the overlay draws.
         await WaitAsync(() => document.Pages.Any(page => page.HighlightRects.Count > 0));

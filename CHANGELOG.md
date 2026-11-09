@@ -30,6 +30,8 @@ semantic versioning once it reaches 1.0.
 - Toolbar clicks are no longer mistaken for text-selection presses when a page is scrolled
   partly behind the toolbar. Position-based page hit-testing is now clipped to the page
   list bounds, and a selection press must originate inside a page view.
+- Search previous/next controls stay hidden until a search returns results and while a
+  search is running, so the loading bar no longer overlaps them.
 
 ## [0.7.0] - 2026-11-08
 

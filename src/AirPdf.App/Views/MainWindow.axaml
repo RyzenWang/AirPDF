@@ -1215,7 +1215,10 @@
                            Width="54"
                            IsVisible="{Binding IsSearching}" />
             </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+            <StackPanel Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="2"
+                        IsVisible="{Binding ShowSearchNavigation}">
               <Button Classes="zoom"
                       Command="{Binding PreviousSearchResultCommand}"
                       IsEnabled="{Binding HasSearchResults}"

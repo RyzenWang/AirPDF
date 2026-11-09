@@ -466,11 +466,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             if (SetProperty(ref _hasSearchResults, value))
             {
                 OnPropertyChanged(nameof(HasNoSearchResults));
+                OnPropertyChanged(nameof(ShowSearchNavigation));
             }
         }
     }
 
     public bool HasNoSearchResults => HasSearched && !IsSearching && !HasSearchResults;
+
+    /// <summary>
+    /// Hide the previous/next controls until a search has produced something to step
+    /// through. They also hide while a search is running so the loading bar has the row to
+    /// itself.
+    /// </summary>
+    public bool ShowSearchNavigation => HasSearched && !IsSearching && HasSearchResults;
 
     public bool IsWelcomeVisible => !IsDocumentOpen && !IsBusy;
 
@@ -3346,11 +3354,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ThemeTooltip));
     }
 
-    partial void OnHasSearchedChanged(bool value) => OnPropertyChanged(nameof(HasNoSearchResults));
+    partial void OnHasSearchedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(HasNoSearchResults));
+        OnPropertyChanged(nameof(ShowSearchNavigation));
+    }
 
     partial void OnSearchQueryChanged(string value) => OnPropertyChanged(nameof(HasSearchQuery));
 
-    partial void OnIsSearchingChanged(bool value) => OnPropertyChanged(nameof(HasNoSearchResults));
+    partial void OnIsSearchingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(HasNoSearchResults));
+        OnPropertyChanged(nameof(ShowSearchNavigation));
+    }
 
     partial void OnHasUpdateChanged(bool value)
     {
