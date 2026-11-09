@@ -103,8 +103,15 @@ public sealed class PdfDocumentService : IDisposable
         // Rendering is CPU bound and must not run on the caller's thread. The priority lane
         // orders renders before they take the native gate, so a visible page is not stuck
         // behind thumbnails queued earlier.
+        var key = new RenderRequestKey(
+            this,
+            fullPath,
+            pageNumber,
+            Thumbnail: priority == PdfRenderPriority.Thumbnail);
+
         return RenderQueue.Enqueue(
             priority,
+            key,
             cancellationToken,
             token => RenderPageCoreAsync(fullPath, pageNumber, width, password, priority, token));
     }

@@ -36,6 +36,8 @@ semantic versioning once it reaches 1.0.
 - Large-document searches use PDFium's native text search to reject non-matching pages
   before their words and character boxes are materialized. Search progress updates are
   throttled to 100ms instead of posting once per page.
+- Queued page renders are coalesced by document/page/kind, so a newer request supersedes
+  an older queued render instead of making the worker execute stale pages first.
 
 ### Fixed
 
