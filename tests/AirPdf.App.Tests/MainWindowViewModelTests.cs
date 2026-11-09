@@ -773,6 +773,22 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.Same(blue, context.ViewModel.InkColor);
     }
     [AvaloniaFact]
+    public void Palette_IncludesWhiteAndKeepsBlackAsDefaultInk()
+    {
+        using var context = new TestContext();
+
+        var white = context.ViewModel.Palette.Single(color => color.Name == "White");
+        Assert.Equal(255, white.Red);
+        Assert.Equal(255, white.Green);
+        Assert.Equal(255, white.Blue);
+
+        Assert.Equal("Black", context.ViewModel.InkColor.Name);
+
+        context.ViewModel.SetInkColor(white);
+        Assert.Equal("White", context.ViewModel.InkColor.Name);
+    }
+
+    [AvaloniaFact]
     public async Task Pages_DrawTheStrokeInTheChosenInkColour()
     {
         using var context = new TestContext();

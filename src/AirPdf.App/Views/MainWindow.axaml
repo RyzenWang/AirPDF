@@ -315,7 +315,8 @@
                       Width="8"
                       Height="8" />
                 <Button.Flyout>
-                  <Flyout Placement="BottomEdgeAlignedLeft">
+                  <Flyout Placement="BottomEdgeAlignedLeft"
+                          Opened="OnInkPaletteOpened">
                     <StackPanel Spacing="9" Width="200">
                       <TextBlock Text="{DynamicResource L.InkColorLabel}" Classes="eyebrow" />
                       <ItemsControl ItemsSource="{Binding Palette}">
@@ -328,7 +329,27 @@
                           <DataTemplate x:DataType="vm:MarkupColor">
                             <Button Classes="swatch" Margin="0,0,6,6"
                                     Background="{Binding Brush}" Tag="{Binding}"
-                                    Click="OnInkSwatchClick" />
+                                    AutomationProperties.Name="{Binding Name}"
+                                    Click="OnInkSwatchClick">
+                              <Panel Width="12" Height="12">
+                                <Path Classes="swatchCheck"
+                                      Data="{StaticResource IconCheck}"
+                                      Stroke="White"
+                                      StrokeThickness="3.2"
+                                      StrokeLineCap="Round"
+                                      StrokeJoin="Round"
+                                      Stretch="Uniform"
+                                      IsHitTestVisible="False" />
+                                <Path Classes="swatchCheck"
+                                      Data="{StaticResource IconCheck}"
+                                      Stroke="#151515"
+                                      StrokeThickness="1.7"
+                                      StrokeLineCap="Round"
+                                      StrokeJoin="Round"
+                                      Stretch="Uniform"
+                                      IsHitTestVisible="False" />
+                              </Panel>
+                            </Button>
                           </DataTemplate>
                         </ItemsControl.ItemTemplate>
                       </ItemsControl>

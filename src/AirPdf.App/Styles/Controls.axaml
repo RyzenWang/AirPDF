@@ -107,6 +107,18 @@
     <Setter Property="CornerRadius" Value="13" />
     <Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.swatch.selected">
+    <Setter Property="BorderThickness" Value="3" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Button.swatch Path.swatchCheck">
+    <Setter Property="Opacity" Value="0" />
+  </Style>
+  <Style Selector="Button.swatch.selected Path.swatchCheck">
+    <Setter Property="Opacity" Value="1" />
   </Style>
 
   <!-- The pen and its palette arrow read as one control: the group carries the hover and

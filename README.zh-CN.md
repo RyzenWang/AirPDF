@@ -129,7 +129,7 @@ NativeAOT 会链接构建机的 glibc，更老的发行版无法启动该二进�
 发布 NativeAOT 版本还需要 C++ 工具链：Windows 上需要 MSVC 生成工具与 Windows SDK，
 macOS 上需要 Xcode，Linux 上需要 clang。普通的 `dotnet build` 不需要。
 
-测试目前共 **282 个**（Core 121 个，App 161 个）。测试使用 `tests/Assets/sample.pdf`，
+测试目前共 **283 个**（Core 121 个，App 162 个）。测试使用 `tests/Assets/sample.pdf`，
 一份八页的示例文档，覆盖英文、中文、混合排版和搜索坐标。`AirPdf.App.Tests` 还包含
 Headless Avalonia 测试，覆盖 XAML 与标签栏、打开、搜索、选择、缩放、语言切换、
 阅读位置恢复，以及 Windows Snap Layouts 的 hit-test 标记。

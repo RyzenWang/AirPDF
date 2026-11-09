@@ -6,7 +6,14 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+### Added
+
+- White is now available in the shared markup palette, including the ink colour picker.
+
 ### Changed
+
+- The selected ink colour in the palette now has a thick accent ring and a check mark, with
+  a contrasting dark/light check so it stays visible on every swatch including white.
 
 - Document metadata and the outline now load on demand from the resident PDFium handle,
   only when the reader first opens the contents or document-information panel. Opening a

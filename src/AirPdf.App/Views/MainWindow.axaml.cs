@@ -2476,6 +2476,30 @@ public partial class MainWindow : Window
         HidePalettes();
     }
 
+    private void OnInkPaletteOpened(object? sender, EventArgs e)
+    {
+        if (InkPaletteButton.Flyout is not Flyout { Content: Control content })
+        {
+            return;
+        }
+
+        // ItemsControl containers are generated during the flyout's layout pass.
+        Dispatcher.UIThread.Post(
+            () => UpdateInkSwatchSelection(content),
+            DispatcherPriority.Loaded);
+    }
+
+    private void UpdateInkSwatchSelection(Control content)
+    {
+        foreach (var button in content.GetVisualDescendants().OfType<Button>())
+        {
+            if (button.Tag is MarkupColor color)
+            {
+                button.Classes.Set("selected", Equals(color, _viewModel.InkColor));
+            }
+        }
+    }
+
     private void OnInkSwatchClick(object? sender, RoutedEventArgs e)
     {
         if (sender is Control { Tag: MarkupColor color })

@@ -79,7 +79,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         new("Orange", 255, 171, 64),
         new("Red", 239, 83, 80),
         new("Grey", 120, 124, 130),
-        new("Black", 32, 33, 36)
+        new("Black", 32, 33, 36),
+        new("White", 255, 255, 255)
     ];
 
     /// <summary>
@@ -202,7 +203,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _settings.RecentFiles ??= [];
         _settings.ReadingPositions ??= [];
         _highlightColor = Palette[0];
-        _inkColor = Palette[^1];
+        _inkColor = Palette.Single(color => color.Name == "Black");
         _documentSubtitle = _localization.T("L.Ready");
         _reading = new ReadingPositionController(
             _settingsService,
