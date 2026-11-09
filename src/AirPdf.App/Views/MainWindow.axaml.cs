@@ -2367,6 +2367,8 @@ public partial class MainWindow : Window
         {
             content.DataContext = _viewModel;
         }
+
+        _ = _viewModel.EnsureDocumentDetailsAsync();
     }
 
     /// <summary>

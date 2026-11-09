@@ -22,5 +22,6 @@
   <ItemGroup>
     <None Include="..\Assets\sample.pdf" Link="Assets\sample.pdf" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\Assets\links.pdf" Link="Assets\links.pdf" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\Assets\outline.pdf" Link="Assets\outline.pdf" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

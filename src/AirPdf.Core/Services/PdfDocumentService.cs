@@ -1,8 +1,6 @@
 using AirPdf.Core.Models;
 using AirPdf.Core.Pdfium;
 using SkiaSharp;
-using UglyToad.PdfPig;
-using UglyToad.PdfPig.Outline;
 
 namespace AirPdf.Core.Services;
 
@@ -48,9 +46,9 @@ public sealed class PdfDocumentService : IDisposable
     }
 
     /// <summary>
-    /// Reads the optional document-information dictionary and outline. This is deliberately
-    /// separate from <see cref="OpenAsync"/>: PdfPig reparses the whole file, and the first
-    /// page can be shown before that work finishes.
+    /// Reads the optional document-information dictionary and outline through the resident
+    /// PDFium handle. Kept separate from <see cref="OpenAsync"/> so it can be loaded only
+    /// when the user opens the outline or document-information panel.
     /// </summary>
     public Task<PdfDocumentDetails> GetDetailsAsync(
         string filePath,
@@ -61,7 +59,30 @@ public sealed class PdfDocumentService : IDisposable
 
         var fullPath = NormalizePath(filePath);
         return Task.Run(
-            () => ReadPdfPigDetails(fullPath, password, cancellationToken),
+            async () =>
+            {
+                await RenderGate.WaitAsync(PdfGatePriority.Background, cancellationToken)
+                    .ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var session = _session;
+                    if (session is null ||
+                        !string.Equals(_sessionPath, fullPath, PathComparison))
+                    {
+                        throw new PdfDocumentException(
+                            PdfFailure.Unknown,
+                            "The document is no longer open.");
+                    }
+
+                    return session.GetDetails();
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
             cancellationToken);
     }
 
@@ -1029,131 +1050,6 @@ public sealed class PdfDocumentService : IDisposable
             FileSizeBytes = fileInfo.Length,
             PdfVersion = 1.7
         };
-    }
-
-    private static PdfDocumentDetails ReadPdfPigDetails(
-        string fullPath,
-        string? password,
-        CancellationToken cancellationToken)
-    {
-        var details = new PdfDocumentDetails();
-        try
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            using var document = PdfDocument.Open(fullPath, new ParsingOptions
-            {
-                Password = password!,
-                UseLenientParsing = true,
-                SkipMissingFonts = true
-            });
-
-            cancellationToken.ThrowIfCancellationRequested();
-
-            var info = document.Information;
-            var metadata = new PdfMetadata
-            {
-                Title = Clean(info.Title),
-                Author = Clean(info.Author),
-                Subject = Clean(info.Subject),
-                Keywords = Clean(info.Keywords),
-                Creator = Clean(info.Creator),
-                Producer = Clean(info.Producer),
-                CreatedAt = SafeDate(info.GetCreatedDateTimeOffset),
-                ModifiedAt = SafeDate(info.GetModifiedDateTimeOffset)
-            };
-
-            IReadOnlyList<PdfBookmark> bookmarks = [];
-            if (document.TryGetBookmarks(out var outline, false))
-            {
-                bookmarks = MapBookmarks(outline.Roots);
-            }
-
-            return new PdfDocumentDetails
-            {
-                PdfVersion = document.Version,
-                Metadata = metadata,
-                Bookmarks = bookmarks
-            };
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch
-        {
-            // Metadata is optional. A file that renders correctly should still open even
-            // when a producer wrote a malformed document-information dictionary.
-            return details;
-        }
-    }
-
-    private static IReadOnlyList<PdfBookmark> MapBookmarks(IReadOnlyList<BookmarkNode> nodes)
-    {
-        if (nodes.Count == 0)
-        {
-            return [];
-        }
-
-        var result = new List<PdfBookmark>(nodes.Count);
-        foreach (var node in nodes)
-        {
-            var children = MapBookmarks(node.Children);
-            var page = FindBookmarkPage(node, children);
-            if (page <= 0)
-            {
-                continue;
-            }
-
-            result.Add(new PdfBookmark
-            {
-                Title = string.IsNullOrWhiteSpace(node.Title) ? $"Page {page}" : node.Title.Trim(),
-                PageNumber = page,
-                Children = children
-            });
-        }
-
-        return result;
-    }
-
-    private static int FindBookmarkPage(BookmarkNode node, IReadOnlyList<PdfBookmark> children)
-    {
-        if (node is DocumentBookmarkNode documentNode && documentNode.PageNumber > 0)
-        {
-            return documentNode.PageNumber;
-        }
-
-        foreach (var child in children)
-        {
-            if (child.PageNumber > 0)
-            {
-                return child.PageNumber;
-            }
-        }
-
-        return 0;
-    }
-
-    private static string? Clean(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return null;
-        }
-
-        return value.Trim();
-    }
-
-    private static DateTimeOffset? SafeDate(Func<DateTimeOffset?> read)
-    {
-        try
-        {
-            return read();
-        }
-        catch
-        {
-            return null;
-        }
     }
 
     private static string NormalizePath(string filePath)

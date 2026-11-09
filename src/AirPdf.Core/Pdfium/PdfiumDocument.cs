@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using AirPdf.Core.Models;
@@ -462,6 +463,260 @@ public sealed partial class PdfiumDocument : IDisposable
         {
             Marshal.FreeHGlobal(buffer);
         }
+    }
+
+    /// <summary>
+    /// Reads the optional metadata and outline through PDFium. The caller must hold the
+    /// process-wide PDFium gate; this method does not touch pages or render anything.
+    /// </summary>
+    public PdfDocumentDetails GetDetails()
+    {
+        ThrowIfDisposed();
+
+        return new PdfDocumentDetails
+        {
+            PdfVersion = ReadPdfVersion(),
+            Metadata = ReadMetadata(),
+            Bookmarks = ReadBookmarks()
+        };
+    }
+
+    private double ReadPdfVersion()
+    {
+        if (PdfiumNative.GetFileVersion(_handle, out var version) != 0 && version > 0)
+        {
+            return version / 10.0;
+        }
+
+        return 1.7;
+    }
+
+    private PdfMetadata ReadMetadata() =>
+        new()
+        {
+            Title = ReadMetaText("Title"),
+            Author = ReadMetaText("Author"),
+            Subject = ReadMetaText("Subject"),
+            Keywords = ReadMetaText("Keywords"),
+            Creator = ReadMetaText("Creator"),
+            Producer = ReadMetaText("Producer"),
+            CreatedAt = ParsePdfDate(ReadMetaText("CreationDate")),
+            ModifiedAt = ParsePdfDate(ReadMetaText("ModDate"))
+        };
+
+    private string? ReadMetaText(string tag)
+    {
+        var tagPointer = Marshal.StringToCoTaskMemUTF8(tag);
+        try
+        {
+            var required = PdfiumNative.GetMetaText(_handle, tagPointer, IntPtr.Zero, default);
+            if (required.Value == 0 || required.Value > int.MaxValue)
+            {
+                return null;
+            }
+
+            var size = checked((int)required.Value);
+            var buffer = Marshal.AllocHGlobal(size);
+            try
+            {
+                var written = PdfiumNative.GetMetaText(
+                    _handle,
+                    tagPointer,
+                    buffer,
+                    new CULong((uint)size));
+                if (written.Value == 0)
+                {
+                    return null;
+                }
+
+                var text = Marshal.PtrToStringUni(buffer, (int)(written.Value / 2));
+                return string.IsNullOrWhiteSpace(text) ? null : text.TrimEnd('\0').Trim();
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(tagPointer);
+        }
+    }
+
+    private IReadOnlyList<PdfBookmark> ReadBookmarks()
+    {
+        var count = 0;
+        return ReadBookmarkLevel(IntPtr.Zero, 0, ref count);
+    }
+
+    private IReadOnlyList<PdfBookmark> ReadBookmarkLevel(IntPtr parent, int depth, ref int count)
+    {
+        const int maxDepth = 64;
+        const int maxBookmarks = 10_000;
+
+        if (depth > maxDepth)
+        {
+            return [];
+        }
+
+        var result = new List<PdfBookmark>();
+        var bookmark = PdfiumNative.BookmarkGetFirstChild(_handle, parent);
+        while (bookmark != IntPtr.Zero && count < maxBookmarks)
+        {
+            count++;
+            var children = ReadBookmarkLevel(bookmark, depth + 1, ref count);
+            var page = BookmarkPage(bookmark, children);
+            if (page > 0)
+            {
+                result.Add(new PdfBookmark
+                {
+                    Title = ReadBookmarkTitle(bookmark) ?? $"Page {page}",
+                    PageNumber = page,
+                    Children = children
+                });
+            }
+
+            bookmark = PdfiumNative.BookmarkGetNextSibling(_handle, bookmark);
+        }
+
+        return result;
+    }
+
+    private int BookmarkPage(IntPtr bookmark, IReadOnlyList<PdfBookmark> children)
+    {
+        var page = DestinationPage(PdfiumNative.BookmarkGetDest(_handle, bookmark));
+        if (page <= 0)
+        {
+            var action = PdfiumNative.BookmarkGetAction(_handle, bookmark);
+            if (action != IntPtr.Zero)
+            {
+                page = DestinationPage(PdfiumNative.ActionGetDest(_handle, action));
+            }
+        }
+
+        if (page > 0)
+        {
+            return page;
+        }
+
+        foreach (var child in children)
+        {
+            if (child.PageNumber > 0)
+            {
+                return child.PageNumber;
+            }
+        }
+
+        return 0;
+    }
+
+    private int DestinationPage(IntPtr destination)
+    {
+        if (destination == IntPtr.Zero)
+        {
+            return 0;
+        }
+
+        var index = PdfiumNative.DestGetPageIndex(_handle, destination);
+        return index < 0 ? 0 : index + 1;
+    }
+
+    private string? ReadBookmarkTitle(IntPtr bookmark)
+    {
+        var required = PdfiumNative.BookmarkGetTitle(bookmark, IntPtr.Zero, default);
+        if (required.Value == 0 || required.Value > int.MaxValue)
+        {
+            return null;
+        }
+
+        var size = checked((int)required.Value);
+        var buffer = Marshal.AllocHGlobal(size);
+        try
+        {
+            var written = PdfiumNative.BookmarkGetTitle(
+                bookmark,
+                buffer,
+                new CULong((uint)size));
+            if (written.Value == 0)
+            {
+                return null;
+            }
+
+            var text = Marshal.PtrToStringUni(buffer, (int)(written.Value / 2));
+            return string.IsNullOrWhiteSpace(text) ? null : text.TrimEnd('\0').Trim();
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    private static DateTimeOffset? ParsePdfDate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var text = value.Trim();
+        if (text.StartsWith("D:", StringComparison.Ordinal))
+        {
+            text = text[2..];
+        }
+
+        if (text.Length < 4 ||
+            !int.TryParse(text[..4], NumberStyles.None, CultureInfo.InvariantCulture, out var year))
+        {
+            return null;
+        }
+
+        var month = ReadNumber(text, 4, 2, 1);
+        var day = ReadNumber(text, 6, 2, 1);
+        var hour = ReadNumber(text, 8, 2, 0);
+        var minute = ReadNumber(text, 10, 2, 0);
+        var second = ReadNumber(text, 12, 2, 0);
+
+        var offset = TimeSpan.Zero;
+        if (text.Length > 14 && text[14] is '+' or '-')
+        {
+            var sign = text[14] == '-' ? -1 : 1;
+            var offsetHours = ReadNumber(text, 15, 2, 0);
+            var offsetMinutes = ReadNumber(text, 18, 2, 0);
+            offset = TimeSpan.FromMinutes(sign * ((offsetHours * 60) + offsetMinutes));
+        }
+
+        try
+        {
+            var safeYear = Math.Clamp(year, 1, 9999);
+            var safeMonth = Math.Clamp(month, 1, 12);
+            return new DateTimeOffset(
+                safeYear,
+                safeMonth,
+                Math.Clamp(day, 1, DateTime.DaysInMonth(safeYear, safeMonth)),
+                Math.Clamp(hour, 0, 23),
+                Math.Clamp(minute, 0, 59),
+                Math.Clamp(second, 0, 59),
+                offset);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            return null;
+        }
+    }
+
+    private static int ReadNumber(string text, int start, int length, int fallback)
+    {
+        if (start + length > text.Length ||
+            !int.TryParse(
+                text.AsSpan(start, length),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out var value))
+        {
+            return fallback;
+        }
+
+        return value;
     }
 
     public void Dispose()

@@ -19,6 +19,5 @@
       with a Linux and macOS publish verified end to end.
     -->
     <PackageReference Include="PDFtoImage" Version="5.4.0" />
-    <PackageReference Include="PdfPig" Version="0.1.16" />
   </ItemGroup>
 </Project>

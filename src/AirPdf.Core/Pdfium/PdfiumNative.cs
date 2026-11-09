@@ -194,4 +194,36 @@ internal static partial class PdfiumNative
     /// page destination.</summary>
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFDest_GetDestPageIndex")]
     internal static extern int DestGetPageIndex(IntPtr document, IntPtr destination);
+
+    // ---- document details -------------------------------------------------------
+
+    /// <summary>Returns the PDF version times ten (for example 17 for PDF 1.7).</summary>
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDF_GetFileVersion")]
+    internal static extern int GetFileVersion(IntPtr document, out int version);
+
+    /// <summary>
+    /// Reads a document-information value as UTF-16LE bytes, including the terminating NUL.
+    /// Pass <see cref="IntPtr.Zero"/> as the buffer to measure the required byte length.
+    /// </summary>
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDF_GetMetaText")]
+    internal static extern CULong GetMetaText(IntPtr document, IntPtr tag, IntPtr buffer, CULong length);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFBookmark_GetFirstChild")]
+    internal static extern IntPtr BookmarkGetFirstChild(IntPtr document, IntPtr parent);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFBookmark_GetNextSibling")]
+    internal static extern IntPtr BookmarkGetNextSibling(IntPtr document, IntPtr bookmark);
+
+    /// <summary>Reads a bookmark title as UTF-16LE, including its NUL terminator.</summary>
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFBookmark_GetTitle")]
+    internal static extern CULong BookmarkGetTitle(IntPtr bookmark, IntPtr buffer, CULong length);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFBookmark_GetDest")]
+    internal static extern IntPtr BookmarkGetDest(IntPtr document, IntPtr bookmark);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFBookmark_GetAction")]
+    internal static extern IntPtr BookmarkGetAction(IntPtr document, IntPtr bookmark);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAction_GetDest")]
+    internal static extern IntPtr ActionGetDest(IntPtr document, IntPtr action);
 }

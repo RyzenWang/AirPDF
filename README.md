@@ -134,7 +134,7 @@ share the top row. macOS and Linux keep their native window frame and the tab ba
 | Window chrome | Avalonia + `Win32Properties` | The Windows tab bar doubles as a managed titlebar; `HTMAXBUTTON` restores Windows 11 Snap Layouts. macOS and Linux keep native decorations. |
 | Rendering | PDFium | The same open-source engine used by browsers; one document handle stays open while reading. |
 | Raster transport | SkiaSharp | Fast, predictable pixel handling. |
-| Text layer | PDFium (`FPDFText_*`) | Characters arrive in reading order from the engine that renders the page, so search, selection, and rotated pages agree with what is drawn. PdfPig supplies metadata and the outline. |
+| Text layer | PDFium (`FPDFText_*`) | Characters arrive in reading order from the engine that renders the page, so search, selection, and rotated pages agree with what is drawn. PDFium also supplies metadata and the outline, loaded only when the reader opens those panels. |
 | MVVM | CommunityToolkit.Mvvm | Small, source-generated, no framework lock-in. |
 | Compilation | NativeAOT (Windows, Linux, macOS) | No JIT at startup: measured 0.7 s to first window against 5.0 s on Windows. |
 
@@ -180,7 +180,7 @@ dotnet build AirPdf.sln -c Release
 dotnet test AirPdf.sln -c Release
 ```
 
-The suite currently has **278 tests** (119 Core, 159 App). It uses
+The suite currently has **280 tests** (120 Core, 160 App). It uses
 `tests/Assets/sample.pdf`, an eight-page document that exercises Latin and Chinese text,
 mixed typography, and search geometry. `AirPdf.App.Tests` adds headless Avalonia coverage
 for the XAML and tab strip, opening, search, selection, zoom, language switching,
@@ -303,17 +303,18 @@ the whole document, and showing the file in its folder.
 ┌──────────────▼──────────────┐
 │ AirPdf.Core                 │
 │  PdfDocumentService         │  PDFium
-│  PdfSearchService           │  PdfPig
+│  PdfSearchService           │  PDFium text layer
 │  SettingsService            │  JSON in the user profile
 └─────────────────────────────┘
 ```
 
 - `AirPdf.Core` has no Avalonia dependency and can be reused by a CLI, tests,
   or another front end.
-- PDFium is single-threaded by design, so all render calls are serialized
-  through one process-wide gate.
-- Pages are rendered to `WriteableBitmap` objects and evicted when they move
-  outside a small window around the current page.
+- PDFium is single-threaded by design, so all native calls are serialized
+  through one process-wide priority gate.
+- Pages are rendered to `WriteableBitmap` objects, reused through a small
+  generation-scoped pool, and evicted when they move outside a small window
+  around the current page.
 - The page list is a virtualizing `ListBox` with a custom template; the scroll
   position drives current-page detection and thumbnail selection.
 - On Windows, `SystemDecorations.BorderOnly` plus an extended client area replace

@@ -10,6 +10,9 @@ public sealed class PdfDocumentServiceTests
     private static readonly string SamplePath =
         Path.Combine(AppContext.BaseDirectory, "Assets", "sample.pdf");
 
+    private static readonly string OutlinePath =
+        Path.Combine(AppContext.BaseDirectory, "Assets", "outline.pdf");
+
     [Fact]
     public async Task OpenAsync_ReadsPagesAndDocumentInfo()
     {
@@ -39,6 +42,34 @@ public sealed class PdfDocumentServiceTests
         Assert.Empty(document.Bookmarks);
         Assert.True(details.PdfVersion >= 1.0);
         Assert.NotNull(details.Metadata);
+    }
+
+    [Fact]
+    public async Task GetDetailsAsync_ReadsPdfiumMetadataAndOutline()
+    {
+        using var service = new PdfDocumentService();
+
+        await service.OpenAsync(OutlinePath);
+        var details = await service.GetDetailsAsync(OutlinePath);
+
+        Assert.Equal(1.4, details.PdfVersion, 1);
+        Assert.Collection(
+            details.Bookmarks,
+            first =>
+            {
+                Assert.Equal("Chapter One", first.Title);
+                Assert.Equal(1, first.PageNumber);
+            },
+            second =>
+            {
+                Assert.Equal("Chapter Two", second.Title);
+                Assert.Equal(2, second.PageNumber);
+            });
+
+        await service.OpenAsync(SamplePath);
+        var sample = await service.GetDetailsAsync(SamplePath);
+        Assert.Equal("AirPDF Field Notes", sample.Metadata.Title);
+        Assert.Contains("Skia", sample.Metadata.Producer);
     }
 
     [Fact]

@@ -2,8 +2,8 @@ namespace AirPdf.Core.Models;
 
 /// <summary>
 /// Metadata and outline that are useful once the document is already on screen, but are
-/// not needed to render the first page. Loading them separately keeps a large file's
-/// PdfPig pass out of the open-to-first-page path.
+/// not needed to render the first page. They are read from the resident PDFium handle only
+/// when the reader opens the contents or document-information panel.
 /// </summary>
 public sealed class PdfDocumentDetails
 {

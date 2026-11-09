@@ -94,7 +94,7 @@ Windows 截图展示 0.6 的标题栏：文档标签和窗口按钮共享顶部�
 | 窗口 | Avalonia + `Win32Properties` | Windows 标签栏兼作自定义标题栏；`HTMAXBUTTON` 恢复 Windows 11 Snap Layouts。macOS / Linux 保留原生窗口装饰。 |
 | 渲染 | PDFium | 浏览器同款开源 PDF 引擎；阅读期间常驻一个文档句柄。 |
 | 位图传输 | SkiaSharp | 快速、可控的像素处理。 |
-| 文本层 | PDFium（`FPDFText_*`） | 由渲染同一引擎按阅读顺序给出字符，搜索、选择与旋转页和实际绘制一致；PdfPig 负责元数据与目录。 |
+| 文本层 | PDFium（`FPDFText_*`） | 由渲染同一引擎按阅读顺序给出字符，搜索、选择与旋转页和实际绘制一致；元数据与目录也由 PDFium 提供，并且只在打开对应面板时加载。 |
 | MVVM | CommunityToolkit.Mvvm | 小而克制的源生成 MVVM。 |
 | 编译方式 | NativeAOT（Windows、Linux、macOS） | 启动时无 JIT：Windows 实测首窗 0.7 秒，对比 5.0 秒。 |
 
@@ -129,7 +129,7 @@ NativeAOT 会链接构建机的 glibc，更老的发行版无法启动该二进�
 发布 NativeAOT 版本还需要 C++ 工具链：Windows 上需要 MSVC 生成工具与 Windows SDK，
 macOS 上需要 Xcode，Linux 上需要 clang。普通的 `dotnet build` 不需要。
 
-测试目前共 **278 个**（Core 119 个，App 159 个）。测试使用 `tests/Assets/sample.pdf`，
+测试目前共 **280 个**（Core 120 个，App 160 个）。测试使用 `tests/Assets/sample.pdf`，
 一份八页的示例文档，覆盖英文、中文、混合排版和搜索坐标。`AirPdf.App.Tests` 还包含
 Headless Avalonia 测试，覆盖 XAML 与标签栏、打开、搜索、选择、缩放、语言切换、
 阅读位置恢复，以及 Windows Snap Layouts 的 hit-test 标记。
@@ -238,8 +238,8 @@ docs/                   截图与架构说明
 ```
 
 `AirPdf.Core` 不依赖 Avalonia，可以被 CLI、测试或其他前端复用。PDFium 不是
-线程安全的，所以所有渲染调用在一个进程级信号量下串行执行。页面位图会按当前页
-附近的小窗口淘汰，避免长文档占用过多内存。
+线程安全的，所以所有原生调用在一个进程级优先级门下串行执行。页面位图通过一个小型
+按文档隔离的池复用，并按当前页附近的小窗口淘汰，避免长文档占用过多内存。
 
 Windows 上使用 `SystemDecorations.BorderOnly` 和扩展客户区替换系统标题栏；
 最大化按钮通过 `Win32Properties` 暴露为 `HTMAXBUTTON`，由一个小型 `WM_NCMOUSEMOVE`

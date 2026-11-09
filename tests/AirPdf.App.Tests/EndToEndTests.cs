@@ -140,6 +140,22 @@ public sealed class EndToEndTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task DocumentDetails_LoadOnlyWhenRequested()
+    {
+        var document = await OpenSampleAsync();
+
+        Assert.False(document.IsDetailsLoaded);
+        await document.EnsureDocumentDetailsAsync();
+
+        Assert.True(document.IsDetailsLoaded);
+        Assert.Contains(document.Metadata, row => row.Value == "AirPDF Field Notes");
+
+        // Asking again is a no-op, not a second parse.
+        await document.EnsureDocumentDetailsAsync();
+        Assert.True(document.IsDetailsLoaded);
+    }
+
+    [AvaloniaFact]
     public async Task SearchShortcut_TypesIntoThePanelAndFindsTextOnThePage()
     {
         var document = await OpenSampleAsync();

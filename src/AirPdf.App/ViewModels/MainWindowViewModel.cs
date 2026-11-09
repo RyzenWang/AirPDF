@@ -145,6 +145,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private CancellationTokenSource? _loadCancellation;
     private CancellationTokenSource? _searchCancellation;
     private CancellationTokenSource? _detailsCancellation;
+    private Task? _detailsTask;
+    private bool _detailsLoaded;
     private PdfDocumentInfo? _document;
     private PdfPageRenderer? _pageRenderer;
     private string? _password;
@@ -404,6 +406,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool HasNoAllBookmarks => !HasAllBookmarks;
 
     public bool HasMetadata => Metadata.Count > 0;
+
+    /// <summary>True once the optional metadata/outline pass has completed.</summary>
+    public bool IsDetailsLoaded => _detailsLoaded;
 
     public bool HasSearchQuery => !string.IsNullOrWhiteSpace(SearchQuery);
 
@@ -848,6 +853,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IsPagesTabSelected = false;
         IsContentsTabSelected = true;
         IsBookmarksTabSelected = false;
+        _ = EnsureDocumentDetailsAsync();
     }
 
     [RelayCommand]
@@ -2465,10 +2471,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             }
 
             DocumentOpened?.Invoke(this, EventArgs.Empty);
-
-            // The metadata/outline pass reparses the file with PdfPig. Keep it out of the
-            // open-to-first-page path and fill the panels when it finishes.
-            _ = LoadDocumentDetailsAsync(info, password);
         }
         catch (OperationCanceledException)
         {
@@ -2498,6 +2500,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// Loads metadata and the outline on first use. Opening a document and reading it never
+    /// pays for the separate PDFium details pass unless the reader asks for either panel.
+    /// </summary>
+    public Task EnsureDocumentDetailsAsync()
+    {
+        if (_disposed || _document is null || _detailsLoaded)
+        {
+            return Task.CompletedTask;
+        }
+
+        return _detailsTask ??= LoadDocumentDetailsAsync(_document, _password);
+    }
+
     private async Task LoadDocumentDetailsAsync(PdfDocumentInfo info, string? password)
     {
         var cancellation = new CancellationTokenSource();
@@ -2523,7 +2539,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             _documentPdfVersion = details.PdfVersion;
             OutlineItems = details.Bookmarks.Select(item => new OutlineItemViewModel(item)).ToList();
             Metadata = BuildMetadata(info);
+            _detailsLoaded = true;
             OnPropertyChanged(nameof(HasMetadata));
+            OnPropertyChanged(nameof(IsDetailsLoaded));
         }
         catch (OperationCanceledException)
         {
@@ -2533,6 +2551,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             // The tab's document service was disposed while the details were loading.
         }
+        catch (PdfDocumentException)
+        {
+            // Metadata is optional; leave the panel showing what the open path knows.
+        }
+        catch (Exception)
+        {
+            // A malformed outline must not surface as an unobserved task exception.
+        }
         finally
         {
             if (ReferenceEquals(_detailsCancellation, cancellation))
@@ -2540,6 +2566,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 _detailsCancellation = null;
             }
 
+            _detailsTask = null;
             cancellation.Dispose();
         }
     }
@@ -2874,6 +2901,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         CancelSafely(_detailsCancellation);
         _detailsCancellation = null;
+        _detailsTask = null;
+        _detailsLoaded = false;
+        OnPropertyChanged(nameof(IsDetailsLoaded));
         _documentMetadata = new PdfMetadata();
         _documentPdfVersion = 1.7;
         _reading.Detach();

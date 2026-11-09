@@ -8,9 +8,9 @@ semantic versioning once it reaches 1.0.
 
 ### Changed
 
-- Document metadata and the outline load after the first page is shown instead of blocking
-  document open on the separate PdfPig pass. The metadata panel fills in when the background
-  read completes.
+- Document metadata and the outline now load on demand from the resident PDFium handle,
+  only when the reader first opens the contents or document-information panel. Opening a
+  document no longer pays for either parse, and the separate PdfPig dependency is gone.
 - PDFium's native gate is priority-aware: a visible page render is handed the gate before
   queued text extraction, link loading, or search work. A long search now yields between
   pages instead of making the visible page wait for the whole scan.
