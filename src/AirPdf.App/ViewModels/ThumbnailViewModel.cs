@@ -14,6 +14,7 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
     private const int RenderWidth = 220;
 
     private readonly PdfPageRenderer _renderer;
+    private readonly PageViewModel? _sourcePage;
     private CancellationTokenSource? _renderCancellation;
     private bool _isActive;
     private int _generation;
@@ -23,9 +24,13 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
     /// <summary>Raised whenever the thumbnail's bitmap is installed or dropped.</summary>
     public event EventHandler? BitmapChanged;
 
-    public ThumbnailViewModel(PdfPageRenderer renderer, PdfPageInfo pageInfo)
+    public ThumbnailViewModel(
+        PdfPageRenderer renderer,
+        PdfPageInfo pageInfo,
+        PageViewModel? sourcePage = null)
     {
         _renderer = renderer;
+        _sourcePage = sourcePage;
         Number = pageInfo.Number;
         Height = Math.Max(80, ThumbnailWidth * (pageInfo.Height / Math.Max(1, pageInfo.Width)));
     }
@@ -150,18 +155,50 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
             await Task.Delay(70, cancellation.Token);
             IsRendering = true;
 
-            using var skiaBitmap = await _renderer.RenderAsync(
-                Number,
-                RenderWidth,
-                cancellation.Token,
-                PdfRenderPriority.Thumbnail);
-            cancellation.Token.ThrowIfCancellationRequested();
+            WriteableBitmap? bitmap = null;
+            var sourceImage = _sourcePage?.Image;
 
-            var bitmap = await Dispatcher.UIThread.InvokeAsync(() =>
+            // The page bitmap is already decoded at a larger size. Downscaling it avoids a
+            // second PDFium page render and keeps the thumbnail lane out of the render gate.
+            if (sourceImage is not null && sourceImage.PixelSize.Width > RenderWidth)
             {
-                var reusable = PageBitmapPool.Rent(new PixelSize(skiaBitmap.Width, skiaBitmap.Height));
-                return BitmapHelper.CreateBitmap(skiaBitmap, reusable);
-            });
+                try
+                {
+                    var targetHeight = Math.Max(
+                        1,
+                        (int)Math.Round(
+                            RenderWidth *
+                            (sourceImage.PixelSize.Height / (double)sourceImage.PixelSize.Width)));
+                    bitmap = await Dispatcher.UIThread.InvokeAsync(() =>
+                    {
+                        var reusable = PageBitmapPool.Rent(new PixelSize(RenderWidth, targetHeight));
+                        return BitmapHelper.CreateScaledBitmap(sourceImage, RenderWidth, reusable);
+                    });
+                }
+                catch (Exception exception) when (exception is not OperationCanceledException)
+                {
+                    // The page bitmap can be replaced while the rail catches up; fall back to
+                    // a fresh PDFium thumbnail in that case.
+                    bitmap = null;
+                }
+            }
+
+            if (bitmap is null)
+            {
+                using var skiaBitmap = await _renderer.RenderAsync(
+                    Number,
+                    RenderWidth,
+                    cancellation.Token,
+                    PdfRenderPriority.Thumbnail);
+                cancellation.Token.ThrowIfCancellationRequested();
+
+                bitmap = await Dispatcher.UIThread.InvokeAsync(() =>
+                {
+                    var reusable = PageBitmapPool.Rent(new PixelSize(skiaBitmap.Width, skiaBitmap.Height));
+                    return BitmapHelper.CreateBitmap(skiaBitmap, reusable);
+                });
+            }
+
             if (cancellation.IsCancellationRequested || generation != _generation)
             {
                 bitmap.Dispose();

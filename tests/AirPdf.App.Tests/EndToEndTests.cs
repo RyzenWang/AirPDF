@@ -289,7 +289,7 @@ public sealed class EndToEndTests : IDisposable
         await WaitAsync(() => document.HasSelection);
 
         var page = document.Pages[0];
-        var before = page.Image;
+        var revision = page.ImageRevision;
 
         _window.KeyPressQwerty(PhysicalKey.H, RawInputModifiers.Control | RawInputModifiers.Shift);
         await WaitAsync(() => document.HasUnsavedAnnotations);
@@ -297,8 +297,8 @@ public sealed class EndToEndTests : IDisposable
         // The page already had a bitmap at this width, and a render that skips that case leaves
         // the highlight invisible until the reader saves a copy and reopens it - which is exactly
         // what was reported.
-        await WaitAsync(() => !ReferenceEquals(page.Image, before));
-        Assert.NotSame(before, page.Image);
+        await WaitAsync(() => page.ImageRevision > revision);
+        Assert.True(page.ImageRevision > revision);
     }
     [AvaloniaFact]
     public async Task UndoShortcut_TakesBackTheHighlightAndReRenders()
@@ -312,7 +312,7 @@ public sealed class EndToEndTests : IDisposable
         await WaitAsync(() => document.CanUndoAnnotation);
 
         var page = document.Pages[0];
-        var before = page.Image;
+        var revision = page.ImageRevision;
 
         _window.KeyPressQwerty(PhysicalKey.Z, RawInputModifiers.Control);
 
@@ -324,8 +324,8 @@ public sealed class EndToEndTests : IDisposable
 
         // Undoing is also a document change, so the page has to be redrawn to show the highlight
         // disappear.
-        await WaitAsync(() => !ReferenceEquals(page.Image, before));
-        Assert.NotSame(before, page.Image);
+        await WaitAsync(() => page.ImageRevision > revision);
+        Assert.True(page.ImageRevision > revision);
     }
     [AvaloniaFact]
     public async Task RedoShortcut_AppliesTheHighlightAgain()
@@ -468,12 +468,12 @@ public sealed class EndToEndTests : IDisposable
             var blue = document.Palette.Single(colour => colour.Name == "Blue");
             document.SetInkColor(blue);
 
-            var before = page.Image;
+            var revision = page.ImageRevision;
             await document.AddInkAtAsync(1, [(0.2, 0.5), (0.8, 0.5)]);
 
             // Wait for the page to be drawn with the stroke, because that render is what makes
             // PDFium discard the standard colour entries.
-            await WaitAsync(() => page.Image is { } image && !ReferenceEquals(image, before));
+            await WaitAsync(() => page.ImageRevision > revision);
 
             document.ToggleEraserModeCommand.Execute(null);
             document.BeginErase();

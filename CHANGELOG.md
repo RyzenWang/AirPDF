@@ -24,6 +24,8 @@ semantic versioning once it reaches 1.0.
   populated set, and text trimming walks the loader's loaded pages. Zoom updates only the
   realised page views; scroll layout is computed from page points and the zoom factor.
   Long documents no longer scan every page for each turn or zoom tick.
+- Thumbnails reuse the page's decoded bitmap when it is already available and downscale it
+  instead of asking PDFium to render the page a second time at thumbnail size.
 
 ### Fixed
 

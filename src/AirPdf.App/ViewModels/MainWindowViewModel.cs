@@ -2864,7 +2864,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             page.InkBrush = InkColor.Brush;
             page.InkWidthPoints = InkWidth;
         }
-        Thumbnails = info.Pages.Select(page => new ThumbnailViewModel(_pageRenderer, page)).ToList();
+        Thumbnails = info.Pages
+            .Select((page, index) => new ThumbnailViewModel(_pageRenderer, page, Pages[index]))
+            .ToList();
 
         foreach (var page in Pages)
         {

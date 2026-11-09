@@ -33,6 +33,7 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     private double _displayWidth;
     private double _displayHeight;
     private WriteableBitmap? _image;
+    private int _imageRevision;
     private bool _isRendering;
     private string? _renderError;
     private IReadOnlyList<PdfSearchRect> _highlightRects = [];
@@ -104,6 +105,13 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     }
 
     public bool ShowPlaceholder => Image is null;
+
+    /// <summary>
+    /// Increments after every completed render. The pooled bitmaps mean a render can reuse
+    /// the same object, so tests and diagnostics cannot use reference identity to tell
+    /// whether the page was redrawn.
+    /// </summary>
+    public int ImageRevision => _imageRevision;
 
     /// <summary>
     /// High quality when the page is at rest; Medium while scrolling or zooming so the
@@ -632,6 +640,7 @@ public sealed class PageViewModel : ObservableObject, IDisposable
             var previous = Image;
             Image = bitmap;
             _renderedWidth = targetWidth;
+            _imageRevision++;
             DisposeBitmapLater(previous);
 
             if (interacting && _interaction?.IsInteracting == false)

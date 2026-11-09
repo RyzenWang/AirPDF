@@ -92,4 +92,52 @@ internal static class BitmapHelper
             normalized?.Dispose();
         }
     }
+
+    /// <summary>
+    /// Creates a thumbnail by downscaling an existing page bitmap instead of asking PDFium
+    /// to render the page a second time. Must be called on the UI thread because it reads the
+    /// page's locked framebuffer; the source pixels are wrapped, not copied.
+    /// </summary>
+    public static WriteableBitmap CreateScaledBitmap(
+        WriteableBitmap source,
+        int targetWidth,
+        WriteableBitmap? reusable = null)
+    {
+        var sourceWidth = source.PixelSize.Width;
+        var sourceHeight = source.PixelSize.Height;
+        if (sourceWidth <= 0 || sourceHeight <= 0 || targetWidth <= 0)
+        {
+            throw new InvalidOperationException("The bitmap has no pixels.");
+        }
+
+        var targetHeight = Math.Max(1, (int)Math.Round(targetWidth * (sourceHeight / (double)sourceWidth)));
+
+        using var framebuffer = source.Lock();
+        using var sourceBitmap = new SKBitmap();
+        var sourceInfo = new SKImageInfo(
+            sourceWidth,
+            sourceHeight,
+            SKColorType.Bgra8888,
+            SKAlphaType.Premul);
+        if (!sourceBitmap.InstallPixels(sourceInfo, framebuffer.Address, framebuffer.RowBytes))
+        {
+            throw new InvalidOperationException("The source bitmap could not be wrapped.");
+        }
+
+        using var scaled = new SKBitmap(
+            new SKImageInfo(targetWidth, targetHeight, SKColorType.Bgra8888, SKAlphaType.Premul));
+        using (var canvas = new SKCanvas(scaled))
+        {
+            canvas.Clear(SKColors.White);
+            canvas.DrawBitmap(
+                sourceBitmap,
+                new SKRect(0, 0, sourceWidth, sourceHeight),
+                new SKRect(0, 0, targetWidth, targetHeight),
+                new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear),
+                null);
+            canvas.Flush();
+        }
+
+        return CreateBitmap(scaled, reusable);
+    }
 }
