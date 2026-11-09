@@ -168,6 +168,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly ReadingPositionController _reading;
     private readonly TextSelectionController _selection;
     private readonly RenderInteractionState _pageInteraction = new();
+    private readonly Dictionary<PageViewModel, long> _pageBitmapBytes = [];
+    private readonly HashSet<PageViewModel> _activePages = [];
+    private readonly HashSet<ThumbnailViewModel> _thumbnailsWithBitmaps = [];
+    private long _pageBitmapTotalBytes;
     private bool _suppressPageInteraction;
     private UpdateInfo? _availableUpdate;
 
@@ -2846,7 +2850,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _reading.Attach(info);
 
         Pages = info.Pages
-            .Select(page => new PageViewModel(_pageRenderer, page, _localization, _pageInteraction))
+            .Select(page => new PageViewModel(
+                _pageRenderer,
+                page,
+                _localization,
+                _pageInteraction,
+                () => _zoom))
             .ToList();
 
         // The stroke drawn under the pointer has to be the colour and width it will keep.
@@ -2856,6 +2865,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             page.InkWidthPoints = InkWidth;
         }
         Thumbnails = info.Pages.Select(page => new ThumbnailViewModel(_pageRenderer, page)).ToList();
+
+        foreach (var page in Pages)
+        {
+            page.BitmapChanged += OnPageBitmapChanged;
+            page.ActiveChanged += OnPageActiveChanged;
+        }
+
+        foreach (var thumbnail in Thumbnails)
+        {
+            thumbnail.BitmapChanged += OnThumbnailBitmapChanged;
+        }
+
         OutlineItems = info.Bookmarks.Select(item => new OutlineItemViewModel(item)).ToList();
         LoadBookmarks(info.FilePath);
         Metadata = BuildMetadata(info);
@@ -2931,13 +2952,21 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         foreach (var page in Pages)
         {
+            page.BitmapChanged -= OnPageBitmapChanged;
+            page.ActiveChanged -= OnPageActiveChanged;
             page.Dispose();
         }
 
         foreach (var thumbnail in Thumbnails)
         {
+            thumbnail.BitmapChanged -= OnThumbnailBitmapChanged;
             thumbnail.Dispose();
         }
+
+        _pageBitmapBytes.Clear();
+        _activePages.Clear();
+        _thumbnailsWithBitmaps.Clear();
+        _pageBitmapTotalBytes = 0;
 
         PageBitmapPool.Reset();
         Pages = [];
@@ -3030,23 +3059,30 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return;
         }
 
-        foreach (var page in Pages)
+        foreach (var pageNumber in loader.LoadedPages)
         {
-            if (Math.Abs(page.Number - _currentPage) <= TextCacheRadius ||
-                _selection.IsPageSelected(page.Number) ||
-                !page.HasTextLayer)
+            if (Math.Abs(pageNumber - _currentPage) <= TextCacheRadius ||
+                _selection.IsPageSelected(pageNumber) ||
+                pageNumber < 1 ||
+                pageNumber > Pages.Count)
+            {
+                continue;
+            }
+
+            var page = Pages[pageNumber - 1];
+            if (!page.HasTextLayer)
             {
                 continue;
             }
 
             page.ReleaseTextLayout();
-            loader.Release(page.Number);
+            loader.Release(pageNumber);
         }
     }
 
     private void TrimThumbnails()
     {
-        foreach (var thumbnail in Thumbnails)
+        foreach (var thumbnail in _thumbnailsWithBitmaps.ToList())
         {
             if (Math.Abs(thumbnail.Number - _currentPage) > 4)
             {
@@ -3057,16 +3093,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void TrimPageImages()
     {
-        foreach (var page in Pages)
+        foreach (var page in _pageBitmapBytes.Keys
+                     .Where(page => Math.Abs(page.Number - _currentPage) > 6)
+                     .ToList())
         {
-            if (Math.Abs(page.Number - _currentPage) > 6)
-            {
-                page.TrimImage();
-            }
+            page.TrimImage();
         }
 
-        var total = Pages.Sum(page => page.BitmapBytes);
-        if (total <= PageBitmapBudgetBytes)
+        if (_pageBitmapTotalBytes <= PageBitmapBudgetBytes)
         {
             return;
         }
@@ -3074,29 +3108,92 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // Evict farthest pages first. The current page and its immediate neighbours are kept
         // even if they alone exceed the budget: evicting what the reader is looking at would
         // trade memory for a blank screen.
-        foreach (var page in Pages
+        foreach (var page in _pageBitmapBytes.Keys
                      .Where(page => Math.Abs(page.Number - _currentPage) > 1)
-                     .OrderByDescending(page => Math.Abs(page.Number - _currentPage)))
+                     .OrderByDescending(page => Math.Abs(page.Number - _currentPage))
+                     .ToList())
         {
-            if (total <= PageBitmapBudgetBytes)
+            if (_pageBitmapTotalBytes <= PageBitmapBudgetBytes)
             {
                 break;
             }
 
-            var before = page.BitmapBytes;
             page.TrimImage();
-            total -= before - page.BitmapBytes;
         }
     }
 
     private void ApplyZoomToPages()
     {
-        foreach (var page in Pages)
+        // Only realised page views have layout to update. Offscreen pages pick up the zoom
+        // when they are attached; PageLayout computes the scroll extent from page points.
+        foreach (var page in _activePages.ToArray())
         {
             page.ApplyZoom(_zoom);
         }
 
         TrimPageImages();
+    }
+
+    /// <summary>Display height at the current zoom, independent of an offscreen page's cache.</summary>
+    public double PageDisplayHeight(PageViewModel page) =>
+        page.HeightPoints * PageViewModel.PixelsPerPointAt100 * _zoom;
+
+    /// <summary>Applies the current zoom before a newly realised page view activates it.</summary>
+    public void ApplyCurrentZoom(PageViewModel page) => page.ApplyZoom(_zoom);
+
+    private void OnPageBitmapChanged(object? sender, EventArgs e)
+    {
+        if (sender is not PageViewModel page)
+        {
+            return;
+        }
+
+        _pageBitmapBytes.TryGetValue(page, out var previous);
+        var current = page.BitmapBytes;
+        _pageBitmapTotalBytes += current - previous;
+
+        if (current > 0)
+        {
+            _pageBitmapBytes[page] = current;
+        }
+        else
+        {
+            _pageBitmapBytes.Remove(page);
+        }
+    }
+
+    private void OnThumbnailBitmapChanged(object? sender, EventArgs e)
+    {
+        if (sender is not ThumbnailViewModel thumbnail)
+        {
+            return;
+        }
+
+        if (thumbnail.Image is null)
+        {
+            _thumbnailsWithBitmaps.Remove(thumbnail);
+        }
+        else
+        {
+            _thumbnailsWithBitmaps.Add(thumbnail);
+        }
+    }
+
+    private void OnPageActiveChanged(object? sender, EventArgs e)
+    {
+        if (sender is not PageViewModel page)
+        {
+            return;
+        }
+
+        if (page.IsActive)
+        {
+            _activePages.Add(page);
+        }
+        else
+        {
+            _activePages.Remove(page);
+        }
     }
 
     private void ApplySearchHighlights(SearchResultViewModel? active)

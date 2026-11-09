@@ -2,6 +2,8 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.VisualTree;
+using AirPdf.App.Controls;
 using AirPdf.App.ViewModels;
 
 namespace AirPdf.App.Views;
@@ -57,6 +59,14 @@ public partial class PdfPageView : UserControl
         {
             _attachedPage = page;
             page.PropertyChanged += OnPagePropertyChanged;
+
+            if (this.FindAncestorOfType<PdfPageList>()?.DataContext is MainWindowViewModel host)
+            {
+                // The view model no longer updates every offscreen page when zoom changes;
+                // a page that is scrolled into view has to pick up the current zoom first.
+                host.ApplyCurrentZoom(page);
+            }
+
             RenderOptions.SetBitmapInterpolationMode(PageImage, page.BitmapInterpolationMode);
             page.Activate(topLevel.RenderScaling);
 

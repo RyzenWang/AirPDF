@@ -20,6 +20,10 @@ semantic versioning once it reaches 1.0.
 - Retired page bitmaps go through a small generation-scoped pool instead of being
   reallocated from scratch on every render. When the source and target strides match, the
   pixel copy is one bulk block instead of one copy per row.
+- Page trims now walk a set of pages that actually hold bitmaps, thumbnails track their own
+  populated set, and text trimming walks the loader's loaded pages. Zoom updates only the
+  realised page views; scroll layout is computed from page points and the zoom factor.
+  Long documents no longer scan every page for each turn or zoom tick.
 
 ### Fixed
 

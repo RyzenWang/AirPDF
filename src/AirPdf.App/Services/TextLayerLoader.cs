@@ -69,6 +69,18 @@ public sealed class TextLayerLoader : IDisposable
         }
     }
 
+    /// <summary>Snapshot of the pages whose parsed text is still cached.</summary>
+    public IReadOnlyList<int> LoadedPages
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _loaded];
+            }
+        }
+    }
+
     /// <summary>Queues a page and its neighbours without waiting.</summary>
     public void Request(int pageNumber, int radius = 1)
     {

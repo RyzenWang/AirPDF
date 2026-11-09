@@ -20,6 +20,9 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
     private WriteableBitmap? _image;
     private bool _isRendering;
 
+    /// <summary>Raised whenever the thumbnail's bitmap is installed or dropped.</summary>
+    public event EventHandler? BitmapChanged;
+
     public ThumbnailViewModel(PdfPageRenderer renderer, PdfPageInfo pageInfo)
     {
         _renderer = renderer;
@@ -43,6 +46,7 @@ public sealed class ThumbnailViewModel : ObservableObject, IDisposable
             if (SetProperty(ref _image, value))
             {
                 OnPropertyChanged(nameof(ShowPlaceholder));
+                BitmapChanged?.Invoke(this, EventArgs.Empty);
             }
         }
     }

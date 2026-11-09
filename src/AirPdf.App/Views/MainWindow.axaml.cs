@@ -1455,7 +1455,7 @@ public partial class MainWindow : Window
     private void RebuildPageLayout()
     {
         _pageLayout = new PageLayout(
-            _viewModel.Pages.Select(page => page.DisplayHeight).ToList());
+            _viewModel.Pages.Select(_viewModel.PageDisplayHeight).ToList());
     }
 
     private void EnsurePageLayout()
@@ -1485,14 +1485,13 @@ public partial class MainWindow : Window
             return;
         }
 
-        var index = Math.Clamp(pageNumber, 1, _viewModel.Pages.Count) - 1;
-        var targetPage = index + 1;
+        var targetPage = Math.Clamp(pageNumber, 1, _viewModel.Pages.Count);
         var top = _pageLayout.GetTop(targetPage);
-        var page = _viewModel.Pages[index];
+        var pageHeight = _pageLayout.GetHeight(targetPage);
         var target = center
-            ? top - Math.Max(12, (viewer.Viewport.Height - page.DisplayHeight) / 2)
+            ? top - Math.Max(12, (viewer.Viewport.Height - pageHeight) / 2)
             : top - 12;
-        var fraction = Math.Clamp((target - top) / Math.Max(1, page.DisplayHeight), 0, 1);
+        var fraction = Math.Clamp((target - top) / Math.Max(1, pageHeight), 0, 1);
 
         ApplyScrollOffset(target, targetPage, fraction);
     }
@@ -1518,11 +1517,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        var index = Math.Clamp(pageNumber, 1, _viewModel.Pages.Count) - 1;
-        var page = _viewModel.Pages[index];
-        var top = _pageLayout.GetTop(page.Number);
+        var pageNumberClamped = Math.Clamp(pageNumber, 1, _viewModel.Pages.Count);
+        var top = _pageLayout.GetTop(pageNumberClamped);
+        var pageHeight = _pageLayout.GetHeight(pageNumberClamped);
         var normalized = Math.Clamp(fraction, 0, 1);
-        var target = top + (normalized * page.DisplayHeight);
+        var target = top + (normalized * pageHeight);
 
         // Scrolling past the current extent is silently clamped, and then the page never gets
         // realised: that is the blank page seen after jumping from the welcome screen, where
@@ -1535,7 +1534,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        ApplyScrollOffset(target, page.Number, normalized);
+        ApplyScrollOffset(target, pageNumberClamped, normalized);
     }
 
     private void ScrollToSearchResult(SearchResultViewModel result)
@@ -1552,14 +1551,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        var page = _viewModel.Pages[result.PageNumber - 1];
         var top = _pageLayout.GetTop(result.PageNumber);
+        var pageHeight = _pageLayout.GetHeight(result.PageNumber);
 
         var highlightTop = result.Rects.Count > 0
-            ? top + (result.Rects[0].Y * page.DisplayHeight)
+            ? top + (result.Rects[0].Y * pageHeight)
             : top;
         var target = highlightTop - (viewer.Viewport.Height * 0.34);
-        var fraction = Math.Clamp((highlightTop - top) / Math.Max(1, page.DisplayHeight), 0, 1);
+        var fraction = Math.Clamp((highlightTop - top) / Math.Max(1, pageHeight), 0, 1);
         ApplyScrollOffset(target, result.PageNumber, fraction);
     }
 

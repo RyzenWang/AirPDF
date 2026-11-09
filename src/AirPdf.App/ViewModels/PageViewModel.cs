@@ -22,6 +22,7 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     private readonly PdfPageRenderer _renderer;
     private readonly LocalizationService _localization;
     private readonly RenderInteractionState? _interaction;
+    private readonly Func<double>? _zoomProvider;
     private bool _interactionSubscribed;
     private CancellationTokenSource? _renderCancellation;
     private double _renderScale = 1;
@@ -42,15 +43,23 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     private IReadOnlyList<PdfSearchRect> _selectionRects = [];
     private double _inkWidthPoints = 2;
 
+    /// <summary>Raised whenever the page's bitmap is installed or dropped.</summary>
+    public event EventHandler? BitmapChanged;
+
+    /// <summary>Raised when the page enters or leaves the realized page list.</summary>
+    public event EventHandler? ActiveChanged;
+
     public PageViewModel(
         PdfPageRenderer renderer,
         PdfPageInfo pageInfo,
         LocalizationService localization,
-        RenderInteractionState? interaction = null)
+        RenderInteractionState? interaction = null,
+        Func<double>? zoomProvider = null)
     {
         _renderer = renderer;
         _localization = localization;
         _interaction = interaction;
+        _zoomProvider = zoomProvider;
         Number = pageInfo.Number;
         WidthPoints = pageInfo.Width;
         HeightPoints = pageInfo.Height;
@@ -89,6 +98,7 @@ public sealed class PageViewModel : ObservableObject, IDisposable
             if (SetProperty(ref _image, value))
             {
                 OnPropertyChanged(nameof(ShowPlaceholder));
+                BitmapChanged?.Invoke(this, EventArgs.Empty);
             }
         }
     }
@@ -348,6 +358,7 @@ public sealed class PageViewModel : ObservableObject, IDisposable
 
     public void Activate(double renderScale)
     {
+        var wasActive = _isActive;
         _isActive = true;
         _renderScale = Math.Clamp(renderScale, 1, 3);
 
@@ -358,6 +369,12 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         }
 
         OnPropertyChanged(nameof(BitmapInterpolationMode));
+
+        if (!wasActive)
+        {
+            ActiveChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         QueueRender();
     }
 
@@ -366,6 +383,7 @@ public sealed class PageViewModel : ObservableObject, IDisposable
 
     public void Deactivate()
     {
+        var wasActive = _isActive;
         _clearLiveInkAfterRender = false;
         ClearLiveInk();
         _isActive = false;
@@ -376,6 +394,11 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         {
             _interaction.Changed -= OnInteractionChanged;
             _interactionSubscribed = false;
+        }
+
+        if (wasActive)
+        {
+            ActiveChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -424,8 +447,16 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     /// which is what makes the stroke under the pointer the same size as the annotation drawn
     /// over it once the page is re-rendered.
     /// </summary>
-    public double InkPreviewThickness =>
-        _inkWidthPoints * (DisplayWidth / Math.Max(1, WidthPoints));
+    public double InkPreviewThickness
+    {
+        get
+        {
+            var scale = _zoomProvider?.Invoke() is { } zoom
+                ? zoom
+                : DisplayWidth / Math.Max(1, WidthPoints);
+            return _inkWidthPoints * PixelsPerPointAt100 * scale;
+        }
+    }
 
     /// <summary>
     /// The stroke being drawn right now, as normalized points, so the reader sees the line under

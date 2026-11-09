@@ -140,6 +140,30 @@ public sealed class EndToEndTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task ZoomThenEnd_LastPageUsesTheCurrentZoom()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 1 && document.Pages[0].Image is not null);
+
+        await FocusFirstPageAsync();
+        _window.KeyPressQwerty(PhysicalKey.End, RawInputModifiers.None);
+        await WaitAsync(() => document.CurrentPage == document.PageCount);
+
+        _window.KeyPressQwerty(PhysicalKey.Digit1, RawInputModifiers.Control);
+        await WaitAsync(() => Math.Abs(document.Zoom - 1) < 0.001);
+
+        var last = document.Pages[^1];
+        await WaitAsync(() =>
+            last.Image is not null &&
+            Math.Abs(last.DisplayWidth - (last.WidthPoints * PageViewModel.PixelsPerPointAt100)) < 1);
+
+        Assert.Equal(
+            last.WidthPoints * PageViewModel.PixelsPerPointAt100,
+            last.DisplayWidth,
+            1);
+    }
+
+    [AvaloniaFact]
     public async Task DocumentDetails_LoadOnlyWhenRequested()
     {
         var document = await OpenSampleAsync();
