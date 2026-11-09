@@ -4,7 +4,7 @@ All notable changes to AirPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning once it reaches 1.0.
 
-## [Unreleased]
+## [0.8.0] - 2026-11-09
 
 ### Added
 
@@ -14,7 +14,6 @@ semantic versioning once it reaches 1.0.
 
 - The selected ink colour in the palette now has a thick accent ring and a check mark, with
   a contrasting dark/light check so it stays visible on every swatch including white.
-
 - Document metadata and the outline now load on demand from the resident PDFium handle,
   only when the reader first opens the contents or document-information panel. Opening a
   document no longer pays for either parse, and the separate PdfPig dependency is gone.
