@@ -14,6 +14,9 @@ semantic versioning once it reaches 1.0.
 - PDFium's native gate is priority-aware: a visible page render is handed the gate before
   queued text extraction, link loading, or search work. A long search now yields between
   pages instead of making the visible page wait for the whole scan.
+- Scrolling and zooming now render new pages at 65% width and use medium-quality bitmap
+  interpolation; once the reader pauses for 220ms, affected pages refine to the full
+  target size and high-quality interpolation.
 
 ### Fixed
 
@@ -21,6 +24,9 @@ semantic versioning once it reaches 1.0.
   overlay's spinner had continued repainting the hidden welcome screen after a document
   finished opening, keeping one CPU core busy until the window was minimised. Page,
   thumbnail, and search spinners are gated the same way.
+- Toolbar clicks are no longer mistaken for text-selection presses when a page is scrolled
+  partly behind the toolbar. Position-based page hit-testing is now clipped to the page
+  list bounds, and a selection press must originate inside a page view.
 
 ## [0.7.0] - 2026-11-08
 

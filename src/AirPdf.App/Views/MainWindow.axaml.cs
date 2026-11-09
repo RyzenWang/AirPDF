@@ -1405,6 +1405,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Scrolling/zooming switches pages to a cheaper render size and interpolation mode.
+        // Restore is excluded so opening a document renders once at its final size.
+        if (!_restoringDocument)
+        {
+            _viewModel.BeginPageInteraction();
+        }
+
         // Laying out a page can invalidate layout again, which raises this event while it is
         // still being handled; recursing through it ends in a stack overflow.
         if (_handlingScrollChanged)
@@ -1928,7 +1935,10 @@ public partial class MainWindow : Window
             }
         }
 
-        var pageView = FindPageView(e.Source) ?? FindPageViewAt(e.GetPosition(this));
+        // The press has to originate inside a page view, not merely be over a page that is
+        // scrolled partly behind the toolbar. The position fallback used to treat a toolbar
+        // click as a text-selection press and swallow the button.
+        var pageView = FindPageView(e.Source);
         if (pageView?.DataContext is not PageViewModel page)
         {
             return;
@@ -2299,6 +2309,15 @@ public partial class MainWindow : Window
 
     private PdfPageView? FindPageViewAt(Point windowPoint)
     {
+        // A page scrolled above the viewport still has a translated rectangle that can
+        // reach under the toolbar. Hit-testing by position is only valid while the point is
+        // inside the page list itself.
+        if (this.TranslatePoint(windowPoint, PagesList) is not { } listPoint ||
+            !new Rect(PagesList.Bounds.Size).Contains(listPoint))
+        {
+            return null;
+        }
+
         foreach (var pageView in PagesList.GetVisualDescendants().OfType<PdfPageView>())
         {
             var origin = pageView.TranslatePoint(new Point(0, 0), this);

@@ -12,7 +12,8 @@
             BoxShadow="0 8 26 0 #26000000"
             ClipToBounds="True">
       <Panel>
-        <Image Source="{Binding Image}"
+        <Image x:Name="PageImage"
+               Source="{Binding Image}"
                Stretch="Fill"
                RenderOptions.BitmapInterpolationMode="HighQuality" />
 

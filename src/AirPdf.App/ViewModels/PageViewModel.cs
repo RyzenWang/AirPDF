@@ -16,9 +16,12 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     private const int MinRenderWidth = 320;
     private const int MaxRenderWidth = 2400;
     private const long MaxRenderPixels = 7_000_000;
+    private const double InteractionRenderScale = 0.65;
 
     private readonly PdfPageRenderer _renderer;
     private readonly LocalizationService _localization;
+    private readonly RenderInteractionState? _interaction;
+    private bool _interactionSubscribed;
     private CancellationTokenSource? _renderCancellation;
     private double _renderScale = 1;
     private int _renderGeneration;
@@ -38,10 +41,15 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     private IReadOnlyList<PdfSearchRect> _selectionRects = [];
     private double _inkWidthPoints = 2;
 
-    public PageViewModel(PdfPageRenderer renderer, PdfPageInfo pageInfo, LocalizationService localization)
+    public PageViewModel(
+        PdfPageRenderer renderer,
+        PdfPageInfo pageInfo,
+        LocalizationService localization,
+        RenderInteractionState? interaction = null)
     {
         _renderer = renderer;
         _localization = localization;
+        _interaction = interaction;
         Number = pageInfo.Number;
         WidthPoints = pageInfo.Width;
         HeightPoints = pageInfo.Height;
@@ -85,6 +93,15 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     }
 
     public bool ShowPlaceholder => Image is null;
+
+    /// <summary>
+    /// High quality when the page is at rest; Medium while scrolling or zooming so the
+    /// compositor is not resampling a large bitmap at full quality every frame.
+    /// </summary>
+    public BitmapInterpolationMode BitmapInterpolationMode =>
+        _interaction?.IsInteracting == true
+            ? BitmapInterpolationMode.MediumQuality
+            : BitmapInterpolationMode.HighQuality;
 
     /// <summary>Bytes held by this page's bitmap, or zero when nothing is rendered.</summary>
     public long BitmapBytes => _image is { } image
@@ -332,6 +349,14 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     {
         _isActive = true;
         _renderScale = Math.Clamp(renderScale, 1, 3);
+
+        if (_interaction is not null && !_interactionSubscribed)
+        {
+            _interaction.Changed += OnInteractionChanged;
+            _interactionSubscribed = true;
+        }
+
+        OnPropertyChanged(nameof(BitmapInterpolationMode));
         QueueRender();
     }
 
@@ -345,6 +370,27 @@ public sealed class PageViewModel : ObservableObject, IDisposable
         _isActive = false;
         CancelRender();
         IsRendering = false;
+
+        if (_interaction is not null && _interactionSubscribed)
+        {
+            _interaction.Changed -= OnInteractionChanged;
+            _interactionSubscribed = false;
+        }
+    }
+
+    private void OnInteractionChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(BitmapInterpolationMode));
+
+        if (_isActive &&
+            _interaction?.IsInteracting == false &&
+            HighTargetWidth() > _renderedWidth + 8)
+        {
+            // The page may have kept an older, high-quality bitmap while the interaction
+            // target was small, or may have finished a reduced render after the interaction
+            // ended. Either way, now is the time to refine it.
+            RequestRender();
+        }
     }
 
     /// <summary>
@@ -463,6 +509,13 @@ public sealed class PageViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         CancelRender();
+
+        if (_interaction is not null && _interactionSubscribed)
+        {
+            _interaction.Changed -= OnInteractionChanged;
+            _interactionSubscribed = false;
+        }
+
         var image = Image;
         Image = null;
         DisposeBitmapLater(image);
@@ -512,9 +565,9 @@ public sealed class PageViewModel : ObservableObject, IDisposable
                 await Task.Delay(90, cancellation.Token);
             }
 
-            var scaleWidth = (int)Math.Ceiling(DisplayWidth * _renderScale);
-            var areaWidth = (int)Math.Sqrt(MaxRenderPixels * (WidthPoints / Math.Max(1, HeightPoints)));
-            var targetWidth = Math.Clamp(Math.Min(scaleWidth, areaWidth), MinRenderWidth, MaxRenderWidth);
+            var interacting = _interaction?.IsInteracting == true;
+            var qualityScale = interacting ? InteractionRenderScale : 1.0;
+            var targetWidth = TargetWidth(qualityScale);
 
             // A page that already has a bitmap at this width skips the render, which is right
             // for scrolling and wrong after an annotation was added: the change would stay
@@ -544,6 +597,12 @@ public sealed class PageViewModel : ObservableObject, IDisposable
             Image = bitmap;
             _renderedWidth = targetWidth;
             DisposeBitmapLater(previous);
+
+            if (interacting && _interaction?.IsInteracting == false)
+            {
+                // The interaction ended while this reduced render was in flight.
+                RequestRender();
+            }
 
             if (_clearLiveInkAfterRender)
             {
@@ -578,6 +637,15 @@ public sealed class PageViewModel : ObservableObject, IDisposable
 
             cancellation.Dispose();
         }
+    }
+
+    private int HighTargetWidth() => TargetWidth(1.0);
+
+    private int TargetWidth(double qualityScale)
+    {
+        var scaleWidth = (int)Math.Ceiling(DisplayWidth * _renderScale * qualityScale);
+        var areaWidth = (int)(Math.Sqrt(MaxRenderPixels * (WidthPoints / Math.Max(1, HeightPoints))) * qualityScale);
+        return Math.Clamp(Math.Min(scaleWidth, areaWidth), MinRenderWidth, MaxRenderWidth);
     }
 
     private static void DisposeBitmapLater(WriteableBitmap? bitmap)

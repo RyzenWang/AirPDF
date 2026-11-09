@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using AirPdf.App.ViewModels;
 
 namespace AirPdf.App.Views;
@@ -41,6 +43,7 @@ public partial class PdfPageView : UserControl
     {
         if (_attachedPage is { } page)
         {
+            page.PropertyChanged -= OnPagePropertyChanged;
             page.Deactivate();
             _attachedPage = null;
         }
@@ -53,10 +56,21 @@ public partial class PdfPageView : UserControl
             && TopLevel.GetTopLevel(this) is { } topLevel)
         {
             _attachedPage = page;
+            page.PropertyChanged += OnPagePropertyChanged;
+            RenderOptions.SetBitmapInterpolationMode(PageImage, page.BitmapInterpolationMode);
             page.Activate(topLevel.RenderScaling);
 
             // Link annotations are needed for hit-testing, so fetch them with the render.
             _ = page.EnsureLinksAsync();
+        }
+    }
+
+    private void OnPagePropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PageViewModel.BitmapInterpolationMode) &&
+            sender is PageViewModel page)
+        {
+            RenderOptions.SetBitmapInterpolationMode(PageImage, page.BitmapInterpolationMode);
         }
     }
 }

@@ -107,6 +107,38 @@ public sealed class EndToEndTests : IDisposable
             1);
     }
 
+    /// <summary>
+    /// A page that is partly scrolled above the viewport still has a translated rectangle
+    /// that reaches behind the toolbar. A toolbar click must be routed to the button, not
+    /// treated as a text-selection press on that page.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task ToolbarButton_WorksWhenAPageIsScrolledUnderIt()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 1 && document.Pages[0].Image is not null);
+
+        var pages = _window.FindControl<PdfPageList>("PagesList");
+        var viewer = pages!.Viewer;
+        Assert.NotNull(viewer);
+        viewer!.Offset = new Vector(0, document.Pages[0].DisplayHeight * 0.8);
+        await Task.Delay(200);
+
+        var fitPage = _window.FindControl<Button>("FitPageButton");
+        Assert.NotNull(fitPage);
+        var center = fitPage!.TranslatePoint(
+            new Point(fitPage.Bounds.Width / 2, fitPage.Bounds.Height / 2),
+            _window);
+        Assert.NotNull(center);
+
+        var zoomBefore = document.Zoom;
+        _window.MouseDown(center!.Value, MouseButton.Left);
+        _window.MouseUp(center.Value, MouseButton.Left);
+
+        await WaitAsync(() => Math.Abs(document.Zoom - zoomBefore) > 0.001);
+        Assert.NotEqual(zoomBefore, document.Zoom);
+    }
+
     [AvaloniaFact]
     public async Task SearchShortcut_TypesIntoThePanelAndFindsTextOnThePage()
     {

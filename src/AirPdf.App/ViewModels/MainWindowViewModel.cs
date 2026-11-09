@@ -165,6 +165,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private TextLayerLoader? _textLoader;
     private readonly ReadingPositionController _reading;
     private readonly TextSelectionController _selection;
+    private readonly RenderInteractionState _pageInteraction = new();
+    private bool _suppressPageInteraction;
     private UpdateInfo? _availableUpdate;
 
     public MainWindowViewModel(
@@ -534,6 +536,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             _zoom = clamped;
             OnPropertyChanged();
             OnPropertyChanged(nameof(ZoomText));
+
+            if (!_suppressPageInteraction)
+            {
+                _pageInteraction.BeginInteraction();
+            }
+
             ApplyZoomToPages();
             ZoomChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -2574,23 +2582,36 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     public void ApplyInitialZoom()
     {
-        switch (_restoreZoomMode)
+        // Restoring a document must render once at its final size, not first at a reduced
+        // interaction size and then again when the restore timer ends.
+        _suppressPageInteraction = true;
+        try
         {
-            case ZoomModes.FitPage:
-                FitPageToViewport();
-                break;
-            case ZoomModes.Manual when _restoreZoom is { } zoom:
-                _zoomMode = ZoomModes.Manual;
-                Zoom = zoom;
-                break;
-            default:
-                FitWidthToViewport();
-                break;
+            switch (_restoreZoomMode)
+            {
+                case ZoomModes.FitPage:
+                    FitPageToViewport();
+                    break;
+                case ZoomModes.Manual when _restoreZoom is { } zoom:
+                    _zoomMode = ZoomModes.Manual;
+                    Zoom = zoom;
+                    break;
+                default:
+                    FitWidthToViewport();
+                    break;
+            }
+        }
+        finally
+        {
+            _suppressPageInteraction = false;
         }
 
         _restoreZoom = null;
         _restoreZoomMode = null;
     }
+
+    /// <summary>Called by the window when scrolling starts or continues.</summary>
+    public void BeginPageInteraction() => _pageInteraction.BeginInteraction();
 
     public void NavigateToPage(int pageNumber)
     {
@@ -2789,7 +2810,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _pageRenderer = new PdfPageRenderer(_documentService, info.FilePath, password);
         _reading.Attach(info);
 
-        Pages = info.Pages.Select(page => new PageViewModel(_pageRenderer, page, _localization)).ToList();
+        Pages = info.Pages
+            .Select(page => new PageViewModel(_pageRenderer, page, _localization, _pageInteraction))
+            .ToList();
 
         // The stroke drawn under the pointer has to be the colour and width it will keep.
         foreach (var page in Pages)
@@ -3517,6 +3540,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         CancelSafely(_detailsCancellation);
         _detailsCancellation = null;
         _reading.Dispose();
+        _pageInteraction.Dispose();
         CloseDocumentCore();
         _documentService.Dispose();
     }
