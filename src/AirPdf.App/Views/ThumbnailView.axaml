@@ -15,7 +15,7 @@
       <Panel>
         <Image Source="{Binding Image}" Stretch="Fill" RenderOptions.BitmapInterpolationMode="MediumQuality" />
         <Border IsVisible="{Binding ShowPlaceholder}" Background="{DynamicResource PagePlaceholderBrush}">
-          <ProgressBar IsIndeterminate="True"
+          <ProgressBar IsIndeterminate="{Binding IsRendering}"
                        Width="54"
                        HorizontalAlignment="Center"
                        VerticalAlignment="Center"

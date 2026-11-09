@@ -30,7 +30,7 @@
 
         <Border IsVisible="{Binding ShowPlaceholder}" Background="{DynamicResource PagePlaceholderBrush}">
           <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="12">
-            <ProgressBar IsIndeterminate="True"
+            <ProgressBar IsIndeterminate="{Binding IsRendering}"
                          Width="96"
                          IsVisible="{Binding IsRendering}" />
             <StackPanel Orientation="Horizontal" Spacing="7" HorizontalAlignment="Center">

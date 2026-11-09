@@ -167,6 +167,30 @@ public sealed class MainWindowXamlTests : IDisposable
             Win32Properties.GetNonClientHitTestResult(button!));
     }
 
+    /// <summary>
+    /// An indeterminate ProgressBar keeps its animation clock running after its parent is
+    /// hidden. The busy spinner therefore has to stop being indeterminate when the document
+    /// finishes opening, otherwise the closed welcome screen repaints at 60 fps forever.
+    /// </summary>
+    [AvaloniaFact]
+    public void BusyProgressBar_OnlyAnimatesWhileBusy()
+    {
+        var window = CreateWindow();
+        var viewModel = Assert.IsType<MainWindowViewModel>(window.DataContext);
+        var bar = window.FindControl<ProgressBar>("BusyProgressBar");
+
+        Assert.NotNull(bar);
+        Assert.False(bar!.IsIndeterminate);
+
+        viewModel.IsBusy = true;
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(bar.IsIndeterminate);
+
+        viewModel.IsBusy = false;
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(bar.IsIndeterminate);
+    }
+
     [AvaloniaFact]
     public void Fullscreen_ShowsExitControlInsteadOfMaximize()
     {
