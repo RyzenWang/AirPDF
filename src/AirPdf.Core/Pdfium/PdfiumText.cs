@@ -57,4 +57,27 @@ internal static class PdfiumText
 
     [DllImport(PdfiumNative.Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFText_GetFontSize")]
     internal static extern double GetFontSize(IntPtr textPage, int index);
+
+    /// <summary>
+    /// Starts a native search. <paramref name="findWhat"/> is a UTF-16LE, NUL-terminated
+    /// string; the flags are zero for the reader's case-insensitive substring search.
+    /// </summary>
+    [DllImport(PdfiumNative.Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFText_FindStart")]
+    internal static extern IntPtr FindStart(
+        IntPtr textPage,
+        IntPtr findWhat,
+        uint flags,
+        int startIndex);
+
+    [DllImport(PdfiumNative.Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFText_FindNext")]
+    internal static extern int FindNext(IntPtr handle);
+
+    [DllImport(PdfiumNative.Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFText_GetSchResultIndex")]
+    internal static extern int GetSearchResultIndex(IntPtr handle);
+
+    [DllImport(PdfiumNative.Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFText_GetSchCount")]
+    internal static extern int GetSearchCount(IntPtr handle);
+
+    [DllImport(PdfiumNative.Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFText_FindClose")]
+    internal static extern void FindClose(IntPtr handle);
 }

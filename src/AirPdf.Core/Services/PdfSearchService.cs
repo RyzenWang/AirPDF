@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.RegularExpressions;
 using AirPdf.Core.Models;
@@ -12,6 +13,8 @@ namespace AirPdf.Core.Services;
 public sealed partial class PdfSearchService
 {
     private const int MaxResults = 250;
+    private const int NativeSearchPageThreshold = 100;
+    private static readonly TimeSpan ProgressInterval = TimeSpan.FromMilliseconds(100);
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();
@@ -36,14 +39,50 @@ public sealed partial class PdfSearchService
         var hits = new List<PdfSearchHit>();
         var pageCount = _documents.OpenPageCount;
 
-        for (var pageNumber = 1; pageNumber <= pageCount && hits.Count < MaxResults; pageNumber++)
+        // PDFium's native search can reject a page before its words and character boxes are
+        // materialized. Keep the existing text path for small documents and for whitespace
+        // queries, where joining words is what guarantees the match.
+        var useNativeSearch =
+            pageCount >= NativeSearchPageThreshold &&
+            !normalizedQuery.Any(char.IsWhiteSpace);
+
+        var lastProgress = Stopwatch.GetTimestamp();
+
+        void ReportProgress(int pageNumber, bool truncated)
         {
+            if (progress is null)
+            {
+                return;
+            }
+
+            if (pageNumber < pageCount &&
+                !truncated &&
+                Stopwatch.GetElapsedTime(lastProgress) < ProgressInterval)
+            {
+                return;
+            }
+
+            lastProgress = Stopwatch.GetTimestamp();
+            progress.Report(new PdfSearchProgress(pageNumber, pageCount, hits.Count, truncated));
+        }
+
+        for (var pageNumber = 1; pageNumber <= pageCount; pageNumber++)
+        {
+            if (hits.Count >= MaxResults)
+            {
+                break;
+            }
+
             cancellationToken.ThrowIfCancellationRequested();
 
             PdfTextPage page;
             try
             {
-                page = await _documents.GetTextPageAsync(pageNumber, cancellationToken).ConfigureAwait(false);
+                page = useNativeSearch
+                    ? await _documents.GetTextPageAsync(pageNumber, normalizedQuery, cancellationToken)
+                        .ConfigureAwait(false)
+                    : await _documents.GetTextPageAsync(pageNumber, cancellationToken)
+                        .ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
@@ -52,16 +91,14 @@ public sealed partial class PdfSearchService
             catch
             {
                 // One unreadable page must not abort the search.
-                progress?.Report(new PdfSearchProgress(pageNumber, pageCount, hits.Count, false));
+                ReportProgress(pageNumber, false);
                 continue;
             }
 
             hits.AddRange(SearchPage(page, normalizedQuery, MaxResults - hits.Count));
-            progress?.Report(new PdfSearchProgress(
+            ReportProgress(
                 pageNumber,
-                pageCount,
-                hits.Count,
-                hits.Count >= MaxResults && pageNumber < pageCount));
+                hits.Count >= MaxResults && pageNumber < pageCount);
         }
 
         return hits;

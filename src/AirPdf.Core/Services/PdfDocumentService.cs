@@ -863,7 +863,18 @@ public sealed class PdfDocumentService : IDisposable
     public int OpenPageCount => _session?.PageCount ?? 0;
 
     /// <summary>Reads one page's text layer through the resident document handle.</summary>
-    public Task<PdfTextPage> GetTextPageAsync(int pageNumber, CancellationToken cancellationToken = default)
+    public Task<PdfTextPage> GetTextPageAsync(int pageNumber, CancellationToken cancellationToken = default) =>
+        GetTextPageAsync(pageNumber, null, cancellationToken);
+
+    /// <summary>
+    /// Reads one page's text layer. When <paramref name="requiredQuery"/> is set, PDFium's
+    /// native search runs before character boxes are built, so a page with no match is
+    /// rejected cheaply.
+    /// </summary>
+    public Task<PdfTextPage> GetTextPageAsync(
+        int pageNumber,
+        string? requiredQuery,
+        CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -871,7 +882,8 @@ public sealed class PdfDocumentService : IDisposable
         return Task.Run(
             async () =>
             {
-                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                await RenderGate.WaitAsync(PdfGatePriority.Background, cancellationToken)
+                    .ConfigureAwait(false);
                 try
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -882,7 +894,7 @@ public sealed class PdfDocumentService : IDisposable
                         return new PdfTextPage { PageNumber = pageNumber, Words = [] };
                     }
 
-                    return session.GetTextPage(pageNumber);
+                    return session.GetTextPage(pageNumber, requiredQuery);
                 }
                 finally
                 {

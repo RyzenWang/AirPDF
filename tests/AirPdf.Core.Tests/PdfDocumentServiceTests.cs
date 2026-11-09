@@ -73,6 +73,24 @@ public sealed class PdfDocumentServiceTests
     }
 
     [Fact]
+    public async Task GetTextPageAsync_CanFilterWithNativeSearch()
+    {
+        using var service = new PdfDocumentService();
+        await service.OpenAsync(SamplePath);
+
+        var text = await service.GetTextPageAsync(1);
+        var word = text.Words
+            .Select(entry => entry.Text.Trim())
+            .First(value => value.Length >= 4 && value.All(char.IsLetter));
+
+        var match = await service.GetTextPageAsync(1, word);
+        var missing = await service.GetTextPageAsync(1, "zzzznotpresentzzzz");
+
+        Assert.NotEmpty(match.Words);
+        Assert.Empty(missing.Words);
+    }
+
+    [Fact]
     public async Task RenderPageAsync_ReturnsRenderablePixels()
     {
         using var service = new PdfDocumentService();

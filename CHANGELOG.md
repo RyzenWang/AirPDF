@@ -26,6 +26,9 @@ semantic versioning once it reaches 1.0.
   Long documents no longer scan every page for each turn or zoom tick.
 - Thumbnails reuse the page's decoded bitmap when it is already available and downscale it
   instead of asking PDFium to render the page a second time at thumbnail size.
+- Large-document searches use PDFium's native text search to reject non-matching pages
+  before their words and character boxes are materialized. Search progress updates are
+  throttled to 100ms instead of posting once per page.
 
 ### Fixed
 

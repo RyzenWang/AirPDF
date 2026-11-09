@@ -309,9 +309,11 @@ public sealed partial class PdfiumDocument : IDisposable
 
     /// <summary>
     /// Reads the page's text layer through PDFium: characters in reading order with boxes in
-    /// unrotated page space, grouped into words and normalized for display.
+    /// unrotated page space, grouped into words and normalized for display. When
+    /// <paramref name="requiredQuery"/> is set, a page without a native text match returns an
+    /// empty layer before any character boxes are materialized.
     /// </summary>
-    public PdfTextPage GetTextPage(int pageNumber)
+    public PdfTextPage GetTextPage(int pageNumber, string? requiredQuery = null)
     {
         ThrowIfDisposed();
 
@@ -336,7 +338,8 @@ public sealed partial class PdfiumDocument : IDisposable
             }
 
             var count = PdfiumText.CountChars(textPage);
-            if (count <= 0)
+            if (count <= 0 ||
+                (!string.IsNullOrEmpty(requiredQuery) && !ContainsQuery(textPage, requiredQuery)))
             {
                 return new PdfTextPage { PageNumber = pageNumber, Words = [] };
             }
@@ -385,6 +388,26 @@ public sealed partial class PdfiumDocument : IDisposable
             }
 
             PdfiumNative.ClosePage(page);
+        }
+    }
+
+    private static bool ContainsQuery(IntPtr textPage, string query)
+    {
+        var findWhat = Marshal.StringToCoTaskMemUni(query);
+        var search = IntPtr.Zero;
+        try
+        {
+            search = PdfiumText.FindStart(textPage, findWhat, 0, 0);
+            return search != IntPtr.Zero && PdfiumText.FindNext(search) != 0;
+        }
+        finally
+        {
+            if (search != IntPtr.Zero)
+            {
+                PdfiumText.FindClose(search);
+            }
+
+            Marshal.FreeCoTaskMem(findWhat);
         }
     }
 
