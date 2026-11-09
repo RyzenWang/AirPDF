@@ -16,7 +16,7 @@ namespace AirPdf.Core.Services;
 /// </remarks>
 public sealed class PdfDocumentService : IDisposable
 {
-    private static readonly SemaphoreSlim RenderGate = new(1, 1);
+    private static readonly PdfNativeGate RenderGate = new();
     private static readonly RenderPriorityQueue RenderQueue = new();
 
     private static readonly StringComparison PathComparison = OperatingSystem.IsWindows()
@@ -47,6 +47,24 @@ public sealed class PdfDocumentService : IDisposable
         return Task.Run(() => OpenCore(fullPath, password, cancellationToken), cancellationToken);
     }
 
+    /// <summary>
+    /// Reads the optional document-information dictionary and outline. This is deliberately
+    /// separate from <see cref="OpenAsync"/>: PdfPig reparses the whole file, and the first
+    /// page can be shown before that work finishes.
+    /// </summary>
+    public Task<PdfDocumentDetails> GetDetailsAsync(
+        string filePath,
+        string? password = null,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+        return Task.Run(
+            () => ReadPdfPigDetails(fullPath, password, cancellationToken),
+            cancellationToken);
+    }
+
     public Task<SKBitmap> RenderPageAsync(
         string filePath,
         int pageNumber,
@@ -67,7 +85,7 @@ public sealed class PdfDocumentService : IDisposable
         return RenderQueue.Enqueue(
             priority,
             cancellationToken,
-            token => RenderPageCoreAsync(fullPath, pageNumber, width, password, token));
+            token => RenderPageCoreAsync(fullPath, pageNumber, width, password, priority, token));
     }
 
     private async Task<SKBitmap> RenderPageCoreAsync(
@@ -75,9 +93,16 @@ public sealed class PdfDocumentService : IDisposable
         int pageNumber,
         int width,
         string? password,
+        PdfRenderPriority priority,
         CancellationToken cancellationToken)
     {
-        await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        // A page the reader can see must get the native gate before queued text/link work.
+        // Thumbnails stay background so they never hold up an open document.
+        var gatePriority = priority == PdfRenderPriority.Thumbnail
+            ? PdfGatePriority.Background
+            : PdfGatePriority.Interactive;
+
+        await RenderGate.WaitAsync(gatePriority, cancellationToken).ConfigureAwait(false);
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -989,14 +1014,6 @@ public sealed class PdfDocumentService : IDisposable
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        // PdfPig gives us metadata and the outline; PDFium stays the renderer.
-        //
-        // Page rotation is deliberately not read here. Reading it requires parsing every
-        // page dictionary, which dominated open time on long documents (measured at 45.1 s
-        // of a 54.7 s open on a 9,277-page file) while nothing consumed the value. The code
-        // that genuinely needs rotation reads it per page, for the pages it touches.
-        TryReadPdfPigDetails(fullPath, password, out var metadata, out var bookmarks, out var version);
-
         var pages = new List<PdfPageInfo>(pageCount);
         for (var index = 0; index < pageCount; index++)
         {
@@ -1010,25 +1027,20 @@ public sealed class PdfDocumentService : IDisposable
             PageCount = pageCount,
             Pages = pages,
             FileSizeBytes = fileInfo.Length,
-            PdfVersion = version,
-            Metadata = metadata,
-            Bookmarks = bookmarks
+            PdfVersion = 1.7
         };
     }
 
-    private static void TryReadPdfPigDetails(
+    private static PdfDocumentDetails ReadPdfPigDetails(
         string fullPath,
         string? password,
-        out PdfMetadata metadata,
-        out IReadOnlyList<PdfBookmark> bookmarks,
-        out double version)
+        CancellationToken cancellationToken)
     {
-        metadata = new PdfMetadata();
-        bookmarks = [];
-        version = 1.7;
-
+        var details = new PdfDocumentDetails();
         try
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             using var document = PdfDocument.Open(fullPath, new ParsingOptions
             {
                 Password = password!,
@@ -1036,10 +1048,10 @@ public sealed class PdfDocumentService : IDisposable
                 SkipMissingFonts = true
             });
 
-            version = document.Version;
+            cancellationToken.ThrowIfCancellationRequested();
 
             var info = document.Information;
-            metadata = new PdfMetadata
+            var metadata = new PdfMetadata
             {
                 Title = Clean(info.Title),
                 Author = Clean(info.Author),
@@ -1051,15 +1063,28 @@ public sealed class PdfDocumentService : IDisposable
                 ModifiedAt = SafeDate(info.GetModifiedDateTimeOffset)
             };
 
+            IReadOnlyList<PdfBookmark> bookmarks = [];
             if (document.TryGetBookmarks(out var outline, false))
             {
                 bookmarks = MapBookmarks(outline.Roots);
             }
+
+            return new PdfDocumentDetails
+            {
+                PdfVersion = document.Version,
+                Metadata = metadata,
+                Bookmarks = bookmarks
+            };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {
             // Metadata is optional. A file that renders correctly should still open even
             // when a producer wrote a malformed document-information dictionary.
+            return details;
         }
     }
 

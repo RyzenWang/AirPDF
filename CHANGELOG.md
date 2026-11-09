@@ -6,6 +6,15 @@ semantic versioning once it reaches 1.0.
 
 ## [Unreleased]
 
+### Changed
+
+- Document metadata and the outline load after the first page is shown instead of blocking
+  document open on the separate PdfPig pass. The metadata panel fills in when the background
+  read completes.
+- PDFium's native gate is priority-aware: a visible page render is handed the gate before
+  queued text extraction, link loading, or search work. A long search now yields between
+  pages instead of making the visible page wait for the whole scan.
+
 ### Fixed
 
 - Indeterminate progress bars now only animate while their operation is active. The busy

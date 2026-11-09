@@ -29,6 +29,19 @@ public sealed class PdfDocumentServiceTests
     }
 
     [Fact]
+    public async Task GetDetailsAsync_ReadsDetailsSeparatelyFromOpen()
+    {
+        using var service = new PdfDocumentService();
+
+        var document = await service.OpenAsync(SamplePath);
+        var details = await service.GetDetailsAsync(SamplePath);
+
+        Assert.Empty(document.Bookmarks);
+        Assert.True(details.PdfVersion >= 1.0);
+        Assert.NotNull(details.Metadata);
+    }
+
+    [Fact]
     public async Task RenderPageAsync_ReturnsRenderablePixels()
     {
         using var service = new PdfDocumentService();

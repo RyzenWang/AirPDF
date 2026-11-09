@@ -144,9 +144,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private NavigationPoint? _pendingOpenPosition;
     private CancellationTokenSource? _loadCancellation;
     private CancellationTokenSource? _searchCancellation;
+    private CancellationTokenSource? _detailsCancellation;
     private PdfDocumentInfo? _document;
     private PdfPageRenderer? _pageRenderer;
     private string? _password;
+    private PdfMetadata _documentMetadata = new();
+    private double _documentPdfVersion = 1.7;
     private bool _disposed;
     private bool _selectingAllText;
     private double _zoom = 1.0;
@@ -2454,6 +2457,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             }
 
             DocumentOpened?.Invoke(this, EventArgs.Empty);
+
+            // The metadata/outline pass reparses the file with PdfPig. Keep it out of the
+            // open-to-first-page path and fill the panels when it finishes.
+            _ = LoadDocumentDetailsAsync(info, password);
         }
         catch (OperationCanceledException)
         {
@@ -2477,6 +2484,52 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                 _loadCancellation = null;
                 OpeningPath = null;
                 OnPropertyChanged(nameof(IsWelcomeVisible));
+            }
+
+            cancellation.Dispose();
+        }
+    }
+
+    private async Task LoadDocumentDetailsAsync(PdfDocumentInfo info, string? password)
+    {
+        var cancellation = new CancellationTokenSource();
+        var previous = Interlocked.Exchange(ref _detailsCancellation, cancellation);
+        previous?.Cancel();
+        previous?.Dispose();
+
+        try
+        {
+            var details = await _documentService.GetDetailsAsync(
+                info.FilePath,
+                password,
+                cancellation.Token);
+
+            if (cancellation.IsCancellationRequested ||
+                _disposed ||
+                !ReferenceEquals(_document, info))
+            {
+                return;
+            }
+
+            _documentMetadata = details.Metadata;
+            _documentPdfVersion = details.PdfVersion;
+            OutlineItems = details.Bookmarks.Select(item => new OutlineItemViewModel(item)).ToList();
+            Metadata = BuildMetadata(info);
+            OnPropertyChanged(nameof(HasMetadata));
+        }
+        catch (OperationCanceledException)
+        {
+            // The tab closed or another document replaced this one.
+        }
+        catch (ObjectDisposedException)
+        {
+            // The tab's document service was disposed while the details were loading.
+        }
+        finally
+        {
+            if (ReferenceEquals(_detailsCancellation, cancellation))
+            {
+                _detailsCancellation = null;
             }
 
             cancellation.Dispose();
@@ -2731,6 +2784,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         _document = info;
         _password = password;
+        _documentMetadata = info.Metadata;
+        _documentPdfVersion = info.PdfVersion;
         _pageRenderer = new PdfPageRenderer(_documentService, info.FilePath, password);
         _reading.Attach(info);
 
@@ -2794,6 +2849,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     private void CloseDocumentCore(bool clearDocument = true)
     {
+        CancelSafely(_detailsCancellation);
+        _detailsCancellation = null;
+        _documentMetadata = new PdfMetadata();
+        _documentPdfVersion = 1.7;
         _reading.Detach();
         ClearHistory();
         ClearUndo();
@@ -3159,7 +3218,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private IReadOnlyList<MetadataRow> BuildMetadata(PdfDocumentInfo info)
     {
         var rows = new List<MetadataRow>();
-        var metadata = info.Metadata;
+        var metadata = _documentMetadata;
         var dateFormat = _localization.IsChinese ? "yyyy年M月d日" : "MMM d, yyyy";
 
         Add(_localization.T("L.MetaTitle"), metadata.Title);
@@ -3171,7 +3230,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         rows.Add(new MetadataRow(_localization.T("L.MetaPages"), info.PageCount.ToString(CultureInfo.InvariantCulture)));
         rows.Add(new MetadataRow(
             _localization.T("L.MetaPdfVersion"),
-            info.PdfVersion.ToString("0.0", CultureInfo.InvariantCulture)));
+            _documentPdfVersion.ToString("0.0", CultureInfo.InvariantCulture)));
         rows.Add(new MetadataRow(_localization.T("L.MetaFileSize"), FormatFileSize(info.FileSizeBytes)));
         Add(_localization.T("L.MetaKeywords"), metadata.Keywords);
 
@@ -3455,6 +3514,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         CancelSafely(_loadCancellation);
         CancelSafely(_searchCancellation);
+        CancelSafely(_detailsCancellation);
+        _detailsCancellation = null;
         _reading.Dispose();
         CloseDocumentCore();
         _documentService.Dispose();
