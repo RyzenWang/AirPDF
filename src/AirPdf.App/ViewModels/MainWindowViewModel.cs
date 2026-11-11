@@ -157,6 +157,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private bool _selectingAllText;
     private double _zoom = 1.0;
     private string _zoomMode = ZoomModes.FitWidth;
+    private double? _zoomBeforeReadingMode;
+    private string? _zoomModeBeforeReadingMode;
     private double? _restoreZoom;
     private string? _restoreZoomMode;
     private int _currentPage = 1;
@@ -249,6 +251,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private IReadOnlyList<PageViewModel> _pages = [];
 
     [ObservableProperty]
+    private IReadOnlyList<PageSpreadViewModel> _spreads = [];
+
+    [ObservableProperty]
+    private bool _isTwoPageMode;
+
+    /// <summary>The flat item list for the page canvas: pages or page spreads.</summary>
+    public IReadOnlyList<object> PageItems => IsTwoPageMode
+        ? Spreads.Cast<object>().ToArray()
+        : Pages.Cast<object>().ToArray();
+
+    [ObservableProperty]
     private IReadOnlyList<ThumbnailViewModel> _thumbnails = [];
 
     [ObservableProperty]
@@ -317,6 +330,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isSidebarVisible;
+
+    [ObservableProperty]
+    private bool _isReadingMode;
+
+    [ObservableProperty]
+    private bool _isReadingChromeRevealed;
+
+    public bool IsChromeVisible => !IsReadingMode || IsReadingChromeRevealed;
+
+    public bool IsStatusBarVisible => !IsReadingMode;
 
     [ObservableProperty]
     private bool _isPagesTabSelected = true;
@@ -503,7 +526,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public NavigationPoint CurrentPosition =>
         new(CurrentPage, Math.Clamp(_reading.PageOffset, 0, 1));
 
-    public bool IsSidebarShown => IsDocumentOpen && IsSidebarVisible;
+    public bool IsSidebarShown => IsDocumentOpen && IsSidebarVisible && !IsReadingMode;
+
+    public string PageLayoutTooltip => _localization.T(
+        IsTwoPageMode ? "L.SinglePageView" : "L.TwoPageView");
 
     public bool IsLightTheme => !IsDarkTheme;
 
@@ -713,6 +739,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _settings.SidebarVisible = IsSidebarVisible;
         _settingsService.Save(_settings);
     }
+
+    [RelayCommand]
+    private void TogglePageLayout() => IsTwoPageMode = !IsTwoPageMode;
 
     [RelayCommand]
     private void ToggleTheme() => _theme.Cycle();
@@ -2602,6 +2631,67 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Zoom = available / (Pages[0].WidthPoints * PageViewModel.PixelsPerPointAt100);
     }
 
+    /// <summary>
+    /// Snapshots the reader's zoom before the chrome disappears, then lets the window refit
+    /// once the page canvas has its new width.
+    /// </summary>
+    public void EnterReadingMode()
+    {
+        if (IsReadingMode)
+        {
+            return;
+        }
+
+        _zoomBeforeReadingMode = _zoom;
+        _zoomModeBeforeReadingMode = _zoomMode;
+        IsReadingChromeRevealed = false;
+        IsReadingMode = true;
+    }
+
+    /// <summary>Restores the zoom that was active before entering content-only reading mode.</summary>
+    public void LeaveReadingMode()
+    {
+        if (!IsReadingMode)
+        {
+            return;
+        }
+
+        IsReadingMode = false;
+        IsReadingChromeRevealed = false;
+
+        var zoom = _zoomBeforeReadingMode;
+        var mode = _zoomModeBeforeReadingMode;
+        _zoomBeforeReadingMode = null;
+        _zoomModeBeforeReadingMode = null;
+
+        if (zoom is { } restore)
+        {
+            _zoomMode = mode ?? _zoomMode;
+            Zoom = restore;
+        }
+    }
+
+    public void FitWidthForReadingMode()
+    {
+        if (IsReadingMode && IsDocumentOpen)
+        {
+            FitWidthToViewport();
+        }
+    }
+
+    public void RevealReadingChrome()
+    {
+        if (IsReadingMode)
+        {
+            IsReadingChromeRevealed = true;
+        }
+    }
+
+    public void HideReadingChrome()
+    {
+        IsReadingChromeRevealed = false;
+    }
+
     public void FitPageToViewport()
     {
         if (Pages.Count == 0)
@@ -3129,20 +3219,23 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         // Only realised page views have layout to update. Offscreen pages pick up the zoom
         // when they are attached; PageLayout computes the scroll extent from page points.
+        var scale = PageDisplayScale;
         foreach (var page in _activePages.ToArray())
         {
-            page.ApplyZoom(_zoom);
+            page.ApplyZoom(scale);
         }
 
         TrimPageImages();
     }
 
+    private double PageDisplayScale => _zoom * (IsTwoPageMode ? 0.5 : 1.0);
+
     /// <summary>Display height at the current zoom, independent of an offscreen page's cache.</summary>
     public double PageDisplayHeight(PageViewModel page) =>
-        page.HeightPoints * PageViewModel.PixelsPerPointAt100 * _zoom;
+        page.HeightPoints * PageViewModel.PixelsPerPointAt100 * PageDisplayScale;
 
     /// <summary>Applies the current zoom before a newly realised page view activates it.</summary>
-    public void ApplyCurrentZoom(PageViewModel page) => page.ApplyZoom(_zoom);
+    public void ApplyCurrentZoom(PageViewModel page) => page.ApplyZoom(PageDisplayScale);
 
     private void OnPageBitmapChanged(object? sender, EventArgs e)
     {
@@ -3419,6 +3512,32 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     partial void OnIsSidebarVisibleChanged(bool value) => OnPropertyChanged(nameof(IsSidebarShown));
+
+    partial void OnIsReadingModeChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsChromeVisible));
+        OnPropertyChanged(nameof(IsStatusBarVisible));
+        OnPropertyChanged(nameof(IsSidebarShown));
+    }
+
+    partial void OnIsReadingChromeRevealedChanged(bool value) =>
+        OnPropertyChanged(nameof(IsChromeVisible));
+
+    partial void OnPagesChanged(IReadOnlyList<PageViewModel> value)
+    {
+        Spreads = PageSpreadViewModel.Create(value);
+        OnPropertyChanged(nameof(PageItems));
+    }
+
+    partial void OnSpreadsChanged(IReadOnlyList<PageSpreadViewModel> value) =>
+        OnPropertyChanged(nameof(PageItems));
+
+    partial void OnIsTwoPageModeChanged(bool value)
+    {
+        OnPropertyChanged(nameof(PageItems));
+        OnPropertyChanged(nameof(PageLayoutTooltip));
+        ApplyZoomToPages();
+    }
 
     partial void OnPageCountChanged(int value)
     {

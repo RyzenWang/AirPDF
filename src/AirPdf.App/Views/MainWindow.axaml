@@ -14,6 +14,24 @@
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource AppBackgroundBrush}">
   <Window.Resources>
+    <DataTemplate x:Key="PageViewTemplate" x:DataType="vm:PageViewModel">
+      <views:PdfPageView Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}" />
+    </DataTemplate>
+    <DataTemplate x:Key="SinglePageItemTemplate" x:DataType="vm:PageViewModel">
+      <views:PdfPageView Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}" />
+    </DataTemplate>
+    <DataTemplate x:Key="SpreadPageItemTemplate" x:DataType="vm:PageSpreadViewModel">
+      <StackPanel Orientation="Horizontal"
+                  Spacing="20"
+                  HorizontalAlignment="Center">
+        <ContentControl Content="{Binding LeftPage}"
+                        ContentTemplate="{StaticResource PageViewTemplate}" />
+        <Panel IsVisible="{Binding HasRightPage}">
+          <ContentControl Content="{Binding RightPage}"
+                          ContentTemplate="{StaticResource PageViewTemplate}" />
+        </Panel>
+      </StackPanel>
+    </DataTemplate>
   </Window.Resources>
   <Grid RowDefinitions="Auto,Auto,*,Auto">
     <!-- Workspace bar: brand, Open, and document tabs share one row. The tab list binds to
@@ -22,6 +40,7 @@
     <Border x:Name="TabStrip"
             Grid.Row="0"
             Height="44"
+            IsVisible="{Binding IsChromeVisible}"
             Background="{DynamicResource TabBarBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,0,0,1"
@@ -193,6 +212,7 @@
          two fit shortcuts fold into the zoom menu. -->
     <Border x:Name="Toolbar"
             Grid.Row="1"
+            IsVisible="{Binding IsChromeVisible}"
             Classes="toolbar"
             Background="{DynamicResource ToolbarBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
@@ -469,6 +489,15 @@
                   ToolTip.Tip="{DynamicResource L.FindInDocument}">
             <Path Classes="icon" Data="{StaticResource IconSearch}" />
           </Button>
+          <Button x:Name="PageLayoutButton"
+                  Classes="icon"
+                  Classes.active="{Binding IsTwoPageMode}"
+                  Command="{Binding TogglePageLayoutCommand}"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{Binding PageLayoutTooltip}"
+                  ToolTip.Tip="{Binding PageLayoutTooltip}">
+            <Path Classes="icon" Data="{StaticResource IconTwoPage}" />
+          </Button>
           <Button Classes="icon"
                   Command="{Binding ToggleSidebarCommand}"
                   IsVisible="{Binding IsDocumentOpen}"
@@ -569,7 +598,8 @@
     <!-- Body -->
     <Grid Grid.Row="2" ColumnDefinitions="Auto,*">
       <!-- Thumbnail / outline rail -->
-      <Border Grid.Column="0"
+      <Border x:Name="Sidebar"
+              Grid.Column="0"
               Width="252"
               IsVisible="{Binding IsSidebarShown}"
               Background="{DynamicResource SidebarBackgroundBrush}"
@@ -756,7 +786,8 @@
       <!-- Reader canvas -->
       <Grid Grid.Column="1" ClipToBounds="True">
         <controls:PdfPageList x:Name="PagesList"
-                              ItemsSource="{Binding Pages}"
+                              ItemsSource="{Binding PageItems}"
+                              ItemTemplate="{StaticResource SinglePageItemTemplate}"
                               IsVisible="{Binding IsDocumentOpen}"
                               AutomationProperties.Name="{DynamicResource L.Pages}"
                               ViewerScrollChanged="OnPagesScrollChanged">
@@ -819,11 +850,6 @@
                         IsEnabled="{Binding IsDocumentOpen}" />
             </ContextMenu>
           </controls:PdfPageList.ContextMenu>
-          <controls:PdfPageList.ItemTemplate>
-            <DataTemplate x:DataType="vm:PageViewModel">
-              <views:PdfPageView Width="{Binding DisplayWidth}" Height="{Binding DisplayHeight}" />
-            </DataTemplate>
-          </controls:PdfPageList.ItemTemplate>
         </controls:PdfPageList>
 
         <!-- Welcome -->
@@ -1336,8 +1362,10 @@
     </Border>
 
     <!-- Status bar -->
-    <Border Grid.Row="3"
+    <Border x:Name="StatusBar"
+            Grid.Row="3"
             Height="30"
+            IsVisible="{Binding IsStatusBarVisible}"
             Background="{DynamicResource StatusBackgroundBrush}"
             BorderBrush="{DynamicResource BorderBrush}"
             BorderThickness="0,1,0,0"

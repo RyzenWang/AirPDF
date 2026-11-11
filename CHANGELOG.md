@@ -4,6 +4,25 @@ All notable changes to AirPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning once it reaches 1.0.
 
+## [Unreleased]
+
+### Added
+
+- The toolbar now has a view-mode button for single-page and two-page spreads. Pages are
+  paired side by side in the same virtualized canvas, and the mode keeps the current page.
+- `F11` now enters a true content-only reading mode: tab strip, toolbar, status bar and
+  thumbnail rail are hidden until the reader leaves fullscreen.
+- Entering reading mode refits the page to the newly available width; leaving fullscreen
+  restores the zoom and zoom mode that were active before.
+- In reading mode, moving the pointer to the top edge reveals the titlebar and toolbar so
+  the window can be dragged or fullscreen exited; moving back into the page hides them
+  again. The sidebar and status bar stay hidden.
+
+### Fixed
+
+- The fullscreen hint no longer points at the hidden top-right exit button; `Esc` and `F11`
+  remain the exit paths.
+
 ## [0.8.0] - 2026-11-09
 
 ### Added

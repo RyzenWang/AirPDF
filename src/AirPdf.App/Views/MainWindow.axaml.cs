@@ -10,6 +10,7 @@ using AirPdf.Core.Services;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -29,6 +30,8 @@ public partial class MainWindow : Window
     private readonly WindowViewModel _tabs;
     private readonly SettingsService _settingsService;
     private readonly string? _initialFile;
+    private readonly IDataTemplate _singlePageTemplate;
+    private readonly IDataTemplate _spreadPageTemplate;
     private MainWindowViewModel _viewModel = null!;
     private ScrollViewer? _tabScrollViewer;
     private DispatcherTimer? _tabAutoScrollTimer;
@@ -38,6 +41,7 @@ public partial class MainWindow : Window
     private int _scrollIntent;
     private bool _suppressThumbnailSync;
     private bool _thumbnailSyncPending;
+    private int _pageLayoutRestoreVersion;
     private bool _handlingScrollChanged;
     private bool _tabStripWidthUpdatePending;
     private WindowState _windowStateBeforeFullScreen = WindowState.Normal;
@@ -85,6 +89,9 @@ public partial class MainWindow : Window
         IUserDialogService? dialogs = null)
     {
         InitializeComponent();
+
+        _singlePageTemplate = (IDataTemplate)Resources["SinglePageItemTemplate"]!;
+        _spreadPageTemplate = (IDataTemplate)Resources["SpreadPageItemTemplate"]!;
 
         _services = services;
         _windows = windows;
@@ -144,7 +151,7 @@ public partial class MainWindow : Window
             }
         }
 
-        PagesList.SizeChanged += (_, _) => UpdateViewport();
+        PagesList.SizeChanged += OnPagesListSizeChanged;
         SizeChanged += OnWindowSizeChanged;
         BrandPanel.SizeChanged += (_, _) => ScheduleTabStripWidthUpdate();
         Activated += (_, _) => SetCaptionActivity(true);
@@ -153,6 +160,7 @@ public partial class MainWindow : Window
         AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
         AddHandler(PointerPressedEvent, OnSelectionPointerPressed, RoutingStrategies.Tunnel);
         AddHandler(PointerMovedEvent, OnSelectionPointerMoved, RoutingStrategies.Tunnel);
+        AddHandler(PointerEnteredEvent, OnReadingChromePointerEntered, RoutingStrategies.Tunnel);
         AddHandler(PointerReleasedEvent, OnSelectionPointerReleased, RoutingStrategies.Tunnel);
         AddHandler(PointerCaptureLostEvent, OnPointerCaptureLost, RoutingStrategies.Tunnel);
         PagesList.AddHandler(PointerWheelChangedEvent, OnPagesPointerWheel, RoutingStrategies.Tunnel);
@@ -234,7 +242,29 @@ public partial class MainWindow : Window
         _viewModel = tab;
         DataContext = tab;
         HookViewModel(tab);
+        ApplyPageTemplate();
         SyncTabSelection();
+
+        if (WindowState == WindowState.FullScreen)
+        {
+            tab.EnterReadingMode();
+            tab.HideReadingChrome();
+            Dispatcher.UIThread.Post(
+                () =>
+                {
+                    if (ReferenceEquals(_viewModel, tab) &&
+                        WindowState == WindowState.FullScreen)
+                    {
+                        UpdateViewport();
+                        tab.FitWidthForReadingMode();
+                    }
+                },
+                DispatcherPriority.Loaded);
+        }
+        else
+        {
+            tab.LeaveReadingMode();
+        }
 
         if (InfoButton.Flyout is Flyout { Content: Control infoContent })
         {
@@ -251,6 +281,7 @@ public partial class MainWindow : Window
 
                 _restoringDocument = true;
                 UpdateViewport();
+                tab.FitWidthForReadingMode();
                 RebuildPageLayout();
                 ScrollToReadingPosition(position.Page, position.PageOffset);
                 UpdateThumbnailSelection();
@@ -277,6 +308,7 @@ public partial class MainWindow : Window
         viewModel.DocumentOpened += OnDocumentOpened;
         viewModel.ZoomChanged += OnZoomChanged;
         viewModel.SearchOpened += OnSearchOpened;
+        viewModel.PropertyChanged += OnViewModelPropertyChanged;
     }
 
     private void UnhookViewModel(MainWindowViewModel viewModel)
@@ -288,6 +320,102 @@ public partial class MainWindow : Window
         viewModel.DocumentOpened -= OnDocumentOpened;
         viewModel.ZoomChanged -= OnZoomChanged;
         viewModel.SearchOpened -= OnSearchOpened;
+        viewModel.PropertyChanged -= OnViewModelPropertyChanged;
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.IsTwoPageMode))
+        {
+            ApplyPageLayoutMode();
+        }
+    }
+
+    private void ApplyPageTemplate()
+    {
+        PagesList.ItemTemplate = _viewModel.IsTwoPageMode
+            ? _spreadPageTemplate
+            : _singlePageTemplate;
+    }
+
+    private void ApplyPageLayoutMode()
+    {
+        ApplyPageTemplate();
+
+        if (!_viewModel.IsDocumentOpen)
+        {
+            return;
+        }
+
+        var position = _viewModel.CurrentPosition;
+        var viewModel = _viewModel;
+        var version = ++_pageLayoutRestoreVersion;
+        var twoPage = _viewModel.IsTwoPageMode;
+        UpdateViewport();
+        RebuildPageLayout();
+
+        bool CurrentPageIsRealized()
+        {
+            foreach (var item in PagesList.GetRealizedContainers().OfType<ListBoxItem>())
+            {
+                // During the swap the old single-page containers are still alive for a
+                // moment; they must not make the new two-page list look settled.
+                if (twoPage)
+                {
+                    if (item.DataContext is PageSpreadViewModel spread &&
+                        (spread.LeftPage.Number == position.Page ||
+                         spread.RightPage?.Number == position.Page))
+                    {
+                        return true;
+                    }
+                }
+                else if (item.DataContext is PageViewModel page &&
+                         page.Number == position.Page)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        void RestorePosition()
+        {
+            if (version != _pageLayoutRestoreVersion ||
+                !ReferenceEquals(_viewModel, viewModel) ||
+                CurrentPageIsRealized())
+            {
+                return;
+            }
+
+            // The virtualizing panel is rebuilt after the ItemsSource/template change and can
+            // briefly keep its old offset. Keep nudging it until the spread containing the
+            // reader's page has actually been realized.
+            RebuildPageLayout();
+            PagesList.ScrollToVerticalOffset(0);
+            ScrollToReadingPosition(position.Page, position.PageOffset);
+        }
+
+        Dispatcher.UIThread.Post(RestorePosition, DispatcherPriority.Loaded);
+        var restoreAttempts = 0;
+        var restoreTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(120)
+        };
+        restoreTimer.Tick += (_, _) =>
+        {
+            if (version != _pageLayoutRestoreVersion ||
+                !ReferenceEquals(_viewModel, viewModel) ||
+                CurrentPageIsRealized() ||
+                ++restoreAttempts >= 30)
+            {
+                restoreTimer.Stop();
+                return;
+            }
+
+            RestorePosition();
+        };
+        restoreTimer.Start();
     }
 
     /// <summary>Records where the outgoing tab was scrolled to before its view goes away.</summary>
@@ -305,8 +433,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        var page = _pageLayout.GetPageAtViewportTop(viewer.Offset.Y, viewer.Viewport.Height);
-        _viewModel.UpdateCurrentPageFromScroll(page, _pageLayout.GetPageOffset(page, viewer.Offset.Y));
+        var layoutPage = _pageLayout.GetPageAtViewportTop(viewer.Offset.Y, viewer.Viewport.Height);
+        var page = PageNumberForLayoutItem(layoutPage);
+        _viewModel.UpdateCurrentPageFromScroll(
+            page,
+            _pageLayout.GetPageOffset(layoutPage, viewer.Offset.Y));
     }
 
     private void OnNewTabClick(object? sender, RoutedEventArgs e) => _tabs.AddTab();
@@ -1029,6 +1160,33 @@ public partial class MainWindow : Window
     {
         var fullScreen = WindowState == WindowState.FullScreen;
 
+        if (_viewModel is not null)
+        {
+            if (fullScreen)
+            {
+                _viewModel.EnterReadingMode();
+
+                // The page list gets wider only after the chrome has collapsed. Refit after
+                // that layout pass so reading mode actually uses the extra width.
+                Dispatcher.UIThread.Post(
+                    () =>
+                    {
+                        if (WindowState != WindowState.FullScreen)
+                        {
+                            return;
+                        }
+
+                        UpdateViewport();
+                        _viewModel.FitWidthForReadingMode();
+                    },
+                    DispatcherPriority.Loaded);
+            }
+            else
+            {
+                _viewModel.LeaveReadingMode();
+            }
+        }
+
         if (this.FindControl<Button>("MaximizeWindowButton") is { } maximizeButton)
         {
             maximizeButton.IsVisible = !fullScreen;
@@ -1325,6 +1483,12 @@ public partial class MainWindow : Window
         }, DispatcherPriority.Loaded);
     }
 
+    private void OnPagesListSizeChanged(object? sender, SizeChangedEventArgs e)
+    {
+        UpdateViewport();
+        _viewModel?.FitWidthForReadingMode();
+    }
+
     private void UpdateViewport()
     {
         _viewModel.UpdateViewport(PagesList.Bounds.Width, PagesList.Bounds.Height);
@@ -1446,21 +1610,43 @@ public partial class MainWindow : Window
             return;
         }
 
-        var page = _pageLayout.GetPageAtViewportTop(viewer.Offset.Y, viewer.Viewport.Height);
-        var fraction = _pageLayout.GetPageOffset(page, viewer.Offset.Y);
+        var layoutPage = _pageLayout.GetPageAtViewportTop(viewer.Offset.Y, viewer.Viewport.Height);
+        var page = PageNumberForLayoutItem(layoutPage);
+        var fraction = _pageLayout.GetPageOffset(layoutPage, viewer.Offset.Y);
         _viewModel.UpdateCurrentPageFromScroll(page, fraction);
         UpdateThumbnailSelection();
     }
 
+    private int LayoutItemCount => _viewModel.IsTwoPageMode
+        ? _viewModel.Spreads.Count
+        : _viewModel.Pages.Count;
+
+    private int LayoutItemForPage(int pageNumber) => _viewModel.IsTwoPageMode
+        ? ((pageNumber - 1) / 2) + 1
+        : pageNumber;
+
+    private int PageNumberForLayoutItem(int layoutPage) => _viewModel.IsTwoPageMode
+        ? ((layoutPage - 1) * 2) + 1
+        : layoutPage;
+
     private void RebuildPageLayout()
     {
-        _pageLayout = new PageLayout(
-            _viewModel.Pages.Select(_viewModel.PageDisplayHeight).ToList());
+        var heights = _viewModel.IsTwoPageMode
+            ? _viewModel.Spreads
+                .Select(spread => Math.Max(
+                    _viewModel.PageDisplayHeight(spread.LeftPage),
+                    spread.RightPage is { } right
+                        ? _viewModel.PageDisplayHeight(right)
+                        : 0))
+                .ToList()
+            : _viewModel.Pages.Select(_viewModel.PageDisplayHeight).ToList();
+
+        _pageLayout = new PageLayout(heights);
     }
 
     private void EnsurePageLayout()
     {
-        if (_pageLayout.Count != _viewModel.Pages.Count)
+        if (_pageLayout.Count != LayoutItemCount)
         {
             RebuildPageLayout();
         }
@@ -1486,8 +1672,9 @@ public partial class MainWindow : Window
         }
 
         var targetPage = Math.Clamp(pageNumber, 1, _viewModel.Pages.Count);
-        var top = _pageLayout.GetTop(targetPage);
-        var pageHeight = _pageLayout.GetHeight(targetPage);
+        var layoutPage = LayoutItemForPage(targetPage);
+        var top = _pageLayout.GetTop(layoutPage);
+        var pageHeight = _pageLayout.GetHeight(layoutPage);
         var target = center
             ? top - Math.Max(12, (viewer.Viewport.Height - pageHeight) / 2)
             : top - 12;
@@ -1518,8 +1705,9 @@ public partial class MainWindow : Window
         }
 
         var pageNumberClamped = Math.Clamp(pageNumber, 1, _viewModel.Pages.Count);
-        var top = _pageLayout.GetTop(pageNumberClamped);
-        var pageHeight = _pageLayout.GetHeight(pageNumberClamped);
+        var layoutPage = LayoutItemForPage(pageNumberClamped);
+        var top = _pageLayout.GetTop(layoutPage);
+        var pageHeight = _pageLayout.GetHeight(layoutPage);
         var normalized = Math.Clamp(fraction, 0, 1);
         var target = top + (normalized * pageHeight);
 
@@ -1551,8 +1739,9 @@ public partial class MainWindow : Window
             return;
         }
 
-        var top = _pageLayout.GetTop(result.PageNumber);
-        var pageHeight = _pageLayout.GetHeight(result.PageNumber);
+        var layoutPage = LayoutItemForPage(result.PageNumber);
+        var top = _pageLayout.GetTop(layoutPage);
+        var pageHeight = _pageLayout.GetHeight(layoutPage);
 
         var highlightTop = result.Rects.Count > 0
             ? top + (result.Rects[0].Y * pageHeight)
@@ -2020,8 +2209,42 @@ public partial class MainWindow : Window
         e.Handled = true;
     }
 
+    private void OnReadingChromePointerEntered(object? sender, PointerEventArgs e) =>
+        UpdateReadingChromeFromPointer(e);
+
+    /// <summary>
+    /// Reading mode keeps the chrome out of the way, but the top edge has to behave like a
+    /// hidden titlebar: enter it to reveal the tabs/toolbar and leave it to go back to the
+    /// content-only view.
+    /// </summary>
+    private void UpdateReadingChromeFromPointer(PointerEventArgs e)
+    {
+        if (_viewModel is null || !_viewModel.IsReadingMode)
+        {
+            return;
+        }
+
+        var y = e.GetPosition(this).Y;
+        if (!_viewModel.IsReadingChromeRevealed)
+        {
+            if (y <= 8)
+            {
+                _viewModel.RevealReadingChrome();
+            }
+
+            return;
+        }
+
+        var chromeHeight = TabStrip.Bounds.Height + Toolbar.Bounds.Height;
+        if (y > chromeHeight + 12)
+        {
+            _viewModel.HideReadingChrome();
+        }
+    }
+
     private void OnSelectionPointerMoved(object? sender, PointerEventArgs e)
     {
+        UpdateReadingChromeFromPointer(e);
         UpdateToolCursor(e);
 
         if (_erasing is { } erasing)

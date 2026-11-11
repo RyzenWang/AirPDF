@@ -773,6 +773,32 @@ public sealed class MainWindowViewModelTests : IDisposable
         Assert.Same(blue, context.ViewModel.InkColor);
     }
     [AvaloniaFact]
+    public async Task TwoPageMode_PairsPagesAndHalvesTheirDisplayWidth()
+    {
+        using var context = new TestContext();
+        await context.ViewModel.OpenPathAsync(SamplePath);
+
+        var page = context.ViewModel.Pages[0];
+        context.ViewModel.ApplyCurrentZoom(page);
+        var singleWidth = page.DisplayWidth;
+
+        context.ViewModel.TogglePageLayoutCommand.Execute(null);
+
+        Assert.True(context.ViewModel.IsTwoPageMode);
+        Assert.Equal((context.ViewModel.Pages.Count + 1) / 2, context.ViewModel.Spreads.Count);
+        Assert.Same(page, context.ViewModel.Spreads[0].LeftPage);
+        Assert.All(context.ViewModel.PageItems, item => Assert.IsType<PageSpreadViewModel>(item));
+
+        context.ViewModel.ApplyCurrentZoom(page);
+        Assert.Equal(singleWidth / 2, page.DisplayWidth, 1);
+
+        context.ViewModel.TogglePageLayoutCommand.Execute(null);
+        context.ViewModel.ApplyCurrentZoom(page);
+        Assert.False(context.ViewModel.IsTwoPageMode);
+        Assert.Equal(singleWidth, page.DisplayWidth, 1);
+    }
+
+    [AvaloniaFact]
     public void Palette_IncludesWhiteAndKeepsBlackAsDefaultInk()
     {
         using var context = new TestContext();

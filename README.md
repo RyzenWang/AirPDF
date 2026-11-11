@@ -61,15 +61,21 @@ share the top row. macOS and Linux keep their native window frame and the tab ba
 - **Windows titlebar, with the tabs in it** — on Windows the 44px workspace bar also carries
   the window controls. Brand, Open, document tabs and minimize/maximize/close share one row;
   the toolbar below is unchanged. Drag the empty area to move the window, double-click it to
-  maximize, and hover the maximize button for Windows 11 Snap Layouts. In fullscreen the
-  maximize control becomes an exit-fullscreen button, and the top edge also starts a drag
-  and leaves fullscreen instead of hitting a resize border. Exiting restores the previous
-  normal or maximized state. Entering fullscreen shows a short top-centre hint with the
-  exit shortcuts and button. Right-click the empty titlebar area or press `Alt+Space` for
-  the native window menu, and the window buttons dim while the window is inactive. macOS
-  and Linux keep their native window frame.
+  maximize, and hover the maximize button for Windows 11 Snap Layouts. `F11` enters a
+  content-only reading mode: the tab strip, toolbar, status bar and thumbnail rail are
+  hidden, the page refits to the wider canvas, and only the page content remains on screen.
+  Moving the pointer to the top edge temporarily reveals the titlebar and toolbar, so the
+  window can be dragged or fullscreen exited from its button; moving back into the page
+  hides them again. Press `Esc` or `F11` to leave reading mode and restore the previous
+  zoom, or drag the top edge to leave fullscreen; exiting restores the previous normal or
+  maximized state and all chrome. Right-click the empty titlebar area or press `Alt+Space` for the native window
+  menu, and the window buttons dim while the window is inactive. macOS and Linux keep their
+  native window frame.
 - **Page navigation on the left** — previous/next and the current-page box sit at the far
   left of the toolbar, aligned with the thumbnail rail; editing and zoom tools stay centred.
+- **Single-page and two-page views** — the toolbar view button shows one page per row by
+  default; the second mode places consecutive pages side by side in the same virtualized
+  canvas.
 - **Thumbnail rail and document outline** for fast navigation.
 - **Full-text search** with page-grouped results, in-page match highlights, and progress
   while a long document is scanned.
@@ -180,7 +186,7 @@ dotnet build AirPdf.sln -c Release
 dotnet test AirPdf.sln -c Release
 ```
 
-The suite currently has **284 tests** (122 Core, 162 App). It uses
+The suite currently has **287 tests** (122 Core, 165 App). It uses
 `tests/Assets/sample.pdf`, an eight-page document that exercises Latin and Chinese text,
 mixed typography, and search geometry. `AirPdf.App.Tests` adds headless Avalonia coverage
 for the XAML and tab strip, opening, search, selection, zoom, language switching,

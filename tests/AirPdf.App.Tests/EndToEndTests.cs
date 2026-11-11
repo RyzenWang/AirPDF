@@ -113,6 +113,114 @@ public sealed class EndToEndTests : IDisposable
     /// treated as a text-selection press on that page.
     /// </summary>
     [AvaloniaFact]
+    public async Task TwoPageMode_KeepsTheCurrentPageInView()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 0);
+
+        document.NavigateToPage(8);
+        await WaitAsync(() => document.CurrentPage == 8);
+
+        var pages = _window.FindControl<PdfPageList>("PagesList");
+        Assert.NotNull(pages);
+
+        document.TogglePageLayoutCommand.Execute(null);
+        await WaitAsync(
+            () => pages!.Viewer?.Offset.Y > 0 &&
+                  pages.GetRealizedContainers()
+                      .OfType<ListBoxItem>()
+                      .Select(item => item.DataContext)
+                      .OfType<PageSpreadViewModel>()
+                      .Any(spread => spread.LeftPage.Number == 8 ||
+                                     spread.RightPage?.Number == 8),
+            5_000);
+
+        Assert.True(pages!.Viewer?.Offset.Y > 0);
+        Assert.Contains(
+            pages.GetRealizedContainers()
+                .OfType<ListBoxItem>()
+                .Select(item => item.DataContext)
+                .OfType<PageSpreadViewModel>(),
+            spread => spread.LeftPage.Number == 8 || spread.RightPage?.Number == 8);
+    }
+
+    [AvaloniaFact]
+    public async Task F11_HidesChromeAndSidebarForReading()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 0);
+
+        if (!document.IsSidebarShown)
+        {
+            document.ToggleSidebarCommand.Execute(null);
+        }
+
+        var tabStrip = _window.FindControl<Border>("TabStrip");
+        var toolbar = _window.FindControl<Border>("Toolbar");
+        var statusBar = _window.FindControl<Border>("StatusBar");
+        var sidebar = _window.FindControl<Border>("Sidebar");
+
+        Assert.NotNull(tabStrip);
+        Assert.NotNull(toolbar);
+        Assert.NotNull(statusBar);
+        Assert.NotNull(sidebar);
+        Assert.True(tabStrip!.IsVisible);
+        Assert.True(toolbar!.IsVisible);
+        Assert.True(statusBar!.IsVisible);
+        Assert.True(sidebar!.IsVisible);
+
+        // The window applies its initial fit-width after the document-open post; let that
+        // settle before recording the zoom that reading mode has to restore.
+        await Task.Delay(250);
+        Dispatcher.UIThread.RunJobs();
+
+        var page = document.Pages[0];
+        var widthBeforeReading = page.DisplayWidth;
+        var zoomBeforeReading = document.Zoom;
+
+        _window.KeyPressQwerty(PhysicalKey.F11, RawInputModifiers.None);
+        await WaitAsync(() => _window.WindowState == WindowState.FullScreen);
+        await WaitAsync(() => page.DisplayWidth > widthBeforeReading + 1, 5_000);
+
+        Assert.True(document.IsReadingMode);
+        Assert.False(tabStrip.IsVisible);
+        Assert.False(toolbar.IsVisible);
+        Assert.False(statusBar.IsVisible);
+        Assert.False(sidebar.IsVisible);
+        Assert.True(page.DisplayWidth > widthBeforeReading);
+
+        // Moving to the hidden top edge reveals only the titlebar/toolbar; the sidebar and
+        // status bar stay out of reading mode.
+        _window.MouseMove(new Point(120, 4));
+        await WaitAsync(() => document.IsReadingChromeRevealed, 5_000);
+        Assert.True(tabStrip.IsVisible);
+        Assert.True(toolbar.IsVisible);
+        Assert.False(statusBar.IsVisible);
+        Assert.False(sidebar.IsVisible);
+
+        _window.MouseMove(new Point(120, 220));
+        await WaitAsync(() => !document.IsReadingChromeRevealed, 5_000);
+        Assert.False(tabStrip.IsVisible);
+        Assert.False(toolbar.IsVisible);
+        Assert.False(statusBar.IsVisible);
+        Assert.False(sidebar.IsVisible);
+
+        _window.KeyPressQwerty(PhysicalKey.F11, RawInputModifiers.None);
+        await WaitAsync(() => _window.WindowState != WindowState.FullScreen);
+        await WaitAsync(() => Math.Abs(page.DisplayWidth - widthBeforeReading) < 1, 5_000);
+
+        Assert.False(document.IsReadingMode);
+        Assert.True(tabStrip.IsVisible);
+        Assert.True(toolbar.IsVisible);
+        Assert.True(statusBar.IsVisible);
+        Assert.True(sidebar.IsVisible);
+        Assert.True(
+            Math.Abs(page.DisplayWidth - widthBeforeReading) < 1,
+            $"width before={widthBeforeReading:F2} zoom before={zoomBeforeReading:F3}, " +
+            $"width after={page.DisplayWidth:F2} zoom after={document.Zoom:F3}");
+    }
+
+    [AvaloniaFact]
     public async Task ToolbarButton_WorksWhenAPageIsScrolledUnderIt()
     {
         var document = await OpenSampleAsync();

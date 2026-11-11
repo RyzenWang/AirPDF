@@ -198,25 +198,44 @@ public sealed class MainWindowXamlTests : IDisposable
         var maximize = window.FindControl<Button>("MaximizeWindowButton");
         var exitFullScreen = window.FindControl<Button>("ExitFullScreenButton");
         var hint = window.FindControl<Border>("FullscreenHint");
+        var tabStrip = window.FindControl<Border>("TabStrip");
+        var toolbar = window.FindControl<Border>("Toolbar");
+        var statusBar = window.FindControl<Border>("StatusBar");
+        var viewModel = Assert.IsType<MainWindowViewModel>(window.DataContext);
 
         Assert.NotNull(maximize);
         Assert.NotNull(exitFullScreen);
         Assert.NotNull(hint);
+        Assert.NotNull(tabStrip);
+        Assert.NotNull(toolbar);
+        Assert.NotNull(statusBar);
         Assert.True(maximize!.IsVisible);
         Assert.False(exitFullScreen!.IsVisible);
         Assert.False(hint!.IsVisible);
+        Assert.True(tabStrip!.IsVisible);
+        Assert.True(toolbar!.IsVisible);
+        Assert.True(statusBar!.IsVisible);
+        Assert.False(viewModel.IsReadingMode);
 
         window.WindowState = WindowState.FullScreen;
 
         Assert.False(maximize.IsVisible);
         Assert.True(exitFullScreen.IsVisible);
         Assert.True(hint.IsVisible);
+        Assert.False(tabStrip.IsVisible);
+        Assert.False(toolbar.IsVisible);
+        Assert.False(statusBar.IsVisible);
+        Assert.True(viewModel.IsReadingMode);
 
         window.WindowState = WindowState.Normal;
 
         Assert.True(maximize.IsVisible);
         Assert.False(exitFullScreen.IsVisible);
         Assert.False(hint.IsVisible);
+        Assert.True(tabStrip.IsVisible);
+        Assert.True(toolbar.IsVisible);
+        Assert.True(statusBar.IsVisible);
+        Assert.False(viewModel.IsReadingMode);
     }
 
     /// <summary>
