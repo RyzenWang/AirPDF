@@ -126,6 +126,10 @@ function Assert-PackageIdentity {
     if ([string]::IsNullOrWhiteSpace($PublisherDisplayName)) {
         throw '-PublisherDisplayName is required.'
     }
+
+    if ($PublisherDisplayName.Length -gt 256) {
+        throw '-PublisherDisplayName must be 256 characters or fewer (got ' + $PublisherDisplayName.Length + ').'
+    }
 }
 
 $defaultIdentityName = 'AirPDF'
@@ -144,6 +148,18 @@ if ($ForStore) {
   -IdentityName <name from Product identity>
   -Publisher    "CN=<publisher id from Product identity>"
 Open Partner Center > your app > Product management > Product identity.
+'@
+    }
+
+    # Partner Center compares this against the account's publisher display name
+    # verbatim. A mismatch is reported as a package validation error before
+    # certification, so the default is never right for a submission.
+    if (-not $PSBoundParameters.ContainsKey('PublisherDisplayName')) {
+        throw @'
+-ForStore needs -PublisherDisplayName: it must match the publisher display name of the
+Partner Center account exactly, or the upload fails with "The PublisherDisplayName
+element in the app manifest ... does not match the publisher display name ...".
+AirPDF's account publishes as: -PublisherDisplayName RyzenWang
 '@
     }
 }

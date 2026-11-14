@@ -87,14 +87,16 @@ The publish folder is per architecture (`artifacts/msix/app-<arch>`), so both ca
 row without clobbering each other.
 
 For a Store submission, pass the identity Partner Center assigned and add
-`-ForStore`. That mode refuses the placeholder identity, refuses a signing
-certificate, checks the identity against the manifest schema, verifies the packed
-manifest, and emits a `.msixupload` next to the `.msix`:
+`-ForStore`. That mode refuses the placeholder identity, refuses a missing
+`-PublisherDisplayName`, refuses a signing certificate, checks the identity against
+the manifest schema, verifies the packed manifest, and emits a `.msixupload` next to
+the `.msix`:
 
 ```powershell
 ./packaging/msix/Build-Msix.ps1 -Version 1.0.0.0 -ForStore `
   -IdentityName '<Package/Identity/Name>' `
-  -Publisher 'CN=<Package/Identity/Publisher>'
+  -Publisher 'CN=<Package/Identity/Publisher>' `
+  -PublisherDisplayName '<publisher display name>'
 ```
 
 The rest of the process — account setup, listing material, certification

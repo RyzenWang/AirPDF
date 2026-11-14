@@ -58,9 +58,17 @@ tickets go through <https://aka.ms/windowsdevelopersupport>.
    | --- | --- | --- |
    | Package/Identity/Name | `AirPDF`, `Contoso.AirPDF` | `-IdentityName` |
    | Package/Identity/Publisher | `CN=1A2B3C4D-1111-2222-3333-444455556666` | `-Publisher` |
+   | Publisher display name | `RyzenWang` | `-PublisherDisplayName` |
 
    Use the value verbatim, including the `CN=`. It is a generated identifier, not
    your name, and it must match the manifest exactly or the upload is rejected.
+
+   The publisher display name is the account-level name on the listing — for this
+   product it is `RyzenWang`, not "AirPDF contributors". Partner Center compares it
+   to `Properties/PublisherDisplayName` verbatim and stops the upload with
+   *"The PublisherDisplayName element in the app manifest ... does not match the
+   publisher display name"* when it differs, so `-ForStore` now refuses to build
+   without it.
 
 The reserved name fixes `Identity Name`; it never changes afterwards. Changing it
 later means a new product.
@@ -83,12 +91,13 @@ later means a new product.
   -Version 1.0.0.0 `
   -ForStore `
   -IdentityName '<Package/Identity/Name>' `
-  -Publisher 'CN=<Package/Identity/Publisher>'
+  -Publisher 'CN=<Package/Identity/Publisher>' `
+  -PublisherDisplayName '<publisher display name from Partner Center>'
 ```
 
-`-ForStore` refuses the placeholder identity, refuses a signing certificate, checks
-the identity against the manifest schema rules, verifies the packed manifest, and
-produces two files:
+`-ForStore` refuses the placeholder identity, refuses a missing publisher display name,
+refuses a signing certificate, checks the identity against the manifest schema rules,
+verifies the packed manifest, and produces two files:
 
 | File | Purpose |
 | --- | --- |
