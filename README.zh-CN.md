@@ -25,7 +25,7 @@
 AirPDF 打开得快、渲染得稳，然后安静地退到页面后面。没有账号，没有云端，没有遥测，
 也没有内嵌浏览器。整个阅读器就是一个小的 .NET 应用，界面用 Avalonia 手写。
 
-> **状态：** 0.8.0。Windows 版可从 [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1)
+> **状态：** 0.9.0。Windows 版可从 [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1)
 > 和 [GitHub Releases](https://github.com/RyzenWang/AirPDF/releases/latest) 获取；macOS 与 Linux
 > 提供便携包。商店版本可能晚于 GitHub 发布。高亮、墨迹、便签、书签、标签页、Windows 自定义
 > 标题栏、撤销/重做与保存均已可用；打印尚未实现。见[路线图](#路线图)。
