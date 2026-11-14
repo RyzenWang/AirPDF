@@ -31,7 +31,7 @@
       ProcessorArchitecture="{{ARCH}}" />
 
   <Properties>
-    <DisplayName>AirPDF</DisplayName>
+    <DisplayName>{{DISPLAY_NAME}}</DisplayName>
     <PublisherDisplayName>{{PUBLISHER_DISPLAY_NAME}}</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
     <Description>A feather-light, cross-platform PDF reader built with .NET and Avalonia.</Description>
@@ -54,7 +54,7 @@
                  Executable="AirPdf.exe"
                  EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
-          DisplayName="AirPDF"
+          DisplayName="{{DISPLAY_NAME}}"
           Description="A feather-light, cross-platform PDF reader built with .NET and Avalonia."
           BackgroundColor="transparent"
           Square150x150Logo="Assets\Square150x150Logo.png"
@@ -67,7 +67,15 @@
         <uap:Extension Category="windows.fileTypeAssociation">
           <uap:FileTypeAssociation Name="airpdf">
             <uap:DisplayName>PDF document</uap:DisplayName>
-            <uap:Logo>Assets\Square44x44Logo.png</uap:Logo>
+            <!--
+              Not Square44x44Logo: the shell renders this reference as a single
+              bitmap and never resolves the targetsize/altform variants for it. It
+              draws the file icon by scaling that bitmap down and, above its native
+              size, by pasting it unscaled into a larger canvas, which is why a 44px
+              image showed up small and off-centre on the desktop. 256 covers every
+              size Explorer asks for, from 16 up to the 256 "extra large" view.
+            -->
+            <uap:Logo>Assets\FileTypeLogo.png</uap:Logo>
             <uap:SupportedFileTypes>
               <uap:FileType>.pdf</uap:FileType>
             </uap:SupportedFileTypes>

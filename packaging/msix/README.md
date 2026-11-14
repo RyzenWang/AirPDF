@@ -31,11 +31,27 @@ generates the logo assets from `src/AirPdf.App/Assets/airpdf.png`, expands
 `AppxManifest.xml`, packs with `makeappx`, then unpacks the result and asserts
 the parts Microsoft certifies.
 
-The source PNG is a full-bleed app icon, but MSIX square logos are canvases that
-Start draws at their full size. The generator therefore insets the icon (66px in
-the 150×150 tile, 28px in the 44×44 app-list logo) and emits `targetsize-*`
-variants for Start, the taskbar and the app list. Drawing the source edge to edge
-makes AirPDF's icon look oversized next to other apps.
+The source PNG is a full-bleed app icon, and the generator keeps it that way for
+the app-list family: `Square44x44Logo` plus the 14 target sizes Windows asks for,
+each in a plain, an `altform-unplated` and an `altform-lightunplated` form. Windows
+renders those at their exact target size in Start, on the taskbar, in search results
+and as the icon of a `.pdf` in Explorer, and adds no padding of its own — so padding
+baked into the file shows up as an icon that looks smaller than its neighbours. The
+medium tile, wide tile and splash screen are branded canvases instead and inset the
+mark on the paper background.
+
+The file type association is a separate path and needs a separate asset. The shell
+renders `uap:Logo` as one bitmap and does not resolve `targetsize` variants for it:
+pointing it at the 44px app-list logo made the `.pdf` arrow pasted unscaled into the
+top-left of the desktop's 48px slot, and wrapped in a much larger canvas at 96px and
+above. It therefore points at a dedicated 256px `FileTypeLogo.png`, and the shell
+scales down from there for every size Explorer asks for. (`desktop7:Logo` would allow
+a real multi-size `.ico`, but it requires Windows 10 build 19645, above the 19041 the
+package supports.)
+
+The build measures all of it after packing — app-list coverage, file-type coverage and
+tile mark size — so an icon that drifts back to a padded or undersized canvas fails
+instead of shipping.
 
 `makeappx` is resolved from an installed Windows SDK, or downloaded on demand
 from the `Microsoft.Windows.SDK.BuildTools` NuGet package — no elevation and no
@@ -54,6 +70,10 @@ under a second instead of several. AOT needs the C++ toolchain (`clang` and the 
 the build machine; pass `-NoAot` to publish the JIT build when it is not available.
 
 Use `-SkipPublish` to repack an existing publish folder.
+
+`-DisplayName` sets the name shown in Start and in the Open with list. Use it when a
+test package has to sit next to an installed Store build, which is otherwise
+indistinguishable from it in the shell.
 
 Two switches shape the package:
 

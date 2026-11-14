@@ -20,6 +20,20 @@ semantic versioning once it reaches 1.0.
 
 ### Fixed
 
+- Icons in the packaged app no longer draw smaller than their neighbours. Every app-list
+  canvas carried the artwork inset at 64% of its size, and no `altform-unplated` variants
+  existed at all, so Windows shrank the icon again in the Start menu. The app-list family
+  now fills its canvas edge to edge and covers all 14 target sizes in the plain, unplated
+  and light-unplated forms, and the medium tile mark went from 66px to 108px in its 150px
+  tile.
+- The `.pdf` icon no longer draws small and off-centre on the desktop. The file type
+  association pointed `uap:Logo` at the 44px app-list logo, and the shell renders that
+  reference as a single bitmap without resolving `targetsize` variants: at the desktop's
+  48px it pasted the 44px image into the top-left corner, and at 96px and above it wrapped
+  the same 44px image in a much larger canvas. The file type now has its own 256px logo,
+  which covers every size Explorer asks for.
+- The build measures both icon families after packing — app-list coverage, file-type
+  coverage and tile mark size — so a padded or undersized asset fails instead of shipping.
 - The fullscreen hint no longer points at the hidden top-right exit button; `Esc` and `F11`
   remain the exit paths.
 
