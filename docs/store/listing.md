@@ -121,35 +121,34 @@ Limit is about 1500 characters. Both languages below fit.
 English:
 
 ```
-AirPDF 0.7 is a tidier workspace and a finer selection.
+AirPDF 0.9 is a quieter reading surface.
 
-• Tabs can be dragged into a new order: holding one near either edge scrolls a long
-  strip, and tabs slide into place instead of jumping. Right-click a tab to close it or
-  to close every other tab.
-• A tray icon keeps AirPDF reachable while it is hidden; Hide to tray leaves documents
-  open. Closing a window still exits.
-• The Windows titlebar opens the native window menu on right-click or Alt+Space, and its
-  buttons dim while the window is inactive.
-• Text selection is character-granular: a drag copies exactly what you highlighted, while
-  double-click still takes a whole word.
-• The arrow keys scroll a small step instead of turning a whole page, and Home / End jump
-  to the start and end of the document.
-• Page navigation moved to the far left of the toolbar, and the app icon is the orange
-  brand tile everywhere, including the Store artwork.
+• F11 is now a real reading mode: the tab strip, toolbar, status bar and thumbnail rail
+  all step aside, the page refits itself to the wider canvas, and leaving fullscreen
+  restores the zoom and zoom mode you had before.
+• Move the pointer to the top edge of the screen and the titlebar and toolbar reappear —
+  just long enough to drag the window or exit fullscreen. Move back into the page and they
+  hide themselves again.
+• A new button on the toolbar puts two pages side by side. Single and spread views share
+  one scrolling canvas, so switching between them keeps your place in the document.
+• The app icon no longer looks smaller than its neighbours in the Start menu, and a .pdf
+  file on the desktop now shows the AirPDF icon at full size and centred, instead of small
+  and pushed into a corner.
 ```
 
 简体中文：
 
 ```
-AirPDF 0.7 更整齐，也更精确。
+AirPDF 0.9 让页面本身成为主体。
 
-• 标签可拖动排序：拖到标签栏左右边缘会自动滚动，松手后平滑归位而不是瞬移。右键标签
-  可以关闭当前标签或关闭其他标签。
-• 隐藏窗口后托盘图标可随时找回应用；选择「隐藏到托盘」时文档保持打开。
-• Windows 标题栏支持右键或 Alt+Space 打开系统菜单；窗口失去焦点时按钮会变暗。
-• 文本选择精确到字符：拖动选中多少就复制多少，不会再带上旁边的字；双击仍然选中整词。
-• 方向键改为小步滚动，不再整页跳转；Home / End 直接跳到文档开头和结尾。
-• 页码导航移到工具栏最左侧，应用图标统一换成橙色品牌标，包内各尺寸商店图标一并更新。
+• F11 变成真正的阅读模式：标签栏、工具栏、状态栏和缩略图栏一起收起，页面自动适配变宽
+  的画布；退出全屏时恢复进入前的缩放比例和缩放方式。
+• 鼠标移到屏幕顶边，标题栏和工具栏会临时出现，正好够拖动窗口或退出全屏；移回页面后又
+  自动隐藏。
+• 工具栏新增视图按钮，把相邻两页并排显示。单页与双页共用同一个滚动画布，切换时不会丢失
+  当前阅读位置。
+• 应用图标在开始菜单里不再比别的应用小一圈；把 .pdf 设为默认打开后，桌面上的 PDF 图标
+  也会以完整尺寸居中显示，不再又小又偏。
 ```
 
 ## Screenshots
