@@ -44,6 +44,22 @@ public sealed class SettingsServiceTests : IDisposable
     }
 
     [Fact]
+    public void Save_RoundTripsTheOpenTabSession()
+    {
+        var service = new SettingsService(_directory);
+        service.Save(new AppSettings
+        {
+            OpenTabs = ["/books/one.pdf", "/books/two.pdf"],
+            SelectedTabPath = "/books/two.pdf"
+        });
+
+        var reloaded = service.Load();
+
+        Assert.Equal(["/books/one.pdf", "/books/two.pdf"], reloaded.OpenTabs);
+        Assert.Equal("/books/two.pdf", reloaded.SelectedTabPath);
+    }
+
+    [Fact]
     public void Save_OverAnExistingFile_KeepsThePreviousCopyAsBackup()
     {
         var service = new SettingsService(_directory);

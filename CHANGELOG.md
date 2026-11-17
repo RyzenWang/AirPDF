@@ -4,6 +4,36 @@ All notable changes to AirPDF are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 semantic versioning once it reaches 1.0.
 
+## [Unreleased]
+
+### Added
+
+- The document tabs that were open when the last window closed are restored on the next
+  launch, in their previous order and with the same tab selected. Missing files are skipped.
+- A document tab's context menu can now open the file's containing folder.
+- Opening the containing folder now brings the Explorer window to the foreground instead
+  of leaving it behind the reader.
+- Selected text now has a floating markup bar for underlines, strikethrough, squiggly
+  underlines, and the existing highlight, with a shared colour palette.
+- The sidebar has a **Markup** tab listing highlight, underline, strikethrough, squiggly,
+  ink, note, and text annotations by page; clicking one scrolls to the annotation's
+  position on the page rather than only selecting the page.
+- Loading the Markup tab streams the current page and then annotation batches, releases the
+  PDFium gate between pages so rendering and editing can interleave, and caches the result
+  across tab switches.
+- New markups are appended to an open Markup tab instead of rescanning the whole document;
+  undo/redo only mark the list dirty for the next tab activation.
+
+### Fixed
+
+- The floating text-markup bar no longer triggers Avalonia's "infinite layout loop" on a
+  very long document. Its position is updated by bounded one-shot retries rather than a
+  layout-updated handler.
+- Markup navigation now re-aligns against the live page view after the virtualized canvas
+  settles, so a 9,000-page document lands on the annotation instead of a neighbouring page.
+- Starting an edit during the Markup tab's background scan no longer cancels and restarts
+  the scan or blocks rendering behind one long lock.
+
 ## [0.9.0] - 2026-11-14
 
 ### Added

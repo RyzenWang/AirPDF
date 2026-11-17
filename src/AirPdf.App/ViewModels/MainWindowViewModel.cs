@@ -160,6 +160,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private double? _zoomBeforeReadingMode;
     private string? _zoomModeBeforeReadingMode;
     private double? _restoreZoom;
+    private bool _initialZoomApplied;
     private string? _restoreZoomMode;
     private int _currentPage = 1;
     private SearchResultViewModel? _selectedSearchResult;
@@ -242,6 +243,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public event EventHandler? SearchOpened;
 
     public event EventHandler<SearchResultViewModel>? ScrollToSearchResultRequested;
+
+    public event EventHandler<MarkupNavigationPoint>? ScrollToMarkupRequested;
 
     public event EventHandler<string>? CopySelectionRequested;
 
@@ -349,6 +352,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isBookmarksTabSelected;
+
+    [ObservableProperty]
+    private bool _isAnnotationsTabSelected;
+
+    [ObservableProperty]
+    private IReadOnlyList<AnnotationItemViewModel> _annotations = [];
+
+    [ObservableProperty]
+    private bool _isLoadingAnnotations;
+
+    private CancellationTokenSource? _annotationsCancellation;
+    private int _annotationsVersion;
+    private bool _annotationsLoaded;
+    private bool _annotationsDirty = true;
+
+    public bool HasAnnotations => Annotations.Count > 0;
+
+    public bool HasNoAnnotations => !HasAnnotations && !IsLoadingAnnotations;
+
+    public string AnnotationCountText => _localization.Format("L.AnnotationCountFormat", Annotations.Count);
 
     [ObservableProperty]
     private bool _isSearchOpen;
@@ -788,18 +811,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         try
         {
-            if (OperatingSystem.IsWindows())
-            {
-                StartProcess("explorer.exe", $"/select,\"{FilePath}\"");
-            }
-            else if (OperatingSystem.IsMacOS())
-            {
-                StartProcess("open", $"-R \"{FilePath}\"");
-            }
-            else
-            {
-                StartProcess("xdg-open", $"\"{FileDirectory}\"");
-            }
+            ExplorerReveal.ShowInFolder(FilePath, FileDirectory);
         }
         catch
         {
@@ -887,6 +899,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IsPagesTabSelected = true;
         IsContentsTabSelected = false;
         IsBookmarksTabSelected = false;
+        IsAnnotationsTabSelected = false;
     }
 
     [RelayCommand]
@@ -895,6 +908,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IsPagesTabSelected = false;
         IsContentsTabSelected = true;
         IsBookmarksTabSelected = false;
+        IsAnnotationsTabSelected = false;
         _ = EnsureDocumentDetailsAsync();
     }
 
@@ -904,6 +918,289 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IsPagesTabSelected = false;
         IsContentsTabSelected = false;
         IsBookmarksTabSelected = true;
+        IsAnnotationsTabSelected = false;
+    }
+
+    [RelayCommand]
+    private void ShowAnnotationsTab()
+    {
+        IsPagesTabSelected = false;
+        IsContentsTabSelected = false;
+        IsBookmarksTabSelected = false;
+        IsAnnotationsTabSelected = true;
+        if (!IsLoadingAnnotations && (!_annotationsLoaded || _annotationsDirty))
+        {
+            _ = LoadAnnotationsAsync();
+        }
+    }
+
+    [RelayCommand]
+    private async Task GoToAnnotationAsync(AnnotationItemViewModel? annotation)
+    {
+        if (annotation is null || !IsDocumentOpen || PageCount == 0)
+        {
+            return;
+        }
+
+        var pageNumber = Math.Clamp(annotation.PageNumber, 1, PageCount);
+        var page = Pages.FirstOrDefault(candidate => candidate.Number == pageNumber);
+        if (page is null)
+        {
+            return;
+        }
+
+        var rotation = await _documentService.GetPageRotationAsync(FilePath, pageNumber);
+        var display = PageGeometry.ToDisplayRect(
+            annotation.Bounds.Left,
+            annotation.Bounds.Top,
+            annotation.Bounds.Right,
+            annotation.Bounds.Bottom,
+            page.WidthPoints,
+            page.HeightPoints,
+            rotation);
+
+        PushHistory();
+        SetCurrentPage(pageNumber);
+        ScrollToMarkupRequested?.Invoke(
+            this,
+            new MarkupNavigationPoint(pageNumber, display));
+    }
+
+    /// <summary>
+    /// Reads every page's markup for the sidebar. This is intentionally on demand: opening a
+    /// document should not pay for scanning annotations the reader never looks at.
+    /// </summary>
+    private async Task LoadAnnotationsAsync()
+    {
+        if (!IsDocumentOpen || PageCount == 0)
+        {
+            Annotations = [];
+            return;
+        }
+
+        CancelSafely(_annotationsCancellation);
+        var cancellation = new CancellationTokenSource();
+        _annotationsCancellation = cancellation;
+        var version = ++_annotationsVersion;
+
+        _annotationsDirty = false;
+        IsLoadingAnnotations = true;
+        try
+        {
+            // Give the reader the page they are looking at immediately; the full scan continues
+            // behind the progress bar. On a long document this is the difference between an
+            // empty sidebar and useful content while the rest of the pages are read.
+            var previewPage = Math.Clamp(CurrentPage, 1, PageCount);
+            var preview = await GetMarkupAsync(previewPage);
+            var previewItems = preview.Select(CreateAnnotationItem).ToList();
+            if (version == _annotationsVersion &&
+                !cancellation.IsCancellationRequested)
+            {
+                Annotations = previewItems;
+            }
+
+            var built = new List<AnnotationItemViewModel>();
+            var completed = false;
+            var progress = new Progress<IReadOnlyList<PdfMarkup>>(batch =>
+            {
+                if (completed ||
+                    version != _annotationsVersion ||
+                    cancellation.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                built.AddRange(batch.Select(CreateAnnotationItem));
+                var includePreview = !built.Any(item => item.PageNumber == previewPage);
+                Annotations = (includePreview ? previewItems : [])
+                    .Concat(built)
+                    .OrderBy(item => item.PageNumber)
+                    .ToList();
+            });
+
+            // One resident-session pass, instead of one worker handoff and gate acquisition
+            // per page. The result also warms the markup cache used by hit-testing. Batches
+            // arrive while the scan runs, so a 9,000-page document fills the list progressively.
+            var markups = await _documentService.GetAllMarkupAsync(
+                FilePath,
+                progress,
+                cancellation.Token);
+            completed = true;
+            cancellation.Token.ThrowIfCancellationRequested();
+
+            foreach (var pageGroup in markups.GroupBy(markup => markup.PageNumber))
+            {
+                _markupCache[pageGroup.Key] = pageGroup.ToList();
+            }
+
+            if (version != _annotationsVersion ||
+                cancellation.IsCancellationRequested)
+            {
+                return;
+            }
+
+            Annotations = markups.Select(CreateAnnotationItem).ToList();
+            _annotationsLoaded = true;
+        }
+        catch (OperationCanceledException)
+        {
+            // Closing the document, or refreshing the tab, owns the newer list.
+        }
+        catch (Exception unexpected)
+        {
+            CrashLog.Write("LoadAnnotations", unexpected);
+        }
+        finally
+        {
+            if (version == _annotationsVersion)
+            {
+                IsLoadingAnnotations = false;
+                _annotationsCancellation = null;
+            }
+
+            cancellation.Dispose();
+        }
+    }
+
+    private AnnotationItemViewModel CreateAnnotationItem(PdfMarkup markup)
+    {
+        var pageLabel = _localization.Format("L.BookmarkPageFormat", markup.PageNumber);
+        var (title, glyph, red, green, blue, detail) = markup.Kind switch
+        {
+            PdfMarkupKind.Highlight => (
+                _localization.T("L.AnnotationHighlight"), "▰",
+                markup.Highlight!.Red, markup.Highlight.Green, markup.Highlight.Blue,
+                string.Empty),
+            PdfMarkupKind.Underline => (
+                _localization.T("L.AnnotationUnderline"), "U",
+                markup.TextMarkup!.Red, markup.TextMarkup.Green, markup.TextMarkup.Blue,
+                string.Empty),
+            PdfMarkupKind.StrikeOut => (
+                _localization.T("L.AnnotationStrikeOut"), "S",
+                markup.TextMarkup!.Red, markup.TextMarkup.Green, markup.TextMarkup.Blue,
+                string.Empty),
+            PdfMarkupKind.Squiggly => (
+                _localization.T("L.AnnotationSquiggly"), "≈",
+                markup.TextMarkup!.Red, markup.TextMarkup.Green, markup.TextMarkup.Blue,
+                string.Empty),
+            PdfMarkupKind.Ink => (
+                _localization.T("L.AnnotationInk"), "✎",
+                markup.Ink!.Red, markup.Ink.Green, markup.Ink.Blue,
+                string.Empty),
+            PdfMarkupKind.Note => (
+                _localization.T("L.AnnotationNote"), "▤",
+                (byte)255, (byte)214, (byte)79,
+                markup.Note!.Text),
+            PdfMarkupKind.FreeText => (
+                _localization.T("L.AnnotationFreeText"), "T",
+                (byte)0, (byte)0, (byte)0,
+                markup.FreeText!.Text),
+            _ => (
+                _localization.T("L.Markup"), "•",
+                (byte)120, (byte)120, (byte)120,
+                string.Empty)
+        };
+
+        return new AnnotationItemViewModel(
+            markup.PageNumber,
+            markup.Kind,
+            title,
+            detail,
+            pageLabel,
+            glyph,
+            red,
+            green,
+            blue,
+            MarkupBounds(markup));
+    }
+
+    private static PdfMarkupKind MarkupKindFor(PdfTextMarkupKind kind) => kind switch
+    {
+        PdfTextMarkupKind.Underline => PdfMarkupKind.Underline,
+        PdfTextMarkupKind.StrikeOut => PdfMarkupKind.StrikeOut,
+        _ => PdfMarkupKind.Squiggly
+    };
+
+    private static PdfQuad MarkupBounds(PdfMarkup markup) => markup.Kind switch
+    {
+        PdfMarkupKind.Highlight => UnionQuads(markup.Highlight!.Quads),
+        PdfMarkupKind.Underline or PdfMarkupKind.StrikeOut or PdfMarkupKind.Squiggly =>
+            UnionQuads(markup.TextMarkup!.Quads),
+        PdfMarkupKind.Ink => InkBounds(markup.Ink!),
+        PdfMarkupKind.Note => NoteBounds(markup.Note!),
+        PdfMarkupKind.FreeText => markup.FreeText!.Bounds,
+        _ => default
+    };
+
+    private static PdfQuad UnionQuads(IReadOnlyList<PdfQuad> quads)
+    {
+        if (quads.Count == 0)
+        {
+            return default;
+        }
+
+        var left = quads[0].Left;
+        var top = quads[0].Top;
+        var right = quads[0].Right;
+        var bottom = quads[0].Bottom;
+        for (var index = 1; index < quads.Count; index++)
+        {
+            var quad = quads[index];
+            left = Math.Min(left, quad.Left);
+            top = Math.Max(top, quad.Top);
+            right = Math.Max(right, quad.Right);
+            bottom = Math.Min(bottom, quad.Bottom);
+        }
+
+        return new PdfQuad(left, top, right, bottom);
+    }
+
+    private static PdfQuad InkBounds(PdfInk ink)
+    {
+        var points = ink.Strokes.SelectMany(stroke => stroke.Points).ToList();
+        if (points.Count == 0)
+        {
+            return default;
+        }
+
+        var margin = Math.Max(2, ink.Width / 2);
+        return new PdfQuad(
+            points.Min(point => point.X) - margin,
+            points.Max(point => point.Y) + margin,
+            points.Max(point => point.X) + margin,
+            points.Min(point => point.Y) - margin);
+    }
+
+    private static PdfQuad NoteBounds(PdfNote note) =>
+        new(
+            note.Position.X - 6,
+            note.Position.Y + 6,
+            note.Position.X + 6,
+            note.Position.Y - 6);
+
+    /// <summary>
+    /// Appends markup the reader just created without rescanning a 9,000-page document. The
+    /// full list is marked dirty so a later tab activation refreshes it; undo/redo also leave
+    /// it dirty rather than starting another full scan while the reader is editing.
+    /// </summary>
+    private void AddNewAnnotationsToSidebar(IEnumerable<PdfMarkup> markups)
+    {
+        if (!IsAnnotationsTabSelected || !_annotationsLoaded || IsLoadingAnnotations)
+        {
+            _annotationsDirty = true;
+            return;
+        }
+
+        var added = markups.Select(CreateAnnotationItem).ToList();
+        if (added.Count == 0)
+        {
+            return;
+        }
+
+        Annotations = Annotations
+            .Concat(added)
+            .OrderBy(annotation => annotation.PageNumber)
+            .ToList();
     }
 
     /// <summary>Reads the bookmarks stored for a document into the sidebar list.</summary>
@@ -1057,14 +1354,29 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// the selection touches.
     /// </remarks>
     [RelayCommand(CanExecute = nameof(CanHighlightSelection))]
-    private async Task HighlightSelectionAsync()
+    private Task HighlightSelectionAsync() => ApplySelectionMarkupAsync(null);
+
+    [RelayCommand(CanExecute = nameof(CanHighlightSelection))]
+    private Task UnderlineSelectionAsync() =>
+        ApplySelectionMarkupAsync(PdfTextMarkupKind.Underline);
+
+    [RelayCommand(CanExecute = nameof(CanHighlightSelection))]
+    private Task StrikeOutSelectionAsync() =>
+        ApplySelectionMarkupAsync(PdfTextMarkupKind.StrikeOut);
+
+    [RelayCommand(CanExecute = nameof(CanHighlightSelection))]
+    private Task SquigglySelectionAsync() =>
+        ApplySelectionMarkupAsync(PdfTextMarkupKind.Squiggly);
+
+    private async Task ApplySelectionMarkupAsync(PdfTextMarkupKind? textKind)
     {
         if (!IsDocumentOpen || !HasSelection)
         {
             return;
         }
 
-        var added = new List<PdfHighlight>();
+        var addedHighlights = new List<PdfHighlight>();
+        var addedMarkups = new List<PdfTextMarkup>();
 
         try
         {
@@ -1081,40 +1393,84 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
                     continue;
                 }
 
-                if (HighlightPolicy == HighlightOverlapPolicy.Skip)
+                if (textKind is null)
                 {
-                    var existing = await _documentService.GetHighlightsAsync(FilePath, page.Number);
-                    quads = quads
-                        .Where(quad => !existing.Any(highlight => highlight.Quads.Any(known => SameQuad(known, quad))))
-                        .ToList();
-
-                    if (quads.Count == 0)
+                    if (HighlightPolicy == HighlightOverlapPolicy.Skip)
                     {
-                        continue;
+                        var existing = await _documentService.GetHighlightsAsync(FilePath, page.Number);
+                        quads = quads
+                            .Where(quad => !existing.Any(highlight =>
+                                highlight.Quads.Any(known => SameQuad(known, quad))))
+                            .ToList();
+
+                        if (quads.Count == 0)
+                        {
+                            continue;
+                        }
                     }
+
+                    await _documentService.AddHighlightAsync(
+                        FilePath,
+                        page.Number,
+                        quads,
+                        HighlightColor.Red,
+                        HighlightColor.Green,
+                        HighlightColor.Blue);
+                    addedHighlights.Add(new PdfHighlight(
+                        page.Number,
+                        quads,
+                        HighlightColor.Red,
+                        HighlightColor.Green,
+                        HighlightColor.Blue));
+                }
+                else
+                {
+                    await _documentService.AddTextMarkupAsync(
+                        FilePath,
+                        page.Number,
+                        textKind.Value,
+                        quads,
+                        HighlightColor.Red,
+                        HighlightColor.Green,
+                        HighlightColor.Blue);
+                    addedMarkups.Add(new PdfTextMarkup(
+                        page.Number,
+                        textKind.Value,
+                        quads,
+                        HighlightColor.Red,
+                        HighlightColor.Green,
+                        HighlightColor.Blue));
                 }
 
-                await _documentService.AddHighlightAsync(
-                    FilePath,
-                    page.Number,
-                    quads,
-                    HighlightColor.Red,
-                    HighlightColor.Green,
-                    HighlightColor.Blue);
-
-                added.Add(new PdfHighlight(page.Number, quads, HighlightColor.Red, HighlightColor.Green, HighlightColor.Blue));
                 page.RequestRender();
             }
 
-            if (added.Count == 0)
+            if (addedHighlights.Count == 0 && addedMarkups.Count == 0)
             {
-                ShowStatus(_localization.T("L.AlreadyHighlighted"));
+                ShowStatus(_localization.T(
+                    textKind is null ? "L.AlreadyHighlighted" : "L.AlreadyMarked"));
                 return;
             }
 
-            PushStep(HighlightAddedStep(added));
+            PushStep(textKind is null
+                ? HighlightAddedStep(addedHighlights)
+                : TextMarkupAddedStep(addedMarkups));
+            AddNewAnnotationsToSidebar(
+                addedHighlights
+                    .Select(highlight => new PdfMarkup(
+                        PdfMarkupKind.Highlight,
+                        Highlight: highlight))
+                    .Concat(addedMarkups.Select(markup => new PdfMarkup(
+                        MarkupKindFor(markup.Kind),
+                        TextMarkup: markup))));
             HasUnsavedAnnotations = true;
-            ShowStatus(_localization.T("L.HighlightAdded"));
+            ShowStatus(_localization.T(textKind switch
+            {
+                PdfTextMarkupKind.Underline => "L.UnderlineAdded",
+                PdfTextMarkupKind.StrikeOut => "L.StrikeOutAdded",
+                PdfTextMarkupKind.Squiggly => "L.SquigglyAdded",
+                _ => "L.HighlightAdded"
+            }));
         }
         catch (PdfDocumentException failure)
         {
@@ -1122,7 +1478,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         catch (Exception unexpected)
         {
-            CrashLog.Write("HighlightSelection", unexpected);
+            CrashLog.Write("ApplySelectionMarkup", unexpected);
             SetError(_localization.T("L.ErrorEditFailed"));
         }
     }
@@ -1270,9 +1626,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         PdfMarkupKind.Highlight => markup.Highlight!.Quads.Any(quad =>
             x >= quad.Left - 0.5 && x <= quad.Right + 0.5 && y >= quad.Bottom - 0.5 && y <= quad.Top + 0.5),
+        PdfMarkupKind.Underline or PdfMarkupKind.StrikeOut or PdfMarkupKind.Squiggly =>
+            markup.TextMarkup!.Quads.Any(quad =>
+                x >= quad.Left - 0.5 && x <= quad.Right + 0.5 &&
+                y >= quad.Bottom - 0.5 && y <= quad.Top + 0.5),
         PdfMarkupKind.Ink => InkContains(markup.Ink!, x, y),
         PdfMarkupKind.Note => x >= markup.Note!.Position.X - 1 && x <= markup.Note.Position.X + 24 &&
                               y >= markup.Note.Position.Y - 1 && y <= markup.Note.Position.Y + 24,
+        PdfMarkupKind.FreeText => x >= markup.FreeText!.Bounds.Left - 0.5 &&
+                                  x <= markup.FreeText.Bounds.Right + 0.5 &&
+                                  y >= markup.FreeText.Bounds.Bottom - 0.5 &&
+                                  y <= markup.FreeText.Bounds.Top + 0.5,
         _ => false
     };
 
@@ -1552,6 +1916,73 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return false;
         }
     }
+
+    /// <summary>
+    /// Asks for text and writes a free-text annotation whose top-left corner is the page
+    /// point that was right-clicked. The box is kept inside the page.
+    /// </summary>
+    public async Task<bool> AddFreeTextAtAsync(int pageNumber, double normalizedX, double normalizedY)
+    {
+        if (!IsDocumentOpen)
+        {
+            return false;
+        }
+
+        var page = Pages.FirstOrDefault(candidate => candidate.Number == pageNumber);
+        if (page is null)
+        {
+            return false;
+        }
+
+        var title = _localization.T("L.AddText");
+        var text = await _dialogs.PromptTextAsync(
+            title,
+            title,
+            _localization.T("L.TextContentLabel"),
+            string.Empty);
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        try
+        {
+            var rotation = await _documentService.GetPageRotationAsync(FilePath, pageNumber);
+            var displayWidth = rotation is 90 or 270 ? page.HeightPoints : page.WidthPoints;
+            var displayHeight = rotation is 90 or 270 ? page.WidthPoints : page.HeightPoints;
+
+            // Roughly 260 x 72 points, clamped to the remaining space from the click point.
+            var width = Math.Clamp(260 / Math.Max(1, displayWidth), 0.12, 0.8);
+            var height = Math.Clamp(72 / Math.Max(1, displayHeight), 0.05, 0.35);
+            var x = Math.Clamp(Math.Min(normalizedX, 1 - width), 0, 1 - width);
+            var y = Math.Clamp(Math.Min(normalizedY, 1 - height), 0, 1 - height);
+
+            var bounds = PageGeometry.ToPageQuad(
+                new PdfSearchRect(x, y, width, height),
+                page.WidthPoints,
+                page.HeightPoints,
+                rotation);
+
+            var freeText = new PdfFreeText(pageNumber, bounds, text.Trim(), 12);
+            await AddFreeTextAsync(freeText);
+            PushStep(FreeTextAddedStep(freeText));
+            HasUnsavedAnnotations = true;
+            ShowStatus(_localization.T("L.TextAdded"));
+            return true;
+        }
+        catch (PdfDocumentException failure)
+        {
+            SetError(_localization.GetPdfFailureMessage(failure.Failure));
+            return false;
+        }
+        catch (Exception unexpected)
+        {
+            CrashLog.Write("AddFreeText", unexpected);
+            SetError(_localization.T("L.ErrorEditFailed"));
+            return false;
+        }
+    }
     private bool CanHighlightSelection() => IsDocumentOpen && HasSelection && !IsBusy;
 
     /// <summary>Writes the document, annotations included, to a file the reader chooses.</summary>
@@ -1765,6 +2196,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             await action();
             HasUnsavedAnnotations = true;
             ShowStatus(_localization.T(statusKey));
+            _annotationsDirty = true;
         }
         catch (PdfDocumentException failure)
         {
@@ -1790,6 +2222,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _annotationUndo.Add(step);
         _annotationRedo.Clear();
         NotifyUndoChanged();
+        _annotationsDirty = true;
     }
 
     private UndoStep HighlightAddedStep(IReadOnlyList<PdfHighlight> highlights) => new(
@@ -1805,6 +2238,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             foreach (var highlight in highlights)
             {
                 await AddHighlightAsync(highlight);
+            }
+        });
+
+    private UndoStep TextMarkupAddedStep(IReadOnlyList<PdfTextMarkup> markups) => new(
+        Undo: async () =>
+        {
+            foreach (var markup in markups)
+            {
+                await RemoveTextMarkupAsync(markup);
+            }
+        },
+        Redo: async () =>
+        {
+            foreach (var markup in markups)
+            {
+                await AddTextMarkupAsync(markup);
             }
         });
 
@@ -1856,11 +2305,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             case PdfMarkupKind.Highlight when markup.Highlight is { } highlight:
                 await AddHighlightAsync(highlight);
                 break;
+            case PdfMarkupKind.Underline or PdfMarkupKind.StrikeOut or PdfMarkupKind.Squiggly
+                when markup.TextMarkup is { } textMarkup:
+                await AddTextMarkupAsync(textMarkup);
+                break;
             case PdfMarkupKind.Ink when markup.Ink is { } ink:
                 await AddInkAsync(ink);
                 break;
             case PdfMarkupKind.Note when markup.Note is { } note:
                 await AddNoteAsync(note);
+                break;
+            case PdfMarkupKind.FreeText when markup.FreeText is { } freeText:
+                await AddFreeTextAsync(freeText);
                 break;
         }
     }
@@ -1872,6 +2328,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             case PdfMarkupKind.Highlight when markup.Highlight is { } highlight:
                 await RemoveHighlightAsync(highlight);
                 break;
+            case PdfMarkupKind.Underline or PdfMarkupKind.StrikeOut or PdfMarkupKind.Squiggly
+                when markup.TextMarkup is { } textMarkup:
+                await RemoveTextMarkupAsync(textMarkup);
+                break;
             case PdfMarkupKind.Ink when markup.Ink is { } ink:
                 await _documentService.RemoveInkMatchingAsync(FilePath, ink);
                 RenderPage(ink.PageNumber);
@@ -1879,6 +2339,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             case PdfMarkupKind.Note when markup.Note is { } note:
                 await _documentService.RemoveNoteMatchingAsync(FilePath, note);
                 RenderPage(note.PageNumber);
+                break;
+            case PdfMarkupKind.FreeText when markup.FreeText is { } freeText:
+                await _documentService.RemoveFreeTextMatchingAsync(FilePath, freeText);
+                RenderPage(freeText.PageNumber);
                 break;
         }
     }
@@ -1889,6 +2353,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             RenderPage(note.PageNumber);
         },
         Redo: async () => await AddNoteAsync(note));
+
+    private UndoStep FreeTextAddedStep(PdfFreeText freeText) => new(
+        Undo: async () =>
+        {
+            await _documentService.RemoveFreeTextMatchingAsync(FilePath, freeText);
+            RenderPage(freeText.PageNumber);
+        },
+        Redo: async () => await AddFreeTextAsync(freeText));
 
     private async Task AddHighlightAsync(PdfHighlight highlight)
     {
@@ -1907,6 +2379,25 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         await _documentService.RemoveHighlightMatchingAsync(FilePath, highlight.PageNumber, highlight.Quads);
         RenderPage(highlight.PageNumber);
+    }
+
+    private async Task AddTextMarkupAsync(PdfTextMarkup markup)
+    {
+        await _documentService.AddTextMarkupAsync(
+            FilePath,
+            markup.PageNumber,
+            markup.Kind,
+            markup.Quads,
+            markup.Red,
+            markup.Green,
+            markup.Blue);
+        RenderPage(markup.PageNumber);
+    }
+
+    private async Task RemoveTextMarkupAsync(PdfTextMarkup markup)
+    {
+        await _documentService.RemoveTextMarkupMatchingAsync(FilePath, markup);
+        RenderPage(markup.PageNumber);
     }
 
     private async Task AddInkAsync(PdfInk ink)
@@ -1928,6 +2419,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         await _documentService.AddNoteAsync(FilePath, note.PageNumber, note.Position, note.Text);
         RenderPage(note.PageNumber);
+    }
+
+    private async Task AddFreeTextAsync(PdfFreeText freeText)
+    {
+        await _documentService.AddFreeTextAsync(
+            FilePath,
+            freeText.PageNumber,
+            freeText.Bounds,
+            freeText.Text,
+            freeText.FontSize);
+        RenderPage(freeText.PageNumber);
     }
 
     private void RenderPage(int pageNumber) =>
@@ -2710,10 +3212,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// Applies the zoom that was remembered for this document. Falls back to
     /// fit-width for documents that have never been opened before.
     /// </summary>
+    public bool NeedsInitialZoom => IsDocumentOpen && !_initialZoomApplied;
+
     public void ApplyInitialZoom()
     {
+        if (!NeedsInitialZoom)
+        {
+            return;
+        }
+
         // Restoring a document must render once at its final size, not first at a reduced
         // interaction size and then again when the restore timer ends.
+        _initialZoomApplied = true;
+        OnPropertyChanged(nameof(NeedsInitialZoom));
         _suppressPageInteraction = true;
         try
         {
@@ -2883,6 +3394,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void NotifySelectionChanged()
     {
         HighlightSelectionCommand.NotifyCanExecuteChanged();
+        UnderlineSelectionCommand.NotifyCanExecuteChanged();
+        StrikeOutSelectionCommand.NotifyCanExecuteChanged();
+        SquigglySelectionCommand.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(SelectionStatus));
     }
@@ -2990,6 +3504,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         DocumentSubtitle = $"{PageCountText} · {FileSizeText}";
         WindowTitle = $"{info.FileName} — AirPDF";
         IsDocumentOpen = true;
+        _initialZoomApplied = false;
+        OnPropertyChanged(nameof(NeedsInitialZoom));
         PageNumberInput = "1";
         SetCurrentPage(1, updateInput: false);
         PageNumberInput = "1";
@@ -3009,6 +3525,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IsPagesTabSelected = true;
         IsContentsTabSelected = false;
         IsBookmarksTabSelected = false;
+        IsAnnotationsTabSelected = false;
 
         OnPropertyChanged(nameof(HasOutlineItems));
         OnPropertyChanged(nameof(HasBookmarks));
@@ -3035,6 +3552,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // The caches are keyed by page number, so they cannot outlive the document.
         InvalidateMarkupCache();
         _rotationCache.Clear();
+        CancelSafely(_annotationsCancellation);
+        _annotationsCancellation = null;
+        _annotationsVersion++;
+        _annotationsLoaded = false;
+        _annotationsDirty = true;
+        Annotations = [];
+        IsLoadingAnnotations = false;
+        IsAnnotationsTabSelected = false;
         _zoomMode = ZoomModes.FitWidth;
         _restoreZoom = null;
         _restoreZoomMode = null;
@@ -3076,6 +3601,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         IsSearching = false;
         IsSearchOpen = false;
         IsDocumentOpen = false;
+        _initialZoomApplied = false;
+        OnPropertyChanged(nameof(NeedsInitialZoom));
         PageCount = 0;
         SetCurrentPage(1, updateInput: false);
         PageNumberInput = "1";
@@ -3523,6 +4050,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     partial void OnIsReadingChromeRevealedChanged(bool value) =>
         OnPropertyChanged(nameof(IsChromeVisible));
 
+    partial void OnAnnotationsChanged(IReadOnlyList<AnnotationItemViewModel> value)
+    {
+        OnPropertyChanged(nameof(HasAnnotations));
+        OnPropertyChanged(nameof(HasNoAnnotations));
+        OnPropertyChanged(nameof(AnnotationCountText));
+    }
+
+    partial void OnIsLoadingAnnotationsChanged(bool value) =>
+        OnPropertyChanged(nameof(HasNoAnnotations));
+
     partial void OnPagesChanged(IReadOnlyList<PageViewModel> value)
     {
         Spreads = PageSpreadViewModel.Create(value);
@@ -3548,7 +4085,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CanGoNext));
     }
 
-    partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(IsWelcomeVisible));
+    partial void OnIsBusyChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsWelcomeVisible));
+        HighlightSelectionCommand.NotifyCanExecuteChanged();
+        UnderlineSelectionCommand.NotifyCanExecuteChanged();
+        StrikeOutSelectionCommand.NotifyCanExecuteChanged();
+        SquigglySelectionCommand.NotifyCanExecuteChanged();
+    }
 
     /// <summary>
     /// Keeps every window in step: the theme lives in <see cref="ThemeService"/>, so a

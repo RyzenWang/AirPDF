@@ -30,6 +30,7 @@ public partial class MainWindow : Window
     private readonly WindowViewModel _tabs;
     private readonly SettingsService _settingsService;
     private readonly string? _initialFile;
+    private readonly bool _restoreSession;
     private readonly IDataTemplate _singlePageTemplate;
     private readonly IDataTemplate _spreadPageTemplate;
     private MainWindowViewModel _viewModel = null!;
@@ -39,6 +40,9 @@ public partial class MainWindow : Window
     private double _tabDragPointerX;
     private bool _suppressScrollSync;
     private int _scrollIntent;
+    private int _markupScrollRequest;
+    private MarkupNavigationPoint? _pendingMarkupNavigation;
+    private DateTime _pendingMarkupNavigationExpiresUtc;
     private bool _suppressThumbnailSync;
     private bool _thumbnailSyncPending;
     private int _pageLayoutRestoreVersion;
@@ -100,6 +104,7 @@ public partial class MainWindow : Window
         var settings = services.Settings;
 
         _initialFile = initialFile;
+        _restoreSession = restoreWindowPosition;
 
         if (OperatingSystem.IsWindows())
         {
@@ -236,8 +241,13 @@ public partial class MainWindow : Window
         // event would write the outgoing tab's offset into it.
         _suppressScrollSync = true;
 
-        // Read the incoming tab's position now, before any of that noise.
-        var position = tab.CurrentPosition;
+        // Read the incoming tab's position now, before any of that noise. A tab opened in
+        // the background has not had its first view restore yet, so its pending reading
+        // position is still waiting.
+        var pendingReading = tab.TakePendingReadingPosition();
+        var position = pendingReading is not null
+            ? new NavigationPoint(pendingReading.Page, pendingReading.PageOffset)
+            : tab.CurrentPosition;
 
         _viewModel = tab;
         DataContext = tab;
@@ -281,6 +291,11 @@ public partial class MainWindow : Window
 
                 _restoringDocument = true;
                 UpdateViewport();
+                if (tab.NeedsInitialZoom)
+                {
+                    tab.ApplyInitialZoom();
+                }
+
                 tab.FitWidthForReadingMode();
                 RebuildPageLayout();
                 ScrollToReadingPosition(position.Page, position.PageOffset);
@@ -303,6 +318,7 @@ public partial class MainWindow : Window
     {
         viewModel.ScrollToPageRequested += OnScrollToPageRequested;
         viewModel.ScrollToSearchResultRequested += OnScrollToSearchResultRequested;
+        viewModel.ScrollToMarkupRequested += OnScrollToMarkupRequested;
         viewModel.ReturnToPositionRequested += OnReturnToPositionRequested;
         viewModel.CopySelectionRequested += OnCopySelectionRequested;
         viewModel.DocumentOpened += OnDocumentOpened;
@@ -315,6 +331,7 @@ public partial class MainWindow : Window
     {
         viewModel.ScrollToPageRequested -= OnScrollToPageRequested;
         viewModel.ScrollToSearchResultRequested -= OnScrollToSearchResultRequested;
+        viewModel.ScrollToMarkupRequested -= OnScrollToMarkupRequested;
         viewModel.ReturnToPositionRequested -= OnReturnToPositionRequested;
         viewModel.CopySelectionRequested -= OnCopySelectionRequested;
         viewModel.DocumentOpened -= OnDocumentOpened;
@@ -328,6 +345,84 @@ public partial class MainWindow : Window
         if (e.PropertyName == nameof(MainWindowViewModel.IsTwoPageMode))
         {
             ApplyPageLayoutMode();
+        }
+        else if (e.PropertyName == nameof(MainWindowViewModel.HasSelection))
+        {
+            Dispatcher.UIThread.Post(PositionSelectionToolbar, DispatcherPriority.Loaded);
+
+            // The page view may still be measuring when the selection notification arrives.
+            // Two one-shot retries cover that without observing LayoutUpdated, which can loop
+            // forever on a very long document when the toolbar's margin changes the layout.
+            DispatcherTimer.RunOnce(PositionSelectionToolbar, TimeSpan.FromMilliseconds(80));
+            DispatcherTimer.RunOnce(PositionSelectionToolbar, TimeSpan.FromMilliseconds(240));
+        }
+    }
+
+    private void OnMarkupColorClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: MarkupColor color })
+        {
+            _viewModel.SetHighlightColor(color);
+            MarkupColorButton.Flyout?.Hide();
+        }
+    }
+
+    private void PositionSelectionToolbar()
+    {
+        if (!_viewModel.HasSelection || SelectionToolbar.Parent is not Control parent)
+        {
+            return;
+        }
+
+        var pageView = PagesList.GetVisualDescendants()
+            .OfType<PdfPageView>()
+            .FirstOrDefault(view => view.DataContext is PageViewModel { SelectionRects.Count: > 0 });
+        if (pageView?.DataContext is not PageViewModel page ||
+            page.SelectionRects.Count == 0)
+        {
+            return;
+        }
+
+        var rect = page.SelectionRects[0];
+        var anchor = pageView.TranslatePoint(
+            new Point(
+                rect.X * pageView.Bounds.Width,
+                rect.Y * pageView.Bounds.Height),
+            parent);
+        if (anchor is null)
+        {
+            return;
+        }
+
+        // The property-change notification can arrive before the binding has made the
+        // toolbar visible, when its measured size is still zero. Fixed fallback dimensions
+        // keep the position correct for the first layout pass; the binding then shows it.
+        var width = SelectionToolbar.Bounds.Width > 0
+            ? SelectionToolbar.Bounds.Width
+            : 190;
+        var height = SelectionToolbar.Bounds.Height > 0
+            ? SelectionToolbar.Bounds.Height
+            : 38;
+        if (parent.Bounds.Width <= width)
+        {
+            return;
+        }
+
+        var selectionWidth = rect.Width * pageView.Bounds.Width;
+        var x = Math.Clamp(
+            anchor.Value.X + (selectionWidth / 2) - (width / 2),
+            8,
+            Math.Max(8, parent.Bounds.Width - width - 8));
+        var y = anchor.Value.Y - height - 10;
+        if (y < 8)
+        {
+            y = anchor.Value.Y + (rect.Height * pageView.Bounds.Height) + 10;
+        }
+
+        var margin = new Thickness(x, y, 0, 0);
+        if (SelectionToolbar.Margin != margin)
+        {
+            SelectionToolbar.Margin = margin;
         }
     }
 
@@ -745,6 +840,14 @@ public partial class MainWindow : Window
         {
             e.Handled = true;
             await CloseTabAsync(tab);
+        }
+    }
+
+    private void OnTabContextOpenFolderClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is MenuItem { Tag: MainWindowViewModel tab })
+        {
+            tab.OpenContainingFolderCommand.Execute(null);
         }
     }
 
@@ -1269,6 +1372,27 @@ public partial class MainWindow : Window
         if (!string.IsNullOrWhiteSpace(_initialFile))
         {
             _ = _viewModel.OpenPathAsync(_initialFile);
+            return;
+        }
+
+        if (_restoreSession)
+        {
+            RestoreSession();
+        }
+    }
+
+    private void RestoreSession()
+    {
+        var paths = _services.Settings.OpenTabs
+            .Where(path => !string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            .Distinct(OperatingSystem.IsWindows()
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal)
+            .ToList();
+
+        if (paths.Count > 0)
+        {
+            _tabs.RestoreSession(paths, _services.Settings.SelectedTabPath);
         }
     }
 
@@ -1416,8 +1540,21 @@ public partial class MainWindow : Window
             return;
         }
 
-        var position = _viewModel.CurrentPosition;
         RebuildPageLayout();
+
+        // A markup jump can race the final fit-width calculation on a very large document.
+        // If the zoom changes under it, the old offset no longer points at the page that was
+        // laid out; redo the markup navigation against the new layout instead of restoring
+        // the pre-jump reading position.
+        if (TakePendingMarkupNavigation() is { } pendingMarkup)
+        {
+            Dispatcher.UIThread.Post(
+                () => ScrollToMarkup(pendingMarkup),
+                DispatcherPriority.Loaded);
+            return;
+        }
+
+        var position = _viewModel.CurrentPosition;
         var viewModel = _viewModel;
         Dispatcher.UIThread.Post(
             () =>
@@ -1430,6 +1567,16 @@ public partial class MainWindow : Window
                 }
             },
             DispatcherPriority.Loaded);
+    }
+
+    private MarkupNavigationPoint? TakePendingMarkupNavigation()
+    {
+        var pending = _pendingMarkupNavigation;
+        _pendingMarkupNavigation = null;
+        return pending is not null &&
+               DateTime.UtcNow <= _pendingMarkupNavigationExpiresUtc
+            ? pending
+            : null;
     }
 
     private void OnScrollToPageRequested(object? sender, int pageNumber)
@@ -1459,6 +1606,165 @@ public partial class MainWindow : Window
             },
             DispatcherPriority.Loaded);
     }
+
+    private void OnScrollToMarkupRequested(object? sender, MarkupNavigationPoint point)
+    {
+        var viewModel = _viewModel;
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (ReferenceEquals(_viewModel, viewModel))
+                {
+                    ScrollToMarkup(point);
+                }
+            },
+            DispatcherPriority.Loaded);
+    }
+
+    private void ScrollToMarkup(MarkupNavigationPoint point, int attempt = 0)
+    {
+        if (point.PageNumber < 1 || point.PageNumber > _viewModel.Pages.Count)
+        {
+            return;
+        }
+
+        if (attempt == 0)
+        {
+            _pendingMarkupNavigation = point;
+            _pendingMarkupNavigationExpiresUtc = DateTime.UtcNow.AddSeconds(30);
+        }
+
+        var viewer = PagesList.Viewer;
+        if (viewer is null || viewer.Viewport.Height <= 0)
+        {
+            if (attempt < 8)
+            {
+                Dispatcher.UIThread.Post(
+                    () => ScrollToMarkup(point, attempt + 1),
+                    DispatcherPriority.Background);
+            }
+
+            return;
+        }
+
+        RebuildPageLayout();
+        var layoutPage = LayoutItemForPage(point.PageNumber);
+        var pageHeight = _pageLayout.GetHeight(layoutPage);
+        var center = Math.Clamp(point.Bounds.Y + (point.Bounds.Height / 2), 0, 1);
+        var target = _pageLayout.GetTop(layoutPage) +
+                     (center * pageHeight) -
+                     (viewer.Viewport.Height * 0.40);
+        var maxOffset = Math.Max(0, viewer.Extent.Height - viewer.Viewport.Height);
+        target = Math.Clamp(target, 0, maxOffset);
+
+        var request = ++_markupScrollRequest;
+        ApplyScrollOffset(target, point.PageNumber, center);
+        DispatcherTimer.RunOnce(
+            () => AlignMarkupInViewport(point, request, attempt: 0),
+            TimeSpan.FromMilliseconds(60));
+    }
+
+    private void AlignMarkupInViewport(
+        MarkupNavigationPoint point,
+        int request,
+        int attempt)
+    {
+        if (request != _markupScrollRequest)
+        {
+            return;
+        }
+
+        var viewer = PagesList.Viewer;
+        if (viewer is null || viewer.Viewport.Height <= 0)
+        {
+            if (attempt < 8)
+            {
+                DispatcherTimer.RunOnce(
+                    () => AlignMarkupInViewport(point, request, attempt + 1),
+                    TimeSpan.FromMilliseconds(60));
+            }
+
+            return;
+        }
+
+        var pageView = FindPageView(point.PageNumber);
+        if (pageView is null)
+        {
+            if (attempt < 12)
+            {
+                // The target page was just outside the realised window (a common edge on a
+                // document with thousands of pages). Nudge one screenful in the direction of
+                // the target, then re-check, instead of ScrollIntoView, which blocks the UI on
+                // a list this large.
+                var realized = PagesList.GetVisualDescendants()
+                    .OfType<PdfPageView>()
+                    .Select(view => (view.DataContext as PageViewModel)?.Number ?? 0)
+                    .Where(number => number > 0)
+                    .ToList();
+                var direction = realized.Count == 0 || point.PageNumber > realized.Max()
+                    ? 1
+                    : -1;
+                var nudge = Math.Max(160, viewer.Viewport.Height * 0.6) * direction;
+                var next = Math.Clamp(
+                    viewer.Offset.Y + nudge,
+                    0,
+                    Math.Max(0, viewer.Extent.Height - viewer.Viewport.Height));
+                PagesList.ScrollToVerticalOffset(next);
+
+                DispatcherTimer.RunOnce(
+                    () => AlignMarkupInViewport(point, request, attempt + 1),
+                    TimeSpan.FromMilliseconds(70));
+            }
+
+            return;
+        }
+
+        var center = Math.Clamp(point.Bounds.Y + (point.Bounds.Height / 2), 0, 1);
+        var pageTop = pageView.TranslatePoint(new Point(0, 0), this);
+        var viewerTop = viewer.TranslatePoint(new Point(0, 0), this);
+        if (pageTop is null || viewerTop is null)
+        {
+            return;
+        }
+
+        var annotationY = pageTop.Value.Y + (center * pageView.Bounds.Height);
+        var desiredY = viewerTop.Value.Y + (viewer.Viewport.Height * 0.40);
+        var maxOffset = Math.Max(0, viewer.Extent.Height - viewer.Viewport.Height);
+        var target = Math.Clamp(
+            viewer.Offset.Y + (annotationY - desiredY),
+            0,
+            maxOffset);
+
+        ApplyScrollOffset(target, point.PageNumber, center);
+        if (attempt >= 4)
+        {
+            _pendingMarkupNavigation = null;
+        }
+
+        // Keep aligning for a short window. A large document can finish its fit-width pass
+        // well after ScrollIntoView; recomputing from the live page view catches that without
+        // trusting cached page heights. The window is bounded so a later user scroll is not
+        // pulled back to the annotation.
+        if (attempt < 4)
+        {
+            var delay = attempt switch
+            {
+                0 => 320,
+                1 => 440,
+                2 => 600,
+                _ => 900
+            };
+            DispatcherTimer.RunOnce(
+                () => AlignMarkupInViewport(point, request, attempt + 1),
+                TimeSpan.FromMilliseconds(delay));
+        }
+    }
+
+    private PdfPageView? FindPageView(int pageNumber) =>
+        PagesList.GetVisualDescendants()
+            .OfType<PdfPageView>()
+            .FirstOrDefault(view => view.DataContext is PageViewModel page &&
+                                    page.Number == pageNumber);
 
     private void OnReturnToPositionRequested(object? sender, NavigationPoint point)
     {
@@ -1615,6 +1921,10 @@ public partial class MainWindow : Window
         var fraction = _pageLayout.GetPageOffset(layoutPage, viewer.Offset.Y);
         _viewModel.UpdateCurrentPageFromScroll(page, fraction);
         UpdateThumbnailSelection();
+        if (_viewModel.HasSelection)
+        {
+            Dispatcher.UIThread.Post(PositionSelectionToolbar, DispatcherPriority.Loaded);
+        }
     }
 
     private int LayoutItemCount => _viewModel.IsTwoPageMode
@@ -1843,6 +2153,15 @@ public partial class MainWindow : Window
         if (OutlineTree.SelectedItem is OutlineItemViewModel outlineItem)
         {
             _viewModel.NavigateToPage(outlineItem.PageNumber);
+        }
+    }
+
+    private void OnAnnotationSelectionChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        if (AnnotationList.SelectedItem is AnnotationItemViewModel annotation)
+        {
+            _viewModel.GoToAnnotationCommand.Execute(annotation);
+            AnnotationList.SelectedItem = null;
         }
     }
 
@@ -3237,6 +3556,8 @@ public partial class MainWindow : Window
         {
             tab.SaveReadingPositionNow();
         }
+
+        _tabs.SaveSession();
 
         var state = WindowState;
         var maximized = state == WindowState.Maximized;

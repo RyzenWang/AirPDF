@@ -15,6 +15,9 @@ public sealed class WindowViewModelTests : IDisposable
     private static readonly string SamplePath =
         Path.Combine(AppContext.BaseDirectory, "Assets", "sample.pdf");
 
+    private static readonly string LinksPath =
+        Path.Combine(AppContext.BaseDirectory, "Assets", "links.pdf");
+
     private readonly string _settingsDirectory =
         Path.Combine(Path.GetTempPath(), $"airpdf-tabs-{Guid.NewGuid():N}");
 
@@ -52,6 +55,44 @@ public sealed class WindowViewModelTests : IDisposable
         var second = host.AddTab();
         Assert.Equal(3, host.Tabs.Count);
         Assert.Same(second, host.SelectedTab);
+    }
+
+    [AvaloniaFact]
+    public async Task Session_RestoresOpenTabsInOrderAndTheSelectedTab()
+    {
+        var host = CreateHost();
+        var first = host.AddTab();
+        await first.OpenPathAsync(SamplePath);
+        var second = host.AddTab();
+        await second.OpenPathAsync(LinksPath);
+
+        host.SelectedTab = first;
+        host.SaveSession();
+
+        Assert.Equal([SamplePath, LinksPath], _services!.Settings.OpenTabs);
+        Assert.Equal(SamplePath, _services.Settings.SelectedTabPath);
+
+        host.Dispose();
+        _host = null;
+
+        var restored = CreateHost();
+        restored.RestoreSession(
+            _services.Settings.OpenTabs,
+            _services.Settings.SelectedTabPath);
+
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while ((restored.Tabs.Count < 3 ||
+                restored.Tabs.Skip(1).Any(tab => !tab.IsDocumentOpen)) &&
+               DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(20);
+        }
+
+        Assert.Equal(2, restored.Tabs.Count(tab => !tab.IsHomeTab));
+        Assert.Equal(
+            [SamplePath, LinksPath],
+            restored.Tabs.Skip(1).Select(tab => tab.FilePath));
+        Assert.Equal(SamplePath, restored.SelectedTab?.FilePath);
     }
 
     [AvaloniaFact]

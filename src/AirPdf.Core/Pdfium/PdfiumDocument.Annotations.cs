@@ -316,8 +316,147 @@ public sealed partial class PdfiumDocument
     }
 
     /// <summary>
-    /// Removes every markup annotation under a page-space point - highlight, ink or note - and
-    /// returns what was removed so it can be put back.
+    /// Adds a free-text annotation. The bounds are in unrotated page space and the default
+    /// appearance is Helvetica at <paramref name="fontSize"/> points.
+    /// </summary>
+    public void AddFreeText(int pageNumber, PdfQuad bounds, string text, float fontSize)
+    {
+        ThrowIfDisposed();
+
+        if (string.IsNullOrWhiteSpace(text) || bounds.Width <= 0 || bounds.Height <= 0)
+        {
+            return;
+        }
+
+        var page = LoadPageOrThrow(pageNumber);
+        var annot = IntPtr.Zero;
+        try
+        {
+            annot = PdfiumNative.PageCreateAnnot(page, PdfiumNative.AnnotFreeText);
+            if (annot == IntPtr.Zero)
+            {
+                throw new PdfDocumentException(PdfFailure.Unsupported, "This page does not accept annotations.");
+            }
+
+            var rect = new PdfiumNative.FsRectF
+            {
+                Left = (float)bounds.Left,
+                Top = (float)bounds.Top,
+                Right = (float)bounds.Right,
+                Bottom = (float)bounds.Bottom
+            };
+
+            PdfiumNative.AnnotSetRect(annot, ref rect);
+            PdfiumNative.AnnotSetStringValue(annot, "Contents", text);
+            PdfiumNative.AnnotSetStringValue(
+                annot,
+                "DA",
+                $"/Helvetica {fontSize.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} Tf 0 g");
+            PdfiumNative.AnnotSetStringValue(
+                annot,
+                FontSizeKey,
+                fontSize.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+
+            // Free text uses /C as its page background. Keep that white; the actual glyph
+            // colour is the separate font colour slot.
+            PdfiumNative.AnnotSetColor(annot, PdfiumNative.AnnotColorFill, 255, 255, 255, 255);
+            PdfiumNative.AnnotSetFontColor(annot, 0, 0, 0, 255);
+            PdfiumNative.AnnotSetStringValue(annot, ColourKey, "0,0,0");
+            PdfiumNative.AnnotSetBorder(annot, 0, 0, 0);
+            PdfiumNative.AnnotSetFlags(annot, PdfiumNative.AnnotFlagPrint);
+        }
+        finally
+        {
+            if (annot != IntPtr.Zero)
+            {
+                PdfiumNative.PageCloseAnnot(annot);
+            }
+
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
+    /// <summary>Reads a free-text annotation back, so it can be hit-tested and undone.</summary>
+    public PdfFreeText? TryReadFreeText(int pageNumber, int index)
+    {
+        ThrowIfDisposed();
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            var annot = PdfiumNative.PageGetAnnot(page, index);
+            if (annot == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            try
+            {
+                if (PdfiumNative.AnnotGetSubtype(annot) != PdfiumNative.AnnotFreeText ||
+                    PdfiumNative.AnnotGetRect(annot, out var rect) == 0)
+                {
+                    return null;
+                }
+
+                var text = ReadStringValue(annot, "Contents");
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    return null;
+                }
+
+                var fontSize = 12f;
+                var storedSize = ReadStringValue(annot, FontSizeKey);
+                if (float.TryParse(
+                        storedSize,
+                        System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out var parsedSize) &&
+                    parsedSize > 0)
+                {
+                    fontSize = parsedSize;
+                }
+
+                var bounds = new PdfQuad(
+                    Math.Min(rect.Left, rect.Right),
+                    Math.Max(rect.Top, rect.Bottom),
+                    Math.Max(rect.Left, rect.Right),
+                    Math.Min(rect.Top, rect.Bottom));
+
+                return new PdfFreeText(pageNumber, bounds, text, fontSize);
+            }
+            finally
+            {
+                PdfiumNative.PageCloseAnnot(annot);
+            }
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
+    private static string ReadStringValue(IntPtr annot, string key)
+    {
+        var bytes = (int)PdfiumNative.AnnotGetStringValue(annot, key, null, 0);
+        if (bytes <= 0)
+        {
+            return string.Empty;
+        }
+
+        var buffer = new byte[bytes];
+        var written = (int)PdfiumNative.AnnotGetStringValue(annot, key, buffer, (uint)bytes);
+        return written <= 0
+            ? string.Empty
+            : System.Text.Encoding.Unicode.GetString(buffer, 0, Math.Min(written, buffer.Length)).TrimEnd('\0');
+    }
+
+    private static string ReadContents(IntPtr annot) => ReadStringValue(annot, "Contents");
+
+    private const string FontSizeKey = "AirPdfFontSize";
+
+    /// <summary>
+    /// Removes every markup annotation under a page-space point - highlight, ink, note or
+    /// free text - and returns what was removed so it can be put back.
     /// </summary>
     public IReadOnlyList<PdfMarkup> RemoveMarkupAt(int pageNumber, double x, double y)
     {
@@ -336,12 +475,19 @@ public sealed partial class PdfiumDocument
                     PdfiumNative.AnnotHighlight when TryReadHighlight(pageNumber, index) is { } highlight &&
                                                      highlight.Quads.Any(quad => Contains(quad, x, y)) =>
                         new PdfMarkup(PdfMarkupKind.Highlight, Highlight: highlight),
+                    PdfiumNative.AnnotUnderline or PdfiumNative.AnnotStrikeOut or PdfiumNative.AnnotSquiggly
+                        when TryReadTextMarkup(pageNumber, index) is { } textMarkup &&
+                             textMarkup.Quads.Any(quad => Contains(quad, x, y)) =>
+                        new PdfMarkup(MarkupKindFor(textMarkup.Kind), TextMarkup: textMarkup),
                     PdfiumNative.AnnotInk when TryReadInk(pageNumber, index) is { } ink &&
                                                Contains(InkBounds(ink.Strokes), x, y) =>
                         new PdfMarkup(PdfMarkupKind.Ink, Ink: ink),
                     PdfiumNative.AnnotText when TryReadNote(pageNumber, index) is { } note &&
                                                 ContainsNote(note, x, y) =>
                         new PdfMarkup(PdfMarkupKind.Note, Note: note),
+                    PdfiumNative.AnnotFreeText when TryReadFreeText(pageNumber, index) is { } freeText &&
+                                                   Contains(freeText.Bounds, x, y) =>
+                        new PdfMarkup(PdfMarkupKind.FreeText, FreeText: freeText),
                     _ => null
                 };
 
@@ -371,6 +517,26 @@ public sealed partial class PdfiumDocument
         x >= note.Position.X - 0.5 && x <= note.Position.X + 22 &&
         y >= note.Position.Y - 0.5 && y <= note.Position.Y + 22;
     /// <summary>Every markup annotation on a page, in one pass.</summary>
+    /// <summary>
+    /// Reads every page's markup in one resident-session pass. The sidebar used to call
+    /// <see cref="GetMarkup"/> once per page, paying a worker-thread handoff and annotation
+    /// gate acquisition for every page; one pass makes opening a long document's markup list
+    /// substantially cheaper.
+    /// </summary>
+    public IReadOnlyList<PdfMarkup> GetAllMarkup(CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+
+        var markup = new List<PdfMarkup>();
+        for (var pageNumber = 1; pageNumber <= PageCount; pageNumber++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            markup.AddRange(GetMarkup(pageNumber));
+        }
+
+        return markup;
+    }
+
     public IReadOnlyList<PdfMarkup> GetMarkup(int pageNumber)
     {
         ThrowIfDisposed();
@@ -386,11 +552,18 @@ public sealed partial class PdfiumDocument
                     case PdfiumNative.AnnotHighlight when TryReadHighlight(pageNumber, index) is { } highlight:
                         markup.Add(new PdfMarkup(PdfMarkupKind.Highlight, Highlight: highlight));
                         break;
+                    case PdfiumNative.AnnotUnderline or PdfiumNative.AnnotStrikeOut or PdfiumNative.AnnotSquiggly
+                        when TryReadTextMarkup(pageNumber, index) is { } textMarkup:
+                        markup.Add(new PdfMarkup(MarkupKindFor(textMarkup.Kind), TextMarkup: textMarkup));
+                        break;
                     case PdfiumNative.AnnotInk when TryReadInk(pageNumber, index) is { } ink:
                         markup.Add(new PdfMarkup(PdfMarkupKind.Ink, Ink: ink));
                         break;
                     case PdfiumNative.AnnotText when TryReadNote(pageNumber, index) is { } note:
                         markup.Add(new PdfMarkup(PdfMarkupKind.Note, Note: note));
+                        break;
+                    case PdfiumNative.AnnotFreeText when TryReadFreeText(pageNumber, index) is { } freeText:
+                        markup.Add(new PdfMarkup(PdfMarkupKind.FreeText, FreeText: freeText));
                         break;
                 }
             }
@@ -414,6 +587,38 @@ public sealed partial class PdfiumDocument
             {
                 var existing = TryReadInk(pageNumber, index);
                 if (existing is null || !SameStrokes(existing.Strokes, ink.Strokes))
+                {
+                    continue;
+                }
+
+                return PdfiumNative.PageRemoveAnnot(page, index) != 0;
+            }
+
+            return false;
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
+    /// <summary>Removes the free-text annotation whose bounds and text match.</summary>
+    public bool RemoveFreeTextMatching(int pageNumber, PdfFreeText freeText)
+    {
+        ThrowIfDisposed();
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            for (var index = PdfiumNative.PageGetAnnotCount(page) - 1; index >= 0; index--)
+            {
+                var existing = TryReadFreeText(pageNumber, index);
+                if (existing is null ||
+                    !string.Equals(existing.Text, freeText.Text, StringComparison.Ordinal) ||
+                    Math.Abs(existing.Bounds.Left - freeText.Bounds.Left) > 0.5 ||
+                    Math.Abs(existing.Bounds.Top - freeText.Bounds.Top) > 0.5 ||
+                    Math.Abs(existing.Bounds.Right - freeText.Bounds.Right) > 0.5 ||
+                    Math.Abs(existing.Bounds.Bottom - freeText.Bounds.Bottom) > 0.5)
                 {
                     continue;
                 }
@@ -633,6 +838,95 @@ public sealed partial class PdfiumDocument
         }
     }
 
+    /// <summary>Reads an underline, strikeout, or squiggly annotation back out.</summary>
+    public PdfTextMarkup? TryReadTextMarkup(int pageNumber, int index)
+    {
+        ThrowIfDisposed();
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            var annot = PdfiumNative.PageGetAnnot(page, index);
+            if (annot == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            try
+            {
+                var kind = KindForSubtype(PdfiumNative.AnnotGetSubtype(annot));
+                if (kind is null)
+                {
+                    return null;
+                }
+
+                var count = (int)PdfiumNative.AnnotCountAttachmentPoints(annot).ToUInt32();
+                var quads = new List<PdfQuad>(count);
+                for (var quad = 0; quad < count; quad++)
+                {
+                    if (PdfiumNative.AnnotGetAttachmentPoints(annot, (UIntPtr)(uint)quad, out var points) == 0)
+                    {
+                        continue;
+                    }
+
+                    quads.Add(QuadFrom(points));
+                }
+
+                if (quads.Count == 0 &&
+                    PdfiumNative.AnnotGetRect(annot, out var rect) != 0)
+                {
+                    quads.Add(new PdfQuad(rect.Left, rect.Top, rect.Right, rect.Bottom));
+                }
+
+                var (red, green, blue) = ReadColour(annot);
+                return new PdfTextMarkup(
+                    pageNumber,
+                    kind.Value,
+                    quads,
+                    red,
+                    green,
+                    blue);
+            }
+            finally
+            {
+                PdfiumNative.PageCloseAnnot(annot);
+            }
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
+    /// <summary>Removes the text markup matching kind and geometry, for undo.</summary>
+    public bool RemoveTextMarkupMatching(int pageNumber, PdfTextMarkup markup)
+    {
+        ThrowIfDisposed();
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            for (var index = PdfiumNative.PageGetAnnotCount(page) - 1; index >= 0; index--)
+            {
+                var existing = TryReadTextMarkup(pageNumber, index);
+                if (existing is null ||
+                    existing.Kind != markup.Kind ||
+                    !SameGeometry(existing.Quads, markup.Quads))
+                {
+                    continue;
+                }
+
+                return PdfiumNative.PageRemoveAnnot(page, index) != 0;
+            }
+
+            return false;
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
     /// <summary>
     /// Removes the highlight whose rectangles match <paramref name="quads"/>, which is how an
     /// added highlight is taken back without depending on an annotation index that later edits
@@ -775,7 +1069,32 @@ public sealed partial class PdfiumDocument
     /// <param name="red">Red component, 0-255.</param>
     /// <param name="green">Green component, 0-255.</param>
     /// <param name="blue">Blue component, 0-255.</param>
-    public void AddHighlight(int pageNumber, IReadOnlyList<PdfQuad> quads, byte red, byte green, byte blue)
+    public void AddHighlight(int pageNumber, IReadOnlyList<PdfQuad> quads, byte red, byte green, byte blue) =>
+        AddAttachmentMarkup(
+            pageNumber,
+            PdfiumNative.AnnotHighlight,
+            quads,
+            red,
+            green,
+            blue);
+
+    /// <summary>Adds an underline, strikeout, or squiggly annotation over the selected quads.</summary>
+    public void AddTextMarkup(
+        int pageNumber,
+        PdfTextMarkupKind kind,
+        IReadOnlyList<PdfQuad> quads,
+        byte red,
+        byte green,
+        byte blue) =>
+        AddAttachmentMarkup(pageNumber, SubtypeFor(kind), quads, red, green, blue);
+
+    private void AddAttachmentMarkup(
+        int pageNumber,
+        int subtype,
+        IReadOnlyList<PdfQuad> quads,
+        byte red,
+        byte green,
+        byte blue)
     {
         ThrowIfDisposed();
 
@@ -788,7 +1107,7 @@ public sealed partial class PdfiumDocument
         var annot = IntPtr.Zero;
         try
         {
-            annot = PdfiumNative.PageCreateAnnot(page, PdfiumNative.AnnotHighlight);
+            annot = PdfiumNative.PageCreateAnnot(page, subtype);
             if (annot == IntPtr.Zero)
             {
                 throw new PdfDocumentException(PdfFailure.Unsupported, "This page does not accept annotations.");
@@ -836,6 +1155,28 @@ public sealed partial class PdfiumDocument
             PdfiumNative.ClosePage(page);
         }
     }
+
+    private static int SubtypeFor(PdfTextMarkupKind kind) => kind switch
+    {
+        PdfTextMarkupKind.Underline => PdfiumNative.AnnotUnderline,
+        PdfTextMarkupKind.StrikeOut => PdfiumNative.AnnotStrikeOut,
+        _ => PdfiumNative.AnnotSquiggly
+    };
+
+    private static PdfTextMarkupKind? KindForSubtype(int subtype) => subtype switch
+    {
+        PdfiumNative.AnnotUnderline => PdfTextMarkupKind.Underline,
+        PdfiumNative.AnnotStrikeOut => PdfTextMarkupKind.StrikeOut,
+        PdfiumNative.AnnotSquiggly => PdfTextMarkupKind.Squiggly,
+        _ => null
+    };
+
+    private static PdfMarkupKind MarkupKindFor(PdfTextMarkupKind kind) => kind switch
+    {
+        PdfTextMarkupKind.Underline => PdfMarkupKind.Underline,
+        PdfTextMarkupKind.StrikeOut => PdfMarkupKind.StrikeOut,
+        _ => PdfMarkupKind.Squiggly
+    };
 
     /// <summary>
     /// Writes the document, annotations included, to a new file. The document that was opened is

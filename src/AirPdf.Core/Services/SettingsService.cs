@@ -12,6 +12,12 @@ public sealed class AppSettings
     /// <summary>Bookmarks the reader created, across all documents.</summary>
     public List<BookmarkEntry> Bookmarks { get; set; } = [];
 
+    /// <summary>Document tabs that were open when the last window closed.</summary>
+    public List<string> OpenTabs { get; set; } = [];
+
+    /// <summary>Path of the tab that was selected, or null when Home was showing.</summary>
+    public string? SelectedTabPath { get; set; }
+
     public string Theme { get; set; } = "System";
 
     public string Language { get; set; } = "en";
@@ -254,6 +260,7 @@ public sealed class SettingsService
             settings.RecentFiles ??= [];
             settings.ReadingPositions ??= [];
             settings.Bookmarks ??= [];
+            settings.OpenTabs ??= [];
             return settings;
         }
         catch

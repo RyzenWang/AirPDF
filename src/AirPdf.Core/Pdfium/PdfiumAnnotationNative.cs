@@ -11,8 +11,17 @@ internal static partial class PdfiumNative
     /// <summary>Highlight annotation, as numbered by the PDFium public API.</summary>
     internal const int AnnotHighlight = 9;
 
+    internal const int AnnotUnderline = 10;
+
+    internal const int AnnotSquiggly = 11;
+
+    internal const int AnnotStrikeOut = 12;
+
     /// <summary>Sticky-note annotation.</summary>
     internal const int AnnotText = 1;
+
+    /// <summary>Free-text annotation drawn directly on the page.</summary>
+    internal const int AnnotFreeText = 3;
 
     /// <summary>Freehand ink annotation.</summary>
     internal const int AnnotInk = 15;
@@ -121,6 +130,9 @@ internal static partial class PdfiumNative
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_SetColor")]
     internal static extern int AnnotSetColor(IntPtr annot, int colorType, uint red, uint green, uint blue, uint alpha);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_SetFontColor")]
+    internal static extern int AnnotSetFontColor(IntPtr annot, uint red, uint green, uint blue, uint alpha);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_SetFlags")]
     internal static extern int AnnotSetFlags(IntPtr annot, int flags);

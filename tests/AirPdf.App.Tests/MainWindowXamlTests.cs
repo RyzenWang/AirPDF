@@ -26,6 +26,9 @@ public sealed class MainWindowXamlTests : IDisposable
     private readonly string _settingsDirectory =
         Path.Combine(Path.GetTempPath(), $"airpdf-xaml-{Guid.NewGuid():N}");
 
+    private static readonly string SamplePath =
+        Path.Combine(AppContext.BaseDirectory, "Assets", "sample.pdf");
+
     public void Dispose()
     {
         if (Directory.Exists(_settingsDirectory))
@@ -459,6 +462,63 @@ public sealed class MainWindowXamlTests : IDisposable
             window.Close();
             page.Dispose();
         }
+    }
+
+    [AvaloniaFact]
+    public async Task Startup_RestoresOpenTabsFromTheSavedSession()
+    {
+        var services = new AppServices(_settingsDirectory);
+        services.Settings.OpenTabs = [SamplePath];
+        services.Settings.SelectedTabPath = SamplePath;
+        services.SettingsService.Save(services.Settings);
+
+        var window = new MainWindow(services, new StubWindowService(), null, restoreWindowPosition: true);
+        window.Show();
+
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (window.FindControl<ListBox>("TabList")?.ItemsSource is not
+                   IEnumerable<MainWindowViewModel> tabs ||
+               tabs.Count(tab => !tab.IsHomeTab) < 1 ||
+               tabs.First(tab => !tab.IsHomeTab).Pages.Count == 0)
+        {
+            if (DateTime.UtcNow >= deadline)
+            {
+                break;
+            }
+
+            await Task.Delay(20);
+        }
+
+        var tabList = window.FindControl<ListBox>("TabList");
+        var documentTabs = Assert.IsAssignableFrom<IEnumerable<MainWindowViewModel>>(tabList!.ItemsSource)
+            .Where(tab => !tab.IsHomeTab)
+            .ToList();
+        Assert.Single(documentTabs);
+        Assert.Equal(SamplePath, documentTabs[0].FilePath);
+        Assert.Same(documentTabs[0], window.DataContext);
+
+        tabList.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+
+        var documentContainer = tabList.GetRealizedContainers()
+            .OfType<ListBoxItem>()
+            .FirstOrDefault(item => item.DataContext is MainWindowViewModel { IsHomeTab: false });
+        var tabBorder = documentContainer?
+            .GetVisualDescendants()
+            .OfType<Border>()
+            .FirstOrDefault(border => border.ContextMenu is not null);
+        Assert.NotNull(tabBorder?.ContextMenu);
+        tabBorder!.ContextMenu!.Open(tabBorder);
+        Dispatcher.UIThread.RunJobs();
+        var tabMenuItems = tabBorder.ContextMenu.Items.OfType<MenuItem>().ToList();
+        Assert.Contains(
+            tabMenuItems,
+            item => Equals(item.Header, services.Localization.T("L.OpenContainingFolder")));
+        Assert.Contains(
+            tabMenuItems,
+            item => Equals(item.Header, services.Localization.T("L.CloseTab")));
+
+        window.Close();
     }
 
     private MainWindow CreateWindow()

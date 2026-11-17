@@ -672,6 +672,47 @@ public sealed class MainWindowViewModelTests : IDisposable
     }
 
     [AvaloniaFact]
+    public async Task AddFreeTextAtAsync_AsksForTheTextAndStoresIt()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-freetext-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var target = Path.Combine(directory, "freetext.pdf");
+            File.Copy(SamplePath, target);
+
+            using var context = new TestContext();
+            await context.ViewModel.OpenPathAsync(target);
+            context.Dialog.NextText = "Free text annotation";
+
+            Assert.True(await context.ViewModel.AddFreeTextAtAsync(1, 0.5, 0.5));
+            Assert.True(context.ViewModel.HasUnsavedAnnotations);
+
+            await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+
+            using var probe = new PdfDocumentService();
+            await probe.OpenAsync(target);
+            var freeText = Assert.Single(await probe.GetFreeTextsAsync(target, 1));
+            Assert.Equal("Free text annotation", freeText.Text);
+            Assert.Equal(1, freeText.PageNumber);
+            Assert.True(freeText.Bounds.Width > 0);
+            Assert.Equal(12f, freeText.FontSize);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // A failed cleanup must not hide the assertion that failed first.
+            }
+        }
+    }
+
+    [AvaloniaFact]
     public async Task AddNoteAtAsync_AsksForTheTextAndStoresIt()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"airpdf-note-{Guid.NewGuid():N}");
@@ -758,6 +799,86 @@ public sealed class MainWindowViewModelTests : IDisposable
             Directory.Delete(directory, recursive: true);
         }
     }
+    [AvaloniaFact]
+    public async Task TextMarkupCommands_AddAllThreeAndPopulateTheMarkupTab()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-textmark-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var target = Path.Combine(directory, "marked.pdf");
+            File.Copy(SamplePath, target);
+
+            using var context = new TestContext();
+            await context.ViewModel.OpenPathAsync(target);
+            Assert.True(await context.ViewModel.EnsureTextLayerAsync(7));
+            var page = context.ViewModel.Pages[6];
+            var word = page.Words[0];
+            Assert.True(await context.ViewModel.BeginTextSelectionAsync(
+                7,
+                word.Bounds.X + (word.Bounds.Width / 2),
+                word.Bounds.Y + (word.Bounds.Height / 2),
+                clickCount: 2));
+            context.ViewModel.CompleteTextSelection();
+            Assert.True(context.ViewModel.HasSelection);
+
+            Assert.True(context.ViewModel.UnderlineSelectionCommand.CanExecute(null));
+            await context.ViewModel.UnderlineSelectionCommand.ExecuteAsync(null);
+            await context.ViewModel.StrikeOutSelectionCommand.ExecuteAsync(null);
+            await context.ViewModel.SquigglySelectionCommand.ExecuteAsync(null);
+
+            await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+
+            using var probe = new PdfDocumentService();
+            await probe.OpenAsync(target);
+            var markups = await probe.GetMarkupAsync(target, 7);
+            Assert.Contains(markups, markup => markup.Kind == PdfMarkupKind.Underline);
+            Assert.Contains(markups, markup => markup.Kind == PdfMarkupKind.StrikeOut);
+            Assert.Contains(markups, markup => markup.Kind == PdfMarkupKind.Squiggly);
+
+            context.ViewModel.ShowAnnotationsTabCommand.Execute(null);
+            await WaitForAsync(
+                () => context.ViewModel.IsAnnotationsTabSelected &&
+                      !context.ViewModel.IsLoadingAnnotations &&
+                      context.ViewModel.Annotations.Count > 0,
+                10_000);
+
+            Assert.Contains(
+                context.ViewModel.Annotations,
+                annotation => annotation.Kind == PdfMarkupKind.Underline);
+            Assert.Contains(
+                context.ViewModel.Annotations,
+                annotation => annotation.Kind == PdfMarkupKind.StrikeOut);
+            Assert.Contains(
+                context.ViewModel.Annotations,
+                annotation => annotation.Kind == PdfMarkupKind.Squiggly);
+
+            var underline = context.ViewModel.Annotations.First(
+                annotation => annotation.Kind == PdfMarkupKind.Underline);
+            MarkupNavigationPoint? navigation = null;
+            context.ViewModel.ScrollToMarkupRequested += (_, point) => navigation = point;
+            await context.ViewModel.GoToAnnotationCommand.ExecuteAsync(underline);
+
+            Assert.NotNull(navigation);
+            Assert.Equal(7, navigation!.PageNumber);
+            Assert.True(navigation.Bounds.Y >= 0 && navigation.Bounds.Y <= 1);
+            Assert.True(navigation.Bounds.Height > 0);
+            Assert.Equal(7, context.ViewModel.CurrentPage);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // A failed cleanup must not hide an assertion failure.
+            }
+        }
+    }
+
     [AvaloniaFact]
     public async Task UseInkColor_SetsTheColourAndStartsDrawing()
     {

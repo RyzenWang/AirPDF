@@ -5,6 +5,7 @@ using AirPdf.App.Services;
 using AirPdf.App.ViewModels;
 using AirPdf.App.Views;
 using AirPdf.Core.Services;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -142,6 +143,89 @@ public sealed class EndToEndTests : IDisposable
                 .Select(item => item.DataContext)
                 .OfType<PageSpreadViewModel>(),
             spread => spread.LeftPage.Number == 8 || spread.RightPage?.Number == 8);
+    }
+
+    [AvaloniaFact]
+    public async Task SelectionToolbar_AddsAnUnderlineAndTheMarkupTabListsIt()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 0);
+
+        _window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Control);
+        await WaitAsync(() => document.HasSelection);
+
+        var toolbar = _window.FindControl<Border>("SelectionToolbar");
+        Assert.NotNull(toolbar);
+        Assert.True(toolbar!.IsVisible);
+        await WaitAsync(
+            () => toolbar.Margin != new Thickness(16, 16, 0, 0),
+            3_000);
+        Assert.NotEqual(new Thickness(16, 16, 0, 0), toolbar.Margin);
+
+        var underline = toolbar.GetVisualDescendants()
+            .OfType<Button>()
+            .FirstOrDefault(button =>
+                AutomationProperties.GetName(button) == _services.Localization.T("L.Underline"));
+        Assert.NotNull(underline);
+        Assert.True(underline!.Command?.CanExecute(null));
+
+        document.UnderlineSelectionCommand.Execute(null);
+        await WaitAsync(() => document.HasUnsavedAnnotations);
+
+        document.ShowAnnotationsTabCommand.Execute(null);
+        await WaitAsync(
+            () => !document.IsLoadingAnnotations && document.Annotations.Count > 0,
+            10_000);
+
+        Assert.Contains(
+            document.Annotations,
+            annotation => annotation.Kind == AirPdf.Core.Models.PdfMarkupKind.Underline);
+
+        var annotationList = _window.FindControl<ListBox>("AnnotationList");
+        Assert.NotNull(annotationList);
+        Assert.True(annotationList!.IsVisible);
+        Assert.NotEmpty(annotationList.ItemsSource!);
+
+        var targetAnnotation = document.Annotations.First(
+            annotation => annotation.PageNumber == 3);
+        MarkupNavigationPoint? navigation = null;
+        document.ScrollToMarkupRequested += (_, point) => navigation = point;
+
+        await document.GoToAnnotationCommand.ExecuteAsync(targetAnnotation);
+        await WaitAsync(() => document.CurrentPage == 3);
+
+        var pageList = _window.FindControl<PdfPageList>("PagesList");
+        Assert.NotNull(pageList?.Viewer);
+        var viewer = pageList!.Viewer!;
+
+        Assert.NotNull(navigation);
+        var annotationCenter = new Point(
+            (navigation!.Bounds.X + (navigation.Bounds.Width / 2)) * 1,
+            (navigation.Bounds.Y + (navigation.Bounds.Height / 2)) * 1);
+
+        PdfPageView? pageThreeView = null;
+        await WaitAsync(
+            () =>
+            {
+                pageThreeView = pageList.GetRealizedContainers()
+                    .OfType<ListBoxItem>()
+                    .SelectMany(item => item.GetVisualDescendants().OfType<PdfPageView>())
+                    .FirstOrDefault(view => view.DataContext is PageViewModel { Number: 3 });
+                return pageThreeView is not null;
+            },
+            5_000);
+
+        var centerInPage = new Point(
+            annotationCenter.X * pageThreeView!.Bounds.Width,
+            annotationCenter.Y * pageThreeView.Bounds.Height);
+        var centerInWindow = pageThreeView.TranslatePoint(centerInPage, _window);
+        var targetInWindow = viewer.TranslatePoint(
+            new Point(0, viewer.Viewport.Height * 0.40),
+            _window);
+
+        Assert.NotNull(centerInWindow);
+        Assert.NotNull(targetInWindow);
+        Assert.InRange(centerInWindow!.Value.Y, targetInWindow!.Value.Y - 5, targetInWindow.Value.Y + 5);
     }
 
     [AvaloniaFact]

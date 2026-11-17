@@ -4,8 +4,12 @@ namespace AirPdf.Core.Models;
 public enum PdfMarkupKind
 {
     Highlight,
+    Underline,
+    StrikeOut,
+    Squiggly,
     Ink,
-    Note
+    Note,
+    FreeText
 }
 
 /// <summary>
@@ -16,12 +20,17 @@ public sealed record PdfMarkup(
     PdfMarkupKind Kind,
     PdfHighlight? Highlight = null,
     PdfInk? Ink = null,
-    PdfNote? Note = null)
+    PdfNote? Note = null,
+    PdfFreeText? FreeText = null,
+    PdfTextMarkup? TextMarkup = null)
 {
     public int PageNumber => Kind switch
     {
         PdfMarkupKind.Highlight => Highlight?.PageNumber ?? 0,
+        PdfMarkupKind.Underline or PdfMarkupKind.StrikeOut or PdfMarkupKind.Squiggly =>
+            TextMarkup?.PageNumber ?? 0,
         PdfMarkupKind.Ink => Ink?.PageNumber ?? 0,
+        PdfMarkupKind.FreeText => FreeText?.PageNumber ?? 0,
         _ => Note?.PageNumber ?? 0
     };
 }

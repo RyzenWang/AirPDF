@@ -642,6 +642,34 @@ public sealed class AnnotationTests : IDisposable
         Assert.True(best.Blue > best.Red + 40, $"the stroke rendered as {best.Red},{best.Green},{best.Blue} rather than blue");
     }
     [Fact]
+    public async Task AddFreeText_DrawsItsTextOnThePage()
+    {
+        var blank = Path.Combine(_directory, "blank.pdf");
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "Assets", "outline.pdf"), blank);
+
+        using var service = new PdfDocumentService();
+        await service.OpenAsync(blank);
+        var before = await service.RenderPageAsync(blank, 1, 600);
+
+        await service.AddFreeTextAsync(
+            blank,
+            1,
+            new PdfQuad(72, 700, 430, 620),
+            "Free text annotation",
+            18);
+
+        using var after = await service.RenderPageAsync(blank, 1, 600);
+        var darkBefore = CountDark(before);
+        var darkAfter = CountDark(after);
+        before.Dispose();
+
+        Assert.True(
+            darkAfter > darkBefore + 10,
+            $"the free-text appearance added only {darkAfter - darkBefore} dark samples");
+        Assert.Single(await service.GetFreeTextsAsync(blank, 1));
+    }
+
+    [Fact]
     public async Task AddHighlight_WithNoRectangles_ChangesNothing()
     {
         using var service = new PdfDocumentService();

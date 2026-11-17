@@ -230,6 +230,75 @@ public sealed class PdfDocumentService : IDisposable
             cancellationToken);
     }
 
+    /// <summary>Adds an underline, strikeout, or squiggly annotation to the resident document.</summary>
+    public Task AddTextMarkupAsync(
+        string filePath,
+        int pageNumber,
+        PdfTextMarkupKind kind,
+        IReadOnlyList<PdfQuad> quads,
+        byte red,
+        byte green,
+        byte blue,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ArgumentNullException.ThrowIfNull(quads);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    ResidentSession(fullPath).AddTextMarkup(
+                        pageNumber,
+                        kind,
+                        quads,
+                        red,
+                        green,
+                        blue);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
+    /// <summary>Removes the text markup matching a snapshot, for undo.</summary>
+    public Task<bool> RemoveTextMarkupMatchingAsync(
+        string filePath,
+        PdfTextMarkup markup,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return ResidentSession(fullPath).RemoveTextMarkupMatching(
+                        markup.PageNumber,
+                        markup);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
     /// <summary>Annotation count of one page in the resident document.</summary>
     public Task<int> GetAnnotationCountAsync(
         string filePath,
@@ -589,6 +658,80 @@ public sealed class PdfDocumentService : IDisposable
             },
             cancellationToken);
     }
+    /// <summary>Reads every page's markup in one resident-session pass.</summary>
+    public Task<IReadOnlyList<PdfMarkup>> GetAllMarkupAsync(
+        string filePath,
+        CancellationToken cancellationToken = default) =>
+        GetAllMarkupAsync(filePath, progress: null, cancellationToken);
+
+    /// <summary>
+    /// Reads every page's markup, reporting small page batches so a very long document can
+    /// fill the sidebar while the scan is still running.
+    /// </summary>
+    public Task<IReadOnlyList<PdfMarkup>> GetAllMarkupAsync(
+        string filePath,
+        IProgress<IReadOnlyList<PdfMarkup>>? progress,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                var markup = new List<PdfMarkup>();
+                var batch = new List<PdfMarkup>();
+                var pageCount = 0;
+
+                // Do not hold the annotation gate for the whole document. A 9,000-page PDF
+                // used to block rendering, text selection and new annotations behind a single
+                // ten-second scan. Taking the gate a page or a small batch at a time lets those
+                // higher-priority operations interleave with the background scan.
+                for (var pageNumber = 1; pageNumber <= pageCount || pageNumber == 1; pageNumber++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        var session = ResidentSession(fullPath);
+                        if (pageCount == 0)
+                        {
+                            pageCount = session.PageCount;
+                        }
+
+                        var pageMarkup = session.GetMarkup(pageNumber);
+                        markup.AddRange(pageMarkup);
+                        batch.AddRange(pageMarkup);
+                    }
+                    finally
+                    {
+                        RenderGate.Release();
+                    }
+
+                    if (pageNumber % 64 == 0)
+                    {
+                        if (batch.Count > 0)
+                        {
+                            progress?.Report(batch);
+                            batch = [];
+                        }
+
+                        // Yield to queued renders/edits between batches.
+                        await Task.Delay(1, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+
+                if (batch.Count > 0)
+                {
+                    progress?.Report(batch);
+                }
+
+                return (IReadOnlyList<PdfMarkup>)markup;
+            },
+            cancellationToken);
+    }
+
     /// <summary>Removes whatever markup is under a page-space point.</summary>
     public Task<IReadOnlyList<PdfMarkup>> RemoveMarkupAtAsync(
         string filePath,
@@ -720,6 +863,102 @@ public sealed class PdfDocumentService : IDisposable
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     ResidentSession(fullPath).AddNote(pageNumber, position, text ?? string.Empty);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
+    /// <summary>Adds a free-text annotation in page-space bounds.</summary>
+    public Task AddFreeTextAsync(
+        string filePath,
+        int pageNumber,
+        PdfQuad bounds,
+        string text,
+        float fontSize = 12,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    ResidentSession(fullPath).AddFreeText(pageNumber, bounds, text ?? string.Empty, fontSize);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
+    /// <summary>Every free-text annotation on a page.</summary>
+    public Task<IReadOnlyList<PdfFreeText>> GetFreeTextsAsync(
+        string filePath,
+        int pageNumber,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var session = ResidentSession(fullPath);
+                    var texts = new List<PdfFreeText>();
+                    for (var index = 0; index < session.GetAnnotationCount(pageNumber); index++)
+                    {
+                        if (session.TryReadFreeText(pageNumber, index) is { } freeText)
+                        {
+                            texts.Add(freeText);
+                        }
+                    }
+
+                    return (IReadOnlyList<PdfFreeText>)texts;
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
+    /// <summary>Removes the free-text annotation matching a snapshot, for undo.</summary>
+    public Task<bool> RemoveFreeTextMatchingAsync(
+        string filePath,
+        PdfFreeText freeText,
+        CancellationToken cancellationToken = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return ResidentSession(fullPath).RemoveFreeTextMatching(freeText.PageNumber, freeText);
                 }
                 finally
                 {

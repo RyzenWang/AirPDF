@@ -99,6 +99,26 @@
     <Setter Property="Padding" Value="0" />
     <Setter Property="CornerRadius" Value="8" />
   </Style>
+  <Style Selector="Border.markupToolbar">
+    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource BorderStrongBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="Padding" Value="4" />
+    <Setter Property="BoxShadow" Value="0 8 24 0 #26000000" />
+  </Style>
+  <Style Selector="Button.markupTool">
+    <Setter Property="Width" Value="34" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="MinHeight" Value="30" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.markupTool:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}" />
+  </Style>
   <Style Selector="Button.swatch">
     <Setter Property="Width" Value="26" />
     <Setter Property="Height" Value="26" />

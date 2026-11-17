@@ -117,6 +117,11 @@
                       PointerPressed="OnTabPointerPressed">
                 <Border.ContextMenu>
                   <ContextMenu>
+                    <MenuItem Header="{DynamicResource L.OpenContainingFolder}"
+                              Click="OnTabContextOpenFolderClick"
+                              Tag="{Binding}"
+                              IsEnabled="{Binding IsDocumentOpen}" />
+                    <Separator />
                     <MenuItem Header="{DynamicResource L.CloseTab}"
                               Click="OnTabContextCloseClick"
                               Tag="{Binding}" />
@@ -622,6 +627,10 @@
                         Classes.active="{Binding IsBookmarksTabSelected}"
                         Content="{DynamicResource L.Bookmarks}"
                         Command="{Binding ShowBookmarksTabCommand}" />
+                <Button Classes="tab"
+                        Classes.active="{Binding IsAnnotationsTabSelected}"
+                        Content="{DynamicResource L.MarkupTab}"
+                        Command="{Binding ShowAnnotationsTabCommand}" />
               </StackPanel>
             </StackPanel>
             <Button Grid.Column="1"
@@ -779,6 +788,82 @@
                            TextAlignment="Center" />
               </StackPanel>
             </Grid>
+
+            <!-- Every markup annotation in the document, loaded only when this tab is opened. -->
+            <Grid IsVisible="{Binding IsAnnotationsTabSelected}" RowDefinitions="Auto,Auto,*">
+              <Grid Margin="14,3,12,5" ColumnDefinitions="*,Auto">
+                <TextBlock Text="{DynamicResource L.MarkupTab}" Classes="eyebrow" />
+                <TextBlock Grid.Column="1"
+                           Text="{Binding AnnotationCountText}"
+                           Classes="caption"
+                           FontSize="10.5" />
+              </Grid>
+              <ProgressBar Grid.Row="1"
+                           IsIndeterminate="True"
+                           IsVisible="{Binding IsLoadingAnnotations}"
+                           Height="2"
+                           Margin="12,0,12,5" />
+              <ListBox x:Name="AnnotationList"
+                       Grid.Row="2"
+                       Classes="annotationList"
+                       ItemsSource="{Binding Annotations}"
+                       Margin="5,0,5,12"
+                       AutomationProperties.Name="{DynamicResource L.AnnotationList}"
+                       SelectionChanged="OnAnnotationSelectionChanged">
+                <ListBox.ItemTemplate>
+                  <DataTemplate x:DataType="vm:AnnotationItemViewModel">
+                    <Border Margin="1,0,1,7"
+                            Padding="9"
+                            CornerRadius="8"
+                            Background="{DynamicResource SurfaceBrush}"
+                            BorderBrush="{DynamicResource BorderBrush}"
+                            BorderThickness="1">
+                      <Grid ColumnDefinitions="Auto,*">
+                        <Border Width="25" Height="25"
+                                CornerRadius="7"
+                                Background="{Binding Brush}"
+                                VerticalAlignment="Top">
+                          <TextBlock Text="{Binding Glyph}"
+                                     FontSize="12"
+                                     FontWeight="Bold"
+                                     HorizontalAlignment="Center"
+                                     VerticalAlignment="Center"
+                                     Foreground="White" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="9,0,0,0" Spacing="2">
+                          <TextBlock Text="{Binding Title}"
+                                     FontSize="12"
+                                     FontWeight="SemiBold"
+                                     TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Detail}"
+                                     IsVisible="{Binding HasDetail}"
+                                     FontSize="11"
+                                     Foreground="{DynamicResource TextSecondaryBrush}"
+                                     TextWrapping="Wrap"
+                                     MaxLines="2" />
+                          <TextBlock Text="{Binding PageLabel}"
+                                     Classes="pageNumber" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <StackPanel Grid.Row="2"
+                          IsVisible="{Binding HasNoAnnotations}"
+                          HorizontalAlignment="Center"
+                          VerticalAlignment="Center"
+                          Spacing="9"
+                          Margin="26">
+                <Border Width="42" Height="42" CornerRadius="11" Background="{DynamicResource SurfaceBrush}">
+                  <Path Classes="icon muted" Data="{StaticResource IconHighlighter}" />
+                </Border>
+                <TextBlock Text="{DynamicResource L.NoAnnotations}"
+                           Classes="caption"
+                           HorizontalAlignment="Center"
+                           TextAlignment="Center" />
+              </StackPanel>
+            </Grid>
           </Grid>
         </Grid>
       </Border>
@@ -851,6 +936,79 @@
             </ContextMenu>
           </controls:PdfPageList.ContextMenu>
         </controls:PdfPageList>
+
+        <!-- Appears over the page as soon as text is selected. -->
+        <Border x:Name="SelectionToolbar"
+                Classes="markupToolbar"
+                IsVisible="{Binding HasSelection}"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                Margin="16,16,0,0"
+                ZIndex="50"
+                AutomationProperties.Name="{DynamicResource L.MarkupTab}">
+          <StackPanel Orientation="Horizontal" Spacing="2">
+            <Button Classes="markupTool"
+                    Command="{Binding HighlightSelectionCommand}"
+                    AutomationProperties.Name="{DynamicResource L.HighlightSelection}"
+                    ToolTip.Tip="{DynamicResource L.HighlightSelection}">
+              <TextBlock Text="▰" FontSize="15" Foreground="{Binding HighlightColor.Brush}" />
+            </Button>
+            <Button Classes="markupTool"
+                    Command="{Binding UnderlineSelectionCommand}"
+                    AutomationProperties.Name="{DynamicResource L.Underline}"
+                    ToolTip.Tip="{DynamicResource L.Underline}">
+              <TextBlock Text="U" FontSize="13" FontWeight="SemiBold"
+                         TextDecorations="Underline" />
+            </Button>
+            <Button Classes="markupTool"
+                    Command="{Binding StrikeOutSelectionCommand}"
+                    AutomationProperties.Name="{DynamicResource L.StrikeOut}"
+                    ToolTip.Tip="{DynamicResource L.StrikeOut}">
+              <TextBlock Text="S" FontSize="13" FontWeight="SemiBold"
+                         TextDecorations="Strikethrough" />
+            </Button>
+            <Button Classes="markupTool"
+                    Command="{Binding SquigglySelectionCommand}"
+                    AutomationProperties.Name="{DynamicResource L.Squiggly}"
+                    ToolTip.Tip="{DynamicResource L.Squiggly}">
+              <TextBlock Text="W" FontSize="13" FontWeight="SemiBold"
+                         TextDecorations="Underline" />
+            </Button>
+            <Border Width="1" Height="20" Margin="3,0"
+                    Background="{DynamicResource BorderBrush}" />
+            <Button x:Name="MarkupColorButton"
+                    Classes="markupTool"
+                    Width="30"
+                    AutomationProperties.Name="{DynamicResource L.HighlightColorLabel}"
+                    ToolTip.Tip="{DynamicResource L.HighlightColorLabel}">
+              <Border Width="20" Height="20" CornerRadius="10"
+                      Background="{Binding HighlightColor.Brush}"
+                      BorderBrush="{DynamicResource BorderStrongBrush}"
+                      BorderThickness="1" />
+              <Button.Flyout>
+                <Flyout Placement="Bottom">
+                  <ItemsControl ItemsSource="{Binding Palette}" Width="172">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel />
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:MarkupColor">
+                        <Button Classes="swatch"
+                                Margin="0,0,6,6"
+                                Background="{Binding Brush}"
+                                Tag="{Binding}"
+                                AutomationProperties.Name="{Binding Name}"
+                                Click="OnMarkupColorClick" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Flyout>
+              </Button.Flyout>
+            </Button>
+          </StackPanel>
+        </Border>
 
         <!-- Welcome -->
         <ScrollViewer IsVisible="{Binding IsWelcomeVisible}"

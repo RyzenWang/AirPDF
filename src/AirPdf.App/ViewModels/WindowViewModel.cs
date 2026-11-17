@@ -57,6 +57,80 @@ public sealed partial class WindowViewModel : ObservableObject, ITabService, IDi
     }
 
     /// <summary>
+    /// Reopens the document tabs stored by the last closed window. Missing files and
+    /// duplicates are skipped, so an old session cannot leave dead tabs behind.
+    /// </summary>
+    public void RestoreSession(IReadOnlyList<string> paths, string? selectedPath)
+    {
+        if (Tabs.Count > 1 || paths.Count == 0)
+        {
+            return;
+        }
+
+        var restored = new List<MainWindowViewModel>();
+        foreach (var path in paths)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                continue;
+            }
+
+            if (restored.Any(tab => SameFile(TabPath(tab), path)))
+            {
+                continue;
+            }
+
+            var tab = _createTab(this, false);
+            _owned.Add(tab);
+            Tabs.Add(tab);
+            restored.Add(tab);
+            _ = tab.OpenPathAsync(path);
+        }
+
+        if (restored.Count == 0)
+        {
+            return;
+        }
+
+        OnPropertyChanged(nameof(HasTabs));
+
+        MainWindowViewModel selected = HomeTab;
+        if (!string.IsNullOrWhiteSpace(selectedPath))
+        {
+            selected = restored.FirstOrDefault(tab => SameFile(TabPath(tab), selectedPath))
+                ?? restored[0];
+        }
+
+        SelectedTab = selected;
+    }
+
+    /// <summary>
+    /// Writes the document tabs and selection into the shared settings object. The window
+    /// saves the settings file after this so tab restoration and window geometry land in one
+    /// write.
+    /// </summary>
+    public void SaveSession()
+    {
+        var settings = HomeTab.Settings;
+        settings.OpenTabs = Tabs
+            .Where(tab => !tab.IsHomeTab)
+            .Select(TabPath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => path!)
+            .Distinct(OperatingSystem.IsWindows()
+                ? StringComparer.OrdinalIgnoreCase
+                : StringComparer.Ordinal)
+            .ToList();
+
+        settings.SelectedTabPath = SelectedTab is { IsHomeTab: false } selected
+            ? TabPath(selected)
+            : null;
+    }
+
+    private static string? TabPath(MainWindowViewModel tab) =>
+        !string.IsNullOrWhiteSpace(tab.FilePath) ? tab.FilePath : tab.OpeningPath;
+
+    /// <summary>
     /// Reorders document tabs without moving the hidden Home placeholder away from index 0.
     /// </summary>
     public void MoveTab(MainWindowViewModel tab, int targetIndex)

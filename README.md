@@ -36,8 +36,9 @@ small .NET application with a hand-built Avalonia interface.
 > [Microsoft Store](https://apps.microsoft.com/detail/9pnsx3223qh1) and
 > [GitHub Releases](https://github.com/RyzenWang/AirPDF/releases/latest); macOS and Linux
 > ship as portable archives. The Store listing can trail the GitHub release. Highlights,
-> ink, notes, bookmarks, tabs, a custom Windows titlebar, undo/redo, and saving are in;
-> printing is not. See the [roadmap](#roadmap).
+> underlines, strikethrough, squiggly underlines, ink, notes, bookmarks, tabs, a custom
+> Windows titlebar, undo/redo, and saving are in; printing is not. See the
+> [roadmap](#roadmap).
 
 ---
 
@@ -89,11 +90,13 @@ share the top row. macOS and Linux keep their native window frame and the tab ba
 - **Password-protected PDFs** with a proper unlock prompt.
 - **Light, dark, and high-contrast themes**, following the system on first launch.
 - **Status bar** with the page position and a reading-progress percentage.
-- **Highlights, ink, and notes** — select text and press `Ctrl+Shift+H` to highlight it, or pick a
-  colour under **Highlight** in the page menu, which highlights it as you choose. Turn on drawing
-  with `Ctrl+Shift+K` or the pen button and write on the page; the arrow beside the pen opens the
-  ink colours and the thickness slider, which previews the stroke it will draw. Sticky notes come
-  from the page menu, and a highlight can be removed from it too.
+- **Highlights, underlines, strikethrough, squiggly underlines, ink, and notes** — select text
+  and use the floating markup bar to highlight it, underline it, strike it through, or add a
+  squiggly underline; the colour swatch on the bar uses the same palette as highlighting.
+  Turn on drawing with `Ctrl+Shift+K` or the pen button and write on the page; the arrow beside
+  the pen opens the ink colours and the thickness slider, which previews the stroke it will
+  draw. Sticky notes come from the page menu, and a text markup can be removed from it too.
+  The sidebar's **Markup** tab lists every annotation by page and jumps to it when clicked.
   Every markup change can be undone and redone, from the toolbar or with `Ctrl+Z` and `Ctrl+Y`
   (the last 100 steps are kept), and `Ctrl+S` writes them into the document itself.
 - **Per-document bookmarks** — `Ctrl+D` marks the current spot and the sidebar keeps them
@@ -109,6 +112,8 @@ share the top row. macOS and Linux keep their native window frame and the tab ba
   StatusNotifier/AppIndicator availability.
 - **Tabs keep the whole document session** — `Ctrl+T` adds a document to the same window,
   and each tab keeps its own zoom, scroll position, search results, and reading position.
+  Closing the last window restores the open tabs, their order, and the selected tab next launch;
+  files that no longer exist are skipped. Closing a tab offers **Open containing folder**.
   The active tab is a warm pill, the strip scrolls when it runs out of room, and `+` follows
   the last tab before pinning to the visible edge. Drag tabs to reorder them; holding one
   near either edge scrolls a long strip, and tabs slide into their new positions. Right-click
@@ -186,7 +191,7 @@ dotnet build AirPdf.sln -c Release
 dotnet test AirPdf.sln -c Release
 ```
 
-The suite currently has **287 tests** (122 Core, 165 App). It uses
+The suite currently has **294 tests** (124 Core, 170 App). It uses
 `tests/Assets/sample.pdf`, an eight-page document that exercises Latin and Chinese text,
 mixed typography, and search geometry. `AirPdf.App.Tests` adds headless Avalonia coverage
 for the XAML and tab strip, opening, search, selection, zoom, language switching,
@@ -370,8 +375,8 @@ docs/                   Screenshots and architecture notes
 - [ ] Native printing and "Save a copy"
 - [x] Per-document bookmarks
 - [x] Rotated pages (links, search highlights, text selection)
-- [x] Highlight annotations, saved with "Save a copy"
-- [x] Ink and sticky-note annotations
+- [x] Highlight, underline, strikethrough, and squiggly annotations, saved with "Save a copy"
+- [x] Ink and sticky-note annotations, plus a markup sidebar
 - [x] Multiple windows
 - [x] Tabs
 - [x] Unified tab/title bar with Windows 11 Snap Layouts
