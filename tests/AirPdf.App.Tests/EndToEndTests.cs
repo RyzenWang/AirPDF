@@ -509,6 +509,19 @@ public sealed class EndToEndTests : IDisposable
         Assert.True(editor!.IsVisible);
         Assert.True(document.IsTextEditing);
 
+        // The editor has to look like text on the page. The Fluent template paints a focused
+        // background and a 2px accent ring on its border element; both are suppressed by the
+        // textInline style, so this proves the style is still applied.
+        var borderElement = editor.GetVisualDescendants()
+            .OfType<Border>()
+            .FirstOrDefault(border => border.Name == "PART_BorderElement");
+        Assert.NotNull(borderElement);
+        Assert.Equal(0, borderElement!.BorderThickness.Left);
+
+        // Page 1 of the sample is a dark cover, so the contrast default has to pick white text
+        // instead of the invisible black default.
+        Assert.Equal("White", document.TextColor.Name);
+
         editor.Text = "Typed on the page";
         Dispatcher.UIThread.RunJobs();
 

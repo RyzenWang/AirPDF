@@ -3194,6 +3194,7 @@ public partial class MainWindow : Window
     private static readonly Cursor HiddenCursor = new(StandardCursorType.None);
 
     private PdfPageView? _textEditorPage;
+    private bool _textColourPicked;
 
     /// <summary>Menu item: toggles the sticky text mode.</summary>
     private async void OnAddTextClick(object? sender, RoutedEventArgs e)
@@ -3209,8 +3210,87 @@ public partial class MainWindow : Window
 
         if (await _viewModel.BeginTextModeAsync())
         {
+            // A new session starts with the contrast default, not the colour left over from the
+            // last one.
+            _textColourPicked = false;
             CloseTextEditor(discard: true);
             UpdateTextCursor(overPage: false);
+        }
+    }
+
+    /// <summary>
+    /// Free text is drawn in the reader's colour, and black on a dark page is unreadable. Until
+    /// the reader picks a colour in this session, the default comes from the page pixels under
+    /// the click: white over dark areas, black over light ones.
+    /// </summary>
+    private void ApplyContrastingTextColour(PdfPageView pageView, double pageX, double pageY)
+    {
+        if (_textColourPicked ||
+            pageView.DataContext is not PageViewModel page ||
+            page.Image is not { } image)
+        {
+            return;
+        }
+
+        var width = image.PixelSize.Width;
+        var height = image.PixelSize.Height;
+        if (width <= 0 || height <= 0 || pageView.Bounds.Width <= 1 || pageView.Bounds.Height <= 1)
+        {
+            return;
+        }
+
+        var centreX = (int)Math.Clamp(pageX / pageView.Bounds.Width * width, 0, width - 1);
+        var centreY = (int)Math.Clamp(pageY / pageView.Bounds.Height * height, 0, height - 1);
+        const int radius = 14;
+        var left = Math.Max(0, centreX - radius);
+        var top = Math.Max(0, centreY - radius);
+        var right = Math.Min(width - 1, centreX + radius);
+        var bottom = Math.Min(height - 1, centreY + radius);
+
+        long total = 0;
+        var samples = 0;
+
+        try
+        {
+            using var frame = image.Lock();
+            var bgra = frame.Format == PixelFormat.Bgra8888;
+            if (!bgra && frame.Format != PixelFormat.Rgba8888)
+            {
+                return;
+            }
+
+            for (var y = top; y <= bottom; y += 2)
+            {
+                var row = frame.Address + (y * frame.RowBytes);
+                for (var x = left; x <= right; x += 2)
+                {
+                    var offset = x * 4;
+                    var first = Marshal.ReadByte(row, offset);
+                    var green = Marshal.ReadByte(row, offset + 1);
+                    var third = Marshal.ReadByte(row, offset + 2);
+                    var (red, blue) = bgra ? (third, first) : (first, third);
+                    total += ((red * 299) + (green * 587) + (blue * 114)) / 1000;
+                    samples++;
+                }
+            }
+        }
+        catch (Exception unexpected)
+        {
+            // A bitmap that cannot be sampled must not take the click down; the control's
+            // current colour stands.
+            CrashLog.Write("TextContrast", unexpected);
+            return;
+        }
+
+        if (samples == 0)
+        {
+            return;
+        }
+
+        var wanted = total / samples < 110 ? "White" : "Black";
+        if (_viewModel.Palette.FirstOrDefault(colour => colour.Name == wanted) is { } match)
+        {
+            _viewModel.SetTextColor(match);
         }
     }
 
@@ -3298,6 +3378,7 @@ public partial class MainWindow : Window
 
         var x = Math.Clamp(inPage.X, 0, Math.Max(0, pageView.Bounds.Width - 8));
         var y = Math.Clamp(inPage.Y, 0, Math.Max(0, pageView.Bounds.Height - 8));
+        ApplyContrastingTextColour(pageView, x, y);
         OpenTextEditor(pageView, x, y, string.Empty, isReedit: false);
     }
 
@@ -3559,6 +3640,7 @@ public partial class MainWindow : Window
         if (sender is Control { Tag: MarkupColor color })
         {
             _viewModel.SetTextColor(color);
+            _textColourPicked = true;
             TextColorButton.Flyout?.Hide();
         }
     }

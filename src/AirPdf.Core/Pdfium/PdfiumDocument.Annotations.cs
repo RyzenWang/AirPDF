@@ -358,11 +358,13 @@ public sealed partial class PdfiumDocument
             PdfiumNative.AnnotSetStringValue(annot, "Contents", text);
             WriteFreeTextAppearance(annot, fontSize, red, green, blue);
 
-            // Deliberately no /C fill: the text sits straight on the page instead of on a white
-            // patch, which is what makes it read as writing rather than as a pasted box. The
-            // glyph colour is carried by /DA, which is where a FreeText annotation keeps it.
+            // No /C fill: the text sits straight on the page instead of on a white patch. The
+            // zero border width is all this PDFium build offers; it still draws its own thin frame
+            // around a FreeText appearance, and making a colour fully transparent makes PDFium
+            // skip the whole annotation instead, so the frame stays.
             PdfiumNative.AnnotSetStringValue(annot, ColourKey, FormatColour(red, green, blue));
             PdfiumNative.AnnotSetBorder(annot, 0, 0, 0);
+
             PdfiumNative.AnnotSetFlags(annot, PdfiumNative.AnnotFlagPrint);
         }
         finally

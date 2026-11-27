@@ -414,6 +414,17 @@
                   ToolTip.Tip="{DynamicResource L.Eraser}">
             <Path Classes="icon" Data="{StaticResource IconEraser}" />
           </Button>
+          <!-- Text mode sits next to the pen: both are sticky markup modes, and the button stays
+               lit while the mode is on. -->
+          <Button x:Name="TextToolButton"
+                  Classes="icon"
+                  Classes.active="{Binding IsTextMode}"
+                  Click="OnAddTextClick"
+                  IsVisible="{Binding IsDocumentOpen}"
+                  AutomationProperties.Name="{DynamicResource L.AddText}"
+                  ToolTip.Tip="{DynamicResource L.AddText}">
+            <Path Classes="icon" Data="{StaticResource IconText}" />
+          </Button>
           <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="8,0" VerticalAlignment="Center" />
 
 
@@ -1053,6 +1064,7 @@
           </Border>
 
           <TextBox x:Name="TextEditor"
+                   Classes="textInline"
                    IsVisible="False"
                    AcceptsReturn="True"
                    TextWrapping="Wrap"
@@ -1065,7 +1077,20 @@
                    CaretBrush="{DynamicResource AccentBrush}"
                    SelectionBrush="{DynamicResource AccentSoftBrush}"
                    VerticalContentAlignment="Top"
-                   SizeChanged="OnTextEditorSizeChanged" />
+                   FocusAdorner="{x:Null}"
+                   SizeChanged="OnTextEditorSizeChanged">
+            <!-- The editor has to read as text on the page, not as a control: the theme paints a
+                 focused background and the focus adorner draws a ring, so both are neutralised
+                 here rather than in the template. -->
+            <TextBox.Resources>
+              <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+              <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+              <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+              <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+              <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+              <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+            </TextBox.Resources>
+          </TextBox>
 
           <Border x:Name="TextFormatBar"
                   Classes="markupToolbar"
@@ -1084,7 +1109,7 @@
                         BorderThickness="1" />
                 <Button.Flyout>
                   <Flyout Placement="Bottom" Opened="OnTextPaletteOpened">
-                    <ItemsControl ItemsSource="{Binding TextPalette}" Width="172">
+                    <ItemsControl ItemsSource="{Binding Palette}" Width="172">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                           <WrapPanel />

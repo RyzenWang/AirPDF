@@ -98,9 +98,10 @@ share the top row. macOS and Linux keep their native window frame and the tab ba
   draw. Sticky notes come from the page menu, and a text markup can be removed from it too;
   **Add text** places a text annotation instead of opening a dialog: the pointer carries a T
   marker with a preview of the box, a click opens an inline editor there, and the bar above it
-  sets the colour and size. The mode stays on for the next piece until `Esc` leaves it, `Esc`
-  places the text, `Enter` starts a new line, and double-clicking a placed text annotation
-  reopens the editor over it.
+  sets the colour and size. New text starts in a colour that can be read against the page under
+  the click. The mode stays on for the next piece until `Esc` leaves it, `Esc` places the text,
+  `Enter` starts a new line, and double-clicking a placed text annotation reopens the editor over
+  it. The toolbar's text button enters the mode too.
   The sidebar's **Markup** tab lists every annotation by page and jumps to it when clicked.
   Every markup change can be undone and redone, from the toolbar or with `Ctrl+Z` and `Ctrl+Y`
   (the last 100 steps are kept), and `Ctrl+S` writes them into the document itself.

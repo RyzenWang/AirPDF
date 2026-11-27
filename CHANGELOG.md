@@ -33,6 +33,11 @@ semantic versioning once it reaches 1.0.
 - Text annotations carry their own colour and no longer paint a white box behind themselves, and
   "Add text" is disabled on a rotated page, where free text would render a quarter turn away from
   the page text.
+- The toolbar has a text button next to the pen, so the mode can be entered without the page
+  menu. It stays lit while text mode is on, like the pen does.
+- A new piece of text starts in a colour that can be read on the page under the click: white over
+  a dark area, black over a light one. Picking a colour in the format bar overrides it for the
+  rest of that session.
 
 ### Fixed
 
@@ -54,6 +59,9 @@ semantic versioning once it reaches 1.0.
   is logged, and the reader is told why the window did not close.
 - A text prompt that fails while adding a note or a text annotation is reported through the
   normal error path instead of propagating out of the menu item's `async void` handler.
+- The inline text editor no longer looks like a bordered input box. The Fluent template paints a
+  focused background and a 2px accent ring on its own border element, which the editor now
+  overrides, so only the words and the caret sit on the page.
 
 ## [0.9.0] - 2026-11-14
 

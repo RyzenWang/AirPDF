@@ -1975,15 +1975,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private MarkupColor _textColor;
 
-    /// <summary>
-    /// Colours offered for text. White is left out: white text on a white page cannot be read,
-    /// and unlike a highlight there is no fill behind it to hide.
-    /// </summary>
-    public IReadOnlyList<MarkupColor> TextPalette =>
-        _textPalette ??= Palette.Where(color => color.Name != "White").ToList();
-
-    private IReadOnlyList<MarkupColor>? _textPalette;
-
     /// <summary>Point size the next piece of text is written in.</summary>
     [ObservableProperty]
     private double _textFontSize = DefaultTextFontSize;
