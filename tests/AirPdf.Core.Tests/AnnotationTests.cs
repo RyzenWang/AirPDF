@@ -718,7 +718,7 @@ public sealed class AnnotationTests : IDisposable
     /// The visible words are page text objects with an embedded font, because PDFium's own
     /// FreeText appearance uses a standard Latin font and draws an empty frame for Chinese.
     /// </summary>
-    [Fact]
+    [CjkFontFact]
     public async Task AddFreeText_RendersChineseTextWithoutAFrame()
     {
         var blank = Path.Combine(_directory, "chinese-text.pdf");

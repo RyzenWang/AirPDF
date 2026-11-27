@@ -340,7 +340,14 @@ public sealed partial class PdfiumDocument
         var annot = IntPtr.Zero;
         try
         {
-            annot = PdfiumNative.PageCreateAnnot(page, PdfiumNative.AnnotStamp);
+            // The words are drawn as appearance objects, which only stamp and ink annotations
+            // accept. Without a font to embed there is nothing to draw with, so the annotation is
+            // a free text instead and PDFium generates an appearance from /DA — Latin only, but
+            // it keeps the words visible on a machine with no usable font.
+            var hasFont = EnsureTextFont() != IntPtr.Zero;
+            annot = PdfiumNative.PageCreateAnnot(
+                page,
+                hasFont ? PdfiumNative.AnnotStamp : PdfiumNative.AnnotFreeText);
             if (annot == IntPtr.Zero)
             {
                 throw new PdfDocumentException(PdfFailure.Unsupported, "This page does not accept annotations.");
@@ -365,7 +372,14 @@ public sealed partial class PdfiumDocument
 
             // Drawing the words ourselves replaces PDFium's generated appearance, which only knows
             // the standard Latin fonts and always paints its own border.
-            AppendTextObjects(annot, bounds, text, fontSize, red, green, blue);
+            if (hasFont)
+            {
+                AppendTextObjects(annot, bounds, text, fontSize, red, green, blue);
+            }
+            else
+            {
+                WriteFreeTextAppearance(annot, fontSize, red, green, blue);
+            }
         }
         finally
         {
@@ -434,16 +448,29 @@ public sealed partial class PdfiumDocument
                     PdfiumNative.AnnotSetFlags(annot, PdfiumNative.AnnotFlagPrint);
 
                     // Replace the drawing wholesale: the old objects are dropped and the new text
-                    // is laid out in the new box.
+                    // is laid out in the new box. Without a font the appearance comes from /DA.
                     ClearTextObjects(annot);
-                    AppendTextObjects(
-                        annot,
-                        updated.Bounds,
-                        updated.Text,
-                        updated.FontSize,
-                        updated.Red,
-                        updated.Green,
-                        updated.Blue);
+                    if (EnsureTextFont() != IntPtr.Zero)
+                    {
+                        AppendTextObjects(
+                            annot,
+                            updated.Bounds,
+                            updated.Text,
+                            updated.FontSize,
+                            updated.Red,
+                            updated.Green,
+                            updated.Blue);
+                    }
+                    else
+                    {
+                        WriteFreeTextAppearance(
+                            annot,
+                            updated.FontSize,
+                            updated.Red,
+                            updated.Green,
+                            updated.Blue);
+                    }
+
                     return true;
                 }
                 finally
@@ -458,6 +485,31 @@ public sealed partial class PdfiumDocument
         {
             PdfiumNative.ClosePage(page);
         }
+    }
+
+    /// <summary>
+    /// Writes the /DA default appearance, which is what PDFium generates a Latin-only appearance
+    /// from. Used when no font can be embedded, and kept on the annotation as a fallback for
+    /// viewers that ignore the appearance objects.
+    /// </summary>
+    private static void WriteFreeTextAppearance(
+        IntPtr annot,
+        float fontSize,
+        byte red,
+        byte green,
+        byte blue)
+    {
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        var size = fontSize.ToString("0.##", culture);
+        var r = (red / 255d).ToString("0.###", culture);
+        var g = (green / 255d).ToString("0.###", culture);
+        var b = (blue / 255d).ToString("0.###", culture);
+
+        PdfiumNative.AnnotSetStringValue(
+            annot,
+            "DA",
+            string.Create(culture, $"/Helvetica {size} Tf {r} {g} {b} rg"));
+        PdfiumNative.AnnotSetStringValue(annot, FontSizeKey, size);
     }
 
     /// <summary>Two free-text annotations are the same one when text and bounds agree.</summary>
@@ -489,17 +541,9 @@ public sealed partial class PdfiumDocument
             return _textFont;
         }
 
-        if (!OperatingSystem.IsWindows())
+        foreach (var candidate in TextFontCandidates(cjkOnly: false))
         {
-            return IntPtr.Zero;
-        }
-
-        foreach (var file in new[] { "simhei.ttf", "Deng.ttf", "msyh.ttc", "arial.ttf" })
-        {
-            var path = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.Fonts),
-                file);
-            if (!File.Exists(path))
+            if (!File.Exists(candidate))
             {
                 continue;
             }
@@ -507,7 +551,7 @@ public sealed partial class PdfiumDocument
             byte[] bytes;
             try
             {
-                bytes = File.ReadAllBytes(path);
+                bytes = File.ReadAllBytes(candidate);
             }
             catch (IOException)
             {
@@ -552,6 +596,65 @@ public sealed partial class PdfiumDocument
             _textFontDataSize = 0;
         }
     }
+
+    /// <summary>
+    /// Fonts that can be embedded for the visible words, best first. Chinese needs a font that
+    /// covers it; the Latin entries only keep the drawing on a machine without one, and a
+    /// platform that has none falls back to PDFium's own generated appearance.
+    /// </summary>
+    /// <remarks>Exposed to the tests so they can tell whether a script can be drawn at all.</remarks>
+    internal static IEnumerable<string> TextFontCandidates(bool cjkOnly)
+    {
+        if (TextFontPathOverride is { } forced)
+        {
+            return string.IsNullOrEmpty(forced) ? [] : [forced];
+        }
+
+        var candidates = new List<string>();
+
+        if (OperatingSystem.IsWindows())
+        {
+            var fonts = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+            candidates.Add(Path.Combine(fonts, "simhei.ttf"));
+            candidates.Add(Path.Combine(fonts, "Deng.ttf"));
+            candidates.Add(Path.Combine(fonts, "msyh.ttc"));
+            if (!cjkOnly)
+            {
+                candidates.Add(Path.Combine(fonts, "arial.ttf"));
+            }
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            candidates.Add("/System/Library/Fonts/PingFang.ttc");
+            candidates.Add("/System/Library/Fonts/STHeiti Medium.ttc");
+            candidates.Add("/System/Library/Fonts/Supplemental/Songti.ttc");
+            candidates.Add("/System/Library/Fonts/Hiragino Sans GB.ttc");
+            if (!cjkOnly)
+            {
+                candidates.Add("/System/Library/Fonts/Helvetica.ttc");
+                candidates.Add("/Library/Fonts/Arial.ttf");
+            }
+        }
+        else
+        {
+            candidates.Add("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc");
+            candidates.Add("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc");
+            candidates.Add("/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc");
+            candidates.Add("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc");
+            if (!cjkOnly)
+            {
+                candidates.Add("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
+                candidates.Add("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf");
+            }
+        }
+
+        return candidates;
+    }
+
+    /// <summary>
+    /// Forces a font file for the tests, or an empty string to simulate a machine without one.
+    /// </summary>
+    internal static string? TextFontPathOverride { get; set; }
 
     /// <summary>
     /// Appends the lines of <paramref name="text"/> to the annotation as page objects, which
