@@ -864,6 +864,50 @@ public sealed class MainWindowViewModelTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// Double-clicking a placed text reopens its editor, which needs the annotation to be found
+    /// again from its box. The text is drawn by the annotation's own appearance objects, so this
+    /// guards the rectangle the hit test relies on.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task FindTextAnnotationAsync_FindsWhatWasJustPlaced()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-text-hit-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var target = Path.Combine(directory, "text-hit.pdf");
+            File.Copy(SamplePath, target);
+
+            using var context = new TestContext();
+            await context.ViewModel.OpenPathAsync(target);
+
+            var display = new PdfSearchRect(0.25, 0.25, 0.3, 0.08);
+            Assert.True(await context.ViewModel.CommitTextAsync(1, "这里需要复核", display));
+
+            var hit = await context.ViewModel.FindTextAnnotationAsync(1, 0.3, 0.28);
+            Assert.NotNull(hit);
+            Assert.Equal("这里需要复核", hit!.Text.Text);
+            Assert.True(hit.Display.Width > 0);
+            Assert.True(hit.Display.Height > 0);
+
+            // A point outside the box belongs to the page, not to the annotation.
+            Assert.Null(await context.ViewModel.FindTextAnnotationAsync(1, 0.9, 0.9));
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // A failed cleanup must not hide the assertion that failed first.
+            }
+        }
+    }
+
     [AvaloniaFact]
     public async Task AddNoteAtAsync_AsksForTheTextAndStoresIt()
     {

@@ -23,6 +23,12 @@ internal static partial class PdfiumNative
     /// <summary>Free-text annotation drawn directly on the page.</summary>
     internal const int AnnotFreeText = 3;
 
+    /// <summary>
+    /// A stamp for text annotations: only stamp and ink annotations accept appearance page
+    /// objects, and drawing the words ourselves is the only way to render any script.
+    /// </summary>
+    internal const int AnnotStamp = 13;
+
     /// <summary>Freehand ink annotation.</summary>
     internal const int AnnotInk = 15;
 

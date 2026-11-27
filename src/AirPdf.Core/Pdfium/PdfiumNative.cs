@@ -235,11 +235,21 @@ internal static partial class PdfiumNative
     /// <summary><c>FPDF_FONT_TRUETYPE</c>.</summary>
     internal const int FontTrueType = 2;
 
-    /// <summary><c>FPDF_ANNOT_IS_HIDDEN</c>: stored in the file, never drawn.</summary>
-    internal const int AnnotFlagHidden = 2;
+    /// <summary>
+    /// Appends a page object to the annotation's own appearance stream, so the drawing stays in
+    /// the annotation layer instead of becoming page content.
+    /// </summary>
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_AppendObject")]
+    internal static extern int AnnotAppendObject(IntPtr annot, IntPtr pageObject);
 
-    /// <summary><c>FPDF_PAGEOBJ_TEXT</c>.</summary>
-    internal const int PageObjText = 1;
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_GetObjectCount")]
+    internal static extern int AnnotGetObjectCount(IntPtr annot);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_RemoveObject")]
+    internal static extern void AnnotRemoveObject(IntPtr annot, int index);
+
+    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_IsObjectSupportedSubtype")]
+    internal static extern int AnnotIsObjectSupportedSubtype(int subtype);
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFText_LoadFont")]
     internal static extern IntPtr TextLoadFont(
@@ -273,39 +283,6 @@ internal static partial class PdfiumNative
         double e,
         double f);
 
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFPage_InsertObject")]
-    internal static extern void PageInsertObject(IntPtr page, IntPtr pageObject);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFPage_RemoveObject")]
-    internal static extern int PageRemoveObject(IntPtr page, IntPtr pageObject);
-
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFPageObj_Destroy")]
     internal static extern void PageObjDestroy(IntPtr pageObject);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFPage_GenerateContent")]
-    internal static extern int PageGenerateContent(IntPtr page);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFPage_CountObjects")]
-    internal static extern int PageCountObjects(IntPtr page);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFPage_GetObject")]
-    internal static extern IntPtr PageGetObject(IntPtr page, int index);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFPageObj_GetType")]
-    internal static extern int PageObjGetType(IntPtr pageObject);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFTextObj_GetText")]
-    internal static extern uint TextObjGetText(
-        IntPtr textObject,
-        IntPtr textPage,
-        IntPtr buffer,
-        uint length);
-
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFPageObj_GetBounds")]
-    internal static extern int PageObjGetBounds(
-        IntPtr pageObject,
-        out float left,
-        out float bottom,
-        out float right,
-        out float top);
 }
