@@ -23,27 +23,6 @@ semantic versioning once it reaches 1.0.
   across tab switches.
 - New markups are appended to an open Markup tab instead of rescanning the whole document;
   undo/redo only mark the list dirty for the next tab activation.
-- The page menu has an **Add text** item, and text is placed on the page instead of typed into a
-  dialog: the pointer becomes a T marker with a live preview of the box, a click opens an inline
-  editor at that spot, and the format bar above it sets the colour and the point size. The mode
-  is sticky, so the next click writes another piece until Esc leaves it; Esc places the text,
-  Enter starts a new line, and the bin discards a draft or deletes the annotation being edited.
-- Double-clicking a text annotation reopens the same editor over it. The wording, colour and size
-  can be changed in place, and each rewrite is a single undo step.
-- Text annotations carry their own colour and no longer paint a white box behind themselves, and
-  "Add text" is disabled on a rotated page, where free text would render a quarter turn away from
-  the page text.
-- Text annotations draw their own appearance: the words are written into the annotation as page
-  objects with an embedded font. PDFium's generated appearance only knows the standard Latin
-  fonts, so Chinese came out as an empty frame, and it always painted a border of its own. The
-  annotation is a stamp underneath, which is the only subtype PDFium lets appearance objects be
-  attached to; it stays an annotation, so it is listed, re-editable and removable like the rest
-  of the markup, and nothing is written into the page content.
-- The toolbar has a text button next to the pen, drawn with the same serif T as the placement
-  marker, so the mode can be entered without the page menu. It stays lit while text mode is on.
-- A new piece of text starts in a colour that can be read on the page under the click: white over
-  a dark area, black over a light one. Picking a colour in the format bar overrides it for the
-  rest of that session.
 
 ### Fixed
 
@@ -63,11 +42,15 @@ semantic versioning once it reaches 1.0.
 - A failure while confirming or releasing documents on close no longer escapes the window's
   `async void` close handler. The window stays open with the unsaved markup intact, the failure
   is logged, and the reader is told why the window did not close.
-- A text prompt that fails while adding a note or a text annotation is reported through the
-  normal error path instead of propagating out of the menu item's `async void` handler.
-- The inline text editor no longer looks like a bordered input box. The Fluent template paints a
-  focused background and a 2px accent ring on its own border element, which the editor now
-  overrides, so only the words and the caret sit on the page.
+- A text prompt that fails while adding a note is reported through the normal error path instead
+  of propagating out of the menu item's `async void` handler.
+
+### Changed
+
+- The text annotation tool is built but not offered yet: its toolbar button and the page menu's
+  **Add text** item are hidden while its placement behaviour is reworked. The command, the inline
+  editor, the annotation rendering and their tests stay in place, so bringing it back is a matter
+  of showing the two entry points again.
 
 ## [0.9.0] - 2026-11-14
 

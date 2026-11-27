@@ -415,12 +415,16 @@
             <Path Classes="icon" Data="{StaticResource IconEraser}" />
           </Button>
           <!-- Text mode sits next to the pen: both are sticky markup modes, and the button stays
-               lit while the mode is on. The glyph is the same serif T the placement ghost shows. -->
+               lit while the mode is on. The glyph is the same serif T the placement ghost shows.
+
+               Hidden for now (0.10). The mode works, but its placement behaviour still needs
+               rework before it ships; the command and the whole interaction stay wired so this
+               is a matter of showing the button again. -->
           <Button x:Name="TextToolButton"
                   Classes="icon"
                   Classes.active="{Binding IsTextMode}"
                   Click="OnAddTextClick"
-                  IsVisible="{Binding IsDocumentOpen}"
+                  IsVisible="False"
                   AutomationProperties.Name="{DynamicResource L.AddText}"
                   ToolTip.Tip="{DynamicResource L.AddText}">
             <TextBlock Text="T"
@@ -929,8 +933,10 @@
               <MenuItem Header="{DynamicResource L.AddNote}"
                         Click="OnAddNoteClick"
                         IsEnabled="{Binding IsDocumentOpen}" />
+              <!-- Hidden with the toolbar button: see the note there. -->
               <MenuItem Header="{DynamicResource L.AddText}"
                         Click="OnAddTextClick"
+                        IsVisible="False"
                         IsEnabled="{Binding CanAddTextHere}" />
               <MenuItem Header="{DynamicResource L.AddBookmark}"
                         Command="{Binding AddBookmarkCommand}"

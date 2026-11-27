@@ -449,9 +449,40 @@ public sealed class EndToEndTests : IDisposable
     }
 
     /// <summary>
+    /// The text tool's entry points are hidden until its placement behaviour is reworked, and
+    /// this fails on purpose when they come back: re-enabling it should be a deliberate change.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task TextModeEntryPoints_AreHidden()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 0);
+
+        var toolbarButton = _window.FindControl<Button>("TextToolButton");
+        Assert.NotNull(toolbarButton);
+        Assert.False(toolbarButton!.IsVisible);
+
+        var pageList = _window.FindControl<PdfPageList>("PagesList");
+        Assert.NotNull(pageList);
+        var menu = pageList!.ContextMenu;
+        Assert.NotNull(menu);
+
+        // The headers are DynamicResources, so they only resolve once the menu is opened.
+        menu!.Open(pageList);
+        Dispatcher.UIThread.RunJobs();
+
+        var addText = menu.Items.OfType<MenuItem>()
+            .FirstOrDefault(item => Equals(item.Header, _services.Localization.T("L.AddText")));
+        Assert.NotNull(addText);
+        Assert.False(addText!.IsVisible);
+        menu.Close();
+    }
+
+    /// <summary>
     /// The whole placement path through the real window: the page menu arms text mode, a click on
     /// the page opens the inline editor there, and Escape writes the annotation. The mode is
-    /// sticky, so it stays armed afterwards.
+    /// sticky, so it stays armed afterwards. The menu item is hidden for now, but the interaction
+    /// behind it is kept working for when it returns.
     /// </summary>
     [AvaloniaFact]
     public async Task PageMenuAddText_PlacesTextWhereThePageIsClicked()
