@@ -11,7 +11,6 @@ components that are distributed with, or required by, the application.
 | Avalonia.Fonts.Inter | MIT | https://github.com/AvaloniaUI/Avalonia |
 | CommunityToolkit.Mvvm | MIT | https://github.com/CommunityToolkit/dotnet |
 | PDFtoImage | MIT | https://github.com/sungaila/PDFtoImage |
-| PdfPig | Apache-2.0 | https://github.com/UglyToad/PdfPig |
 | PDFium | BSD-3-Clause | https://pdfium.googlesource.com/pdfium/ |
 | SkiaSharp | MIT | https://github.com/mono/SkiaSharp |
 | Velopack | MIT | https://github.com/velopack/velopack |
@@ -76,12 +75,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
-
-## Apache License 2.0 (PdfPig)
-
-PdfPig is licensed under the Apache License, Version 2.0. The full license is
-available at https://www.apache.org/licenses/LICENSE-2.0. PdfPig's NOTICE and
-attribution information is available in its upstream repository.
 
 ## SIL Open Font License 1.1 (Inter)
 

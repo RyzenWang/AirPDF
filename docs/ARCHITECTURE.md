@@ -17,13 +17,18 @@ front end.
 - Reads page count and page sizes from PDFium directly (see `AirPdf.Core/Pdfium`). The
   bindings are plain C ABI; the native library is the one PDFtoImage already ships for every
   target, so the platform matrix is unchanged.
-- Reads metadata and the outline through PdfPig.
-- Does **not** read page rotation. Doing so requires parsing every page dictionary, which
-  dominated open time on long documents (measured at 45.1 s of a 54.7 s open on a
-  9,277-page file, and 18.5 s of 24.6 s on a 4,215-page one) while nothing consumed the
-  value. The services that need it read it per page, for the pages they actually touch.
-- Serializes all PDFium rendering behind a static `SemaphoreSlim`, because
-  PDFium is not thread-safe.
+- Reads metadata and the outline from PDFium (`FPDF_GetMetaText`, `FPDFBookmark_*`), only when
+  the reader first opens the contents or document-information panel. PdfPig used to do this and
+  is no longer a dependency.
+- Does **not** read page rotation for every page when the document opens. Doing so requires
+  parsing every page dictionary, which dominated open time on long documents (measured at
+  45.1 s of a 54.7 s open on a 9,277-page file, and 18.5 s of 24.6 s on a 4,215-page one).
+  The services that need it — links, search highlights, selection-to-annotation mapping — read
+  it per page, for the pages they actually touch.
+- Serializes every PDFium call behind one process-wide gate (`PdfNativeGate`), because PDFium
+  is not thread-safe. The gate is priority-aware: when the current owner releases it, an
+  interactive page render is handed the gate before queued text extraction, link loading, or
+  search work, so a long scan yields between pages instead of blocking a visible page.
 - Maps native and parsing failures to `PdfDocumentException` with a stable
   `PdfFailure` value.
 
@@ -34,8 +39,9 @@ front end.
 - Returns snippets and word rectangles normalized to the page (`0..1`, origin
   top-left).
 - Caps results at 250 to keep the UI responsive on pathological documents.
-- Leaves highlight rectangles empty for rotated pages, where the coordinate
-  transform is not yet implemented.
+- Rotated pages are searchable like any other. PDFium reports character boxes in the page's own
+  unrotated space, so only the boxes are mapped through `PageGeometry`; the token order is
+  already the reading order.
 
 `SettingsService`
 
@@ -102,9 +108,9 @@ payload — `bblanchon.PDFium.*` and the SkiaSharp native assets for every publi
 
 PDFium has no managed, cross-platform Avalonia integration that is both free
 and maintained for this use case. Rasterizing pages into a virtualized list is
-simple, predictable, and fast enough for reading. The trade-off is that text
-selection and accessible text extraction from the visual layer are not
-available yet; search and selection use the separate PDFium text layer.
+simple, predictable, and fast enough for reading. The cost is that the visual layer carries no
+text: selection and search run on a separate PDFium text layer (see *Text selection*), and UI
+Automation cannot read the bitmap the way it would read a text control (see *Accessibility*).
 
 ### Render sizing
 
@@ -113,12 +119,15 @@ available yet; search and selection use the separate PDFium text layer.
   by width (2400 px) and area (7 MP).
 - This keeps text crisp at 100–200% and prevents a single zoomed page from
   exhausting memory.
-- The page bitmap cache is trimmed to ±4 pages around the current page.
+- Page bitmaps are trimmed once a page is more than 6 pages from the current one, and then
+  farthest-first until the working set is under a 128 MB budget. The current page and its
+  immediate neighbours are always kept, even if they alone exceed it.
+- Thumbnails and parsed text layers use a tighter radius of 4 pages.
 
 ### Threading
 
 - PDF calls run on the thread pool through `Task.Run`.
-- One process-wide semaphore serializes PDFium calls.
+- One process-wide, priority-aware gate serializes PDFium calls.
 - Bitmap conversion happens on the UI thread after the native render completes.
 - Text-layer extraction runs on the thread pool; page callbacks are marshaled to
   the UI thread before touching view models.
@@ -152,10 +161,9 @@ Setting `AIRPDF_PROBE=1` turns on the render diagnostic: every document open app
 `%TEMP%\airpdf-render-probe.txt` with the page size, whether each page is active, whether it has a
 bitmap, and the viewer extent; `Ctrl+Shift+D` appends one on demand. It is the fastest way to tell
 "never activated" from "rendered blank" in a report from a machine you cannot look at.
-One genuine inefficiency survived the investigation even though it is not worth a change on
-its own: every visible thumbnail and page placeholder carries an `IsIndeterminate="True"`
-`ProgressBar`, so each visible item runs its own animation clock. It is a candidate to replace
-with a static indicator if a low-end machine ever shows idle cost.
+The page and thumbnail placeholders used to carry an always-running indeterminate `ProgressBar`,
+so every visible item ran its own animation clock. The bars are now bound to `IsRendering`, and a
+placeholder that is not rendering hides its bar, so an idle window has no animation left to run.
 ## Navigation
 
 Vertical page positions are deterministic: a 24 px top padding, a 28 px gap, and
@@ -186,37 +194,6 @@ the document maximized would otherwise keep a zoom that no longer fits.
 `ApplyInitialZoom` resolves the mode once the viewport is known; older settings
 files have no mode and fall back to fit-width.
 
-### Idle cost, and how it was measured
-
-The window is idle when nothing is being read: no layout passes, no scroll events, no page
-renders. That was checked rather than assumed, with a counter per second and a CPU sample:
-
-```powershell
-$p = Start-Process .\AirPdf.exe -ArgumentList 'sample.pdf' -PassThru
-Start-Sleep -Seconds 12
-$t = $p.TotalProcessorTime
-Start-Sleep -Seconds 8
-$p.Refresh()
-100 * ($p.TotalProcessorTime - $t).TotalSeconds / 8
-```
-
-**Measure this on hardware with a GPU.** The first run of this exercise reported 78-96% of one
-core with a document open and concluded there was a rendering defect. It was measured on a
-VMware VM with "Microsoft Basic Display Adapter", where every frame is composited in software;
-minimising the window dropped it to 0.3%, which located the cost in presentation rather than in
-application code. On real hardware the same build idles in the low single digits, and the
-earlier reading was an artefact of the environment. Forcing a different composition mode in
-`Win32PlatformOptions` did not help there either (DirectComposition 67%, RedirectionSurface
-115%, LowLatencyDxgiSwapChain 121%), which is another sign the cost was the software adapter.
-
-Setting `AIRPDF_PROBE=1` turns on the render diagnostic: every document open appends a block to
-`%TEMP%\airpdf-render-probe.txt` with the page size, whether each page is active, whether it has a
-bitmap, and the viewer extent; `Ctrl+Shift+D` appends one on demand. It is the fastest way to tell
-"never activated" from "rendered blank" in a report from a machine you cannot look at.
-One genuine inefficiency survived the investigation even though it is not worth a change on
-its own: every visible thumbnail and page placeholder carries an `IsIndeterminate="True"`
-`ProgressBar`, so each visible item runs its own animation clock. It is a candidate to replace
-with a static indicator if a low-end machine ever shows idle cost.
 ## Navigation history
 
 `MainWindowViewModel` keeps a bounded stack of `(page, offset)` points. Every
@@ -240,8 +217,10 @@ instead of beginning a drag. Only `http`, `https` and `mailto` targets are hande
 the shell: `Launch` and remote `GoTo` actions are ignored on purpose, so a document
 cannot start a program.
 
-Rotated pages report no links, for the same reason search highlights are skipped
-there — PDFium returns annotation bounds in unrotated page space.
+Rotated pages report links too. PDFium returns annotation bounds in the page's unrotated space,
+so `GetLinks` reads the page box and `/Rotate`, maps each rectangle through `PageGeometry`, and
+normalizes it exactly like a search rectangle. The rotated-page tests check each quarter turn
+against pixels rather than trusted arithmetic.
 
 ## Text selection
 
@@ -265,10 +244,11 @@ character, so it is unaffected either way.
 
 ## Annotations and saving
 
-The reader is a reader: the file the user opened is never written to. Annotations are added to
-the resident PDFium document in memory, and the only way they leave the process is
-**Save a copy**, which writes a new file through `FPDF_SaveAsCopy`. The test for this hashes the
-original before and after.
+Annotations are added to the resident PDFium document in memory and leave it by one of two
+routes: **Save** (`Ctrl+S`) writes them back into the file the reader opened, and **Save a copy**
+(`Ctrl+Shift+S`) writes a new file through `FPDF_SaveAsCopy` instead. Until either runs,
+`HasUnsavedAnnotations` marks the title and closing asks first. The test for the copy route
+hashes the original before and after.
 
 Two things make this less trivial than it sounds:
 
@@ -405,7 +385,8 @@ Four layers, and a defect is usually caught by the lowest one that can see it:
 
 The end-to-end tests are the newest layer precisely because the other three all missed the
 defects they were supposed to catch: a bookmark jump that left the page blank, a tab switch that
-crashed, and a scroll-triggered stack overflow were each invisible to 131 unit tests.
+crashed, and a scroll-triggered stack overflow were each invisible to the unit tests that existed
+at the time. The suite is 297 tests today.
 
 Two rules make them reliable in a headless process:
 

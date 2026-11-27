@@ -39,12 +39,13 @@ small enough to commit.
 - Put parsing, rendering, and file operations in the core; put only presentation
   state in view models.
 - Long-running work must be cancellable and must not block the UI thread.
-- Do not call PDFium concurrently. Use `PdfDocumentService` rather than calling
-  PDFtoImage directly.
+- Do not call PDFium concurrently. Take the render gate through
+  `PdfDocumentService` rather than binding `FPDF_*` yourself.
 - Prefer source-generated MVVM properties and commands over hand-written
   `INotifyPropertyChanged` boilerplate.
-- Keep user-facing text in one place when localization lands. For now, English
-  is the source language.
+- Every user-facing string goes in the `LocalizationService` catalog with both an
+  English and a Simplified Chinese entry. XAML reads it with a `DynamicResource`
+  key; code reads it with `T` or `Format`. English is the source language.
 - Use four spaces in C# and two in XAML, JSON, and YAML (see `.editorconfig`).
 
 ## Tests

@@ -349,7 +349,7 @@ src/
   AirPdf.App/           Avalonia desktop application
 tests/
   AirPdf.Core.Tests/    Open, render, search, and failure tests
-  AirPdf.App.Tests/     Headless view-model and page-layout tests
+  AirPdf.App.Tests/     Headless view-model, XAML, and end-to-end tests
   Assets/               Reproducible sample PDF and its HTML source
 docs/                   Screenshots and architecture notes
 ```
@@ -373,7 +373,7 @@ docs/                   Screenshots and architecture notes
 ## Roadmap
 
 - [x] PDF hyperlinks and internal link navigation
-- [ ] Native printing and "Save a copy"
+- [ ] Native printing
 - [x] Per-document bookmarks
 - [x] Rotated pages (links, search highlights, text selection)
 - [x] Highlight, underline, strikethrough, and squiggly annotations, saved with "Save a copy"
