@@ -132,6 +132,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>Markup per page, filled on demand and dropped whenever an edit lands.</summary>
     private readonly Dictionary<int, IReadOnlyList<PdfMarkup>> _markupCache = [];
 
+    /// <summary>
+    /// Bumped whenever the markup cache is dropped. A read that was already in flight when an
+    /// edit landed must not put its pre-edit result back into the cache the edit just cleared.
+    /// </summary>
+    private int _markupCacheVersion;
+
     /// <summary>Page rotation per page; the hit test needs it and it does not change.</summary>
     private readonly Dictionary<int, int> _rotationCache = [];
 
@@ -1021,6 +1027,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             // One resident-session pass, instead of one worker handoff and gate acquisition
             // per page. The result also warms the markup cache used by hit-testing. Batches
             // arrive while the scan runs, so a 9,000-page document fills the list progressively.
+            var markupVersion = _markupCacheVersion;
             var markups = await _documentService.GetAllMarkupAsync(
                 FilePath,
                 progress,
@@ -1028,9 +1035,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             completed = true;
             cancellation.Token.ThrowIfCancellationRequested();
 
-            foreach (var pageGroup in markups.GroupBy(markup => markup.PageNumber))
+            // Only warm the cache if no edit landed during the scan: a stale batch would
+            // otherwise resurrect markup that was just removed.
+            if (markupVersion == _markupCacheVersion)
             {
-                _markupCache[pageGroup.Key] = pageGroup.ToList();
+                foreach (var pageGroup in markups.GroupBy(markup => markup.PageNumber))
+                {
+                    _markupCache[pageGroup.Key] = pageGroup.ToList();
+                }
             }
 
             if (version != _annotationsVersion ||
@@ -1596,7 +1608,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public string? NoteUnderPointer => _noteUnderPointer;
 
     /// <summary>Drops the cached markup after an edit.</summary>
-    private void InvalidateMarkupCache() => _markupCache.Clear();
+    private void InvalidateMarkupCache()
+    {
+        _markupCache.Clear();
+        _markupCacheVersion++;
+    }
 
     private async Task<int> GetRotationAsync(int pageNumber)
     {
@@ -1617,8 +1633,16 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return cached;
         }
 
+        // An edit can land while this read is in flight. Writing the pre-edit result back would
+        // re-seed the cache the edit just cleared, and the next hit test would target an
+        // annotation that is no longer there.
+        var version = _markupCacheVersion;
         var markup = await _documentService.GetMarkupAsync(FilePath, pageNumber);
-        _markupCache[pageNumber] = markup;
+        if (version == _markupCacheVersion)
+        {
+            _markupCache[pageNumber] = markup;
+        }
+
         return markup;
     }
 
@@ -1876,20 +1900,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return false;
         }
 
-        var title = _localization.T("L.AddNote");
-        var text = await _dialogs.PromptTextAsync(
-            title,
-            title,
-            _localization.T("L.NoteTextLabel"),
-            string.Empty);
-
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
         try
         {
+            // The prompt is inside the try because it is awaited from an async void click
+            // handler: a dialog that throws would otherwise end the process.
+            var title = _localization.T("L.AddNote");
+            var text = await _dialogs.PromptTextAsync(
+                title,
+                title,
+                _localization.T("L.NoteTextLabel"),
+                string.Empty);
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
             var rotation = await _documentService.GetPageRotationAsync(FilePath, pageNumber);
             var point = PageGeometry.ToPageQuad(
                 new PdfSearchRect(normalizedX, normalizedY, 0, 0),
@@ -1934,20 +1960,22 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             return false;
         }
 
-        var title = _localization.T("L.AddText");
-        var text = await _dialogs.PromptTextAsync(
-            title,
-            title,
-            _localization.T("L.TextContentLabel"),
-            string.Empty);
-
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
         try
         {
+            // The prompt is inside the try because it is awaited from an async void click
+            // handler: a dialog that throws would otherwise end the process.
+            var title = _localization.T("L.AddText");
+            var text = await _dialogs.PromptTextAsync(
+                title,
+                title,
+                _localization.T("L.TextContentLabel"),
+                string.Empty);
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
             var rotation = await _documentService.GetPageRotationAsync(FilePath, pageNumber);
             var displayWidth = rotation is 90 or 270 ? page.HeightPoints : page.WidthPoints;
             var displayHeight = rotation is 90 or 270 ? page.WidthPoints : page.HeightPoints;
@@ -3440,6 +3468,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         pageViewModel.SetTextLayout(page);
         _selection.OnTextLayerLoaded(page.PageNumber);
     }
+
+    /// <summary>Shows a catalog message in the error banner.</summary>
+    public void ReportError(string messageKey) => SetError(messageKey);
 
     public void SaveSettings() => _settingsService.Save(_settings);
 

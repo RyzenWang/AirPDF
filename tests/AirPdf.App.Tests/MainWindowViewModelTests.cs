@@ -712,6 +712,42 @@ public sealed class MainWindowViewModelTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// The text prompt is reached from an async void click handler, so a dialog that throws has
+    /// to be reported through the normal error path instead of escaping and ending the process.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task AddFreeTextAtAsync_WhenThePromptFails_ReportsAnError()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-freetext-fail-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var target = Path.Combine(directory, "freetext-fail.pdf");
+            File.Copy(SamplePath, target);
+
+            using var context = new TestContext();
+            await context.ViewModel.OpenPathAsync(target);
+            context.Dialog.PromptThrows = true;
+
+            Assert.False(await context.ViewModel.AddFreeTextAtAsync(1, 0.5, 0.5));
+            Assert.True(context.ViewModel.HasError);
+            Assert.False(context.ViewModel.HasUnsavedAnnotations);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // A failed cleanup must not hide the assertion that failed first.
+            }
+        }
+    }
+
     [AvaloniaFact]
     public async Task AddNoteAtAsync_AsksForTheTextAndStoresIt()
     {
@@ -1789,13 +1825,23 @@ public sealed class MainWindowViewModelTests : IDisposable
         /// <summary>Text the next prompt returns; null simulates the reader cancelling.</summary>
         public string? NextText { get; set; }
 
+        /// <summary>Makes the text prompt fail, as a dialog that cannot open would.</summary>
+        public bool PromptThrows { get; set; }
+
         /// <summary>Path the save picker returns; null simulates the reader cancelling.</summary>
         public string? NextSavePath { get; set; }
 
         public Task<string?> PickSavePathAsync(string suggestedName) => Task.FromResult(NextSavePath);
 
-        public Task<string?> PromptTextAsync(string title, string heading, string fieldLabel, string initialValue) =>
-            Task.FromResult(NextText);
+        public Task<string?> PromptTextAsync(string title, string heading, string fieldLabel, string initialValue)
+        {
+            if (PromptThrows)
+            {
+                throw new InvalidOperationException("The text prompt failed.");
+            }
+
+            return Task.FromResult(NextText);
+        }
 
         /// <summary>What the unsaved-changes prompt returns.</summary>
         public UnsavedChangesChoice NextUnsavedChoice { get; set; } = UnsavedChangesChoice.Cancel;

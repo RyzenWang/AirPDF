@@ -10,6 +10,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Xunit;
@@ -421,6 +422,86 @@ public sealed class EndToEndTests : IDisposable
         _window.KeyPressQwerty(PhysicalKey.N, RawInputModifiers.Control);
 
         Assert.Single(_windows.NewWindows);
+    }
+
+    [AvaloniaFact]
+    public async Task ClosingTheWindow_WhenThePromptFails_KeepsTheWindowOpen()
+    {
+        var document = await OpenSampleAsync();
+        await document.AddInkAtAsync(1, [(0.2, 0.5), (0.8, 0.5)]);
+        Assert.True(document.HasUnsavedAnnotations);
+
+        _dialogs.ConfirmThrows = true;
+        _window.Close();
+        await WaitAsync(() => document.HasError, 10_000);
+
+        // The prompt exists to protect unsaved markup, so a failure on that path must neither
+        // lose it nor end the process through the async void handler.
+        Assert.True(_window.IsVisible);
+        Assert.True(document.HasUnsavedAnnotations);
+        Assert.Equal(_services.Localization.T("L.ErrorCloseAborted"), document.ErrorMessage);
+
+        // Let the fixture's own dispose close the window for real.
+        _dialogs.ConfirmThrows = false;
+        _dialogs.NextUnsavedChoice = UnsavedChangesChoice.Discard;
+        _window.Close();
+        await WaitAsync(() => !_window.IsVisible, 10_000);
+    }
+
+    /// <summary>
+    /// "Add text" is the only way into the free-text annotation path, so this drives the page
+    /// menu a reader actually opens instead of the view-model method behind it. The view-model
+    /// method was implemented and tested while nothing in the window called it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task PageMenuAddText_WritesTheTypedTextAsAnAnnotation()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 1 && document.Pages[0].Image is not null);
+
+        var page = document.Pages[0];
+        PdfPageView? pageView = null;
+        await WaitAsync(() =>
+        {
+            pageView = _window.GetVisualDescendants().OfType<PdfPageView>()
+                .FirstOrDefault(view => ReferenceEquals(view.DataContext, page) && view.Bounds.Width > 1);
+            return pageView is not null;
+        });
+        Assert.NotNull(pageView);
+
+        var center = pageView!.TranslatePoint(
+            new Point(pageView.Bounds.Width / 2, pageView.Bounds.Height / 2),
+            _window);
+        Assert.NotNull(center);
+
+        // The right click is what records the page point the menu acts on.
+        _window.MouseDown(center!.Value, MouseButton.Right);
+        _window.MouseUp(center.Value, MouseButton.Right);
+        await Task.Delay(100);
+
+        var pageList = _window.FindControl<PdfPageList>("PagesList");
+        Assert.NotNull(pageList);
+        var menu = pageList!.ContextMenu;
+        Assert.NotNull(menu);
+        menu!.Open(pageList);
+        Dispatcher.UIThread.RunJobs();
+
+        var addText = menu.Items.OfType<MenuItem>()
+            .FirstOrDefault(item => Equals(item.Header, _services.Localization.T("L.AddText")));
+        Assert.NotNull(addText);
+
+        _dialogs.NextText = "Typed from the page menu";
+        addText!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, addText));
+
+        await WaitAsync(() => document.HasUnsavedAnnotations);
+        Assert.True(document.HasUnsavedAnnotations);
+
+        document.ShowAnnotationsTabCommand.Execute(null);
+        await WaitAsync(() => !document.IsLoadingAnnotations && document.Annotations.Count > 0, 10_000);
+        Assert.Contains(
+            document.Annotations,
+            annotation => annotation.Kind == AirPdf.Core.Models.PdfMarkupKind.FreeText &&
+                          annotation.Detail == "Typed from the page menu");
     }
 
     [AvaloniaFact]
@@ -1037,15 +1118,27 @@ public sealed class EndToEndTests : IDisposable
         public Task<string?> PickSavePathAsync(string suggestedName) => Task.FromResult<string?>(null);
 
         public Task<string?> PromptTextAsync(string title, string heading, string fieldLabel, string initialValue) =>
-            Task.FromResult<string?>(null);
+            Task.FromResult(NextText);
+
+        /// <summary>Text the next text prompt returns, or null to cancel it.</summary>
+        public string? NextText { get; set; }
 
         public UnsavedChangesChoice NextUnsavedChoice { get; set; } = UnsavedChangesChoice.Discard;
+
+        /// <summary>Makes the unsaved-changes prompt fail, as a broken dialog would.</summary>
+        public bool ConfirmThrows { get; set; }
 
         public int UnsavedPrompts { get; private set; }
 
         public Task<UnsavedChangesChoice> ConfirmUnsavedChangesAsync(string fileName)
         {
             UnsavedPrompts++;
+
+            if (ConfirmThrows)
+            {
+                throw new InvalidOperationException("The unsaved-changes prompt failed.");
+            }
+
             return Task.FromResult(NextUnsavedChoice);
         }
     }

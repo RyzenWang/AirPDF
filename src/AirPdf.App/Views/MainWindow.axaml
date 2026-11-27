@@ -912,6 +912,9 @@
               <MenuItem Header="{DynamicResource L.AddNote}"
                         Click="OnAddNoteClick"
                         IsEnabled="{Binding IsDocumentOpen}" />
+              <MenuItem Header="{DynamicResource L.AddText}"
+                        Click="OnAddTextClick"
+                        IsEnabled="{Binding IsDocumentOpen}" />
               <MenuItem Header="{DynamicResource L.AddBookmark}"
                         Command="{Binding AddBookmarkCommand}"
                         IsEnabled="{Binding IsDocumentOpen}" />

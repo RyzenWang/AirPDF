@@ -1548,8 +1548,10 @@ public partial class MainWindow : Window
         // the pre-jump reading position.
         if (TakePendingMarkupNavigation() is { } pendingMarkup)
         {
+            // ScrollToMarkup drops the jump by itself if the tab changes before it runs.
+            var markupTab = _viewModel;
             Dispatcher.UIThread.Post(
-                () => ScrollToMarkup(pendingMarkup),
+                () => ScrollToMarkup(pendingMarkup, markupTab),
                 DispatcherPriority.Loaded);
             return;
         }
@@ -1615,15 +1617,20 @@ public partial class MainWindow : Window
             {
                 if (ReferenceEquals(_viewModel, viewModel))
                 {
-                    ScrollToMarkup(point);
+                    ScrollToMarkup(point, viewModel);
                 }
             },
             DispatcherPriority.Loaded);
     }
 
-    private void ScrollToMarkup(MarkupNavigationPoint point, int attempt = 0)
+    private void ScrollToMarkup(MarkupNavigationPoint point, MainWindowViewModel tab, int attempt = 0)
     {
-        if (point.PageNumber < 1 || point.PageNumber > _viewModel.Pages.Count)
+        // The retry chains below outlive the click that started them. Every one of them re-checks
+        // the tab it was started for, so a jump queued against one document cannot scroll a
+        // different one to the same page number after a tab switch.
+        if (!ReferenceEquals(_viewModel, tab) ||
+            point.PageNumber < 1 ||
+            point.PageNumber > tab.Pages.Count)
         {
             return;
         }
@@ -1640,7 +1647,7 @@ public partial class MainWindow : Window
             if (attempt < 8)
             {
                 Dispatcher.UIThread.Post(
-                    () => ScrollToMarkup(point, attempt + 1),
+                    () => ScrollToMarkup(point, tab, attempt + 1),
                     DispatcherPriority.Background);
             }
 
@@ -1660,16 +1667,17 @@ public partial class MainWindow : Window
         var request = ++_markupScrollRequest;
         ApplyScrollOffset(target, point.PageNumber, center);
         DispatcherTimer.RunOnce(
-            () => AlignMarkupInViewport(point, request, attempt: 0),
+            () => AlignMarkupInViewport(point, tab, request, attempt: 0),
             TimeSpan.FromMilliseconds(60));
     }
 
     private void AlignMarkupInViewport(
         MarkupNavigationPoint point,
+        MainWindowViewModel tab,
         int request,
         int attempt)
     {
-        if (request != _markupScrollRequest)
+        if (request != _markupScrollRequest || !ReferenceEquals(_viewModel, tab))
         {
             return;
         }
@@ -1680,7 +1688,7 @@ public partial class MainWindow : Window
             if (attempt < 8)
             {
                 DispatcherTimer.RunOnce(
-                    () => AlignMarkupInViewport(point, request, attempt + 1),
+                    () => AlignMarkupInViewport(point, tab, request, attempt + 1),
                     TimeSpan.FromMilliseconds(60));
             }
 
@@ -1712,7 +1720,7 @@ public partial class MainWindow : Window
                 PagesList.ScrollToVerticalOffset(next);
 
                 DispatcherTimer.RunOnce(
-                    () => AlignMarkupInViewport(point, request, attempt + 1),
+                    () => AlignMarkupInViewport(point, tab, request, attempt + 1),
                     TimeSpan.FromMilliseconds(70));
             }
 
@@ -1755,7 +1763,7 @@ public partial class MainWindow : Window
                 _ => 900
             };
             DispatcherTimer.RunOnce(
-                () => AlignMarkupInViewport(point, request, attempt + 1),
+                () => AlignMarkupInViewport(point, tab, request, attempt + 1),
                 TimeSpan.FromMilliseconds(delay));
         }
     }
@@ -1962,40 +1970,14 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ScrollToPage(int pageNumber, bool center = true, int attempt = 0)
+    private void ScrollToPage(int pageNumber, bool center = true) =>
+        ScrollToPage(pageNumber, center, attempt: 0, _viewModel);
+
+    private void ScrollToPage(int pageNumber, bool center, int attempt, MainWindowViewModel tab)
     {
-        if (_viewModel.Pages.Count == 0)
-        {
-            return;
-        }
-
-        EnsurePageLayout();
-        var viewer = PagesList.Viewer;
-        if (viewer is null)
-        {
-            if (attempt < 2)
-            {
-                Dispatcher.UIThread.Post(() => ScrollToPage(pageNumber, center, attempt + 1), DispatcherPriority.Loaded);
-            }
-
-            return;
-        }
-
-        var targetPage = Math.Clamp(pageNumber, 1, _viewModel.Pages.Count);
-        var layoutPage = LayoutItemForPage(targetPage);
-        var top = _pageLayout.GetTop(layoutPage);
-        var pageHeight = _pageLayout.GetHeight(layoutPage);
-        var target = center
-            ? top - Math.Max(12, (viewer.Viewport.Height - pageHeight) / 2)
-            : top - 12;
-        var fraction = Math.Clamp((target - top) / Math.Max(1, pageHeight), 0, 1);
-
-        ApplyScrollOffset(target, targetPage, fraction);
-    }
-
-    private void ScrollToReadingPosition(int pageNumber, double fraction, int attempt = 0)
-    {
-        if (_viewModel.Pages.Count == 0)
+        // The retry below can outlive the click that asked for it. A page number means nothing
+        // in another document, so the chain stops as soon as the tab changes.
+        if (!ReferenceEquals(_viewModel, tab) || tab.Pages.Count == 0)
         {
             return;
         }
@@ -2007,14 +1989,50 @@ public partial class MainWindow : Window
             if (attempt < 2)
             {
                 Dispatcher.UIThread.Post(
-                    () => ScrollToReadingPosition(pageNumber, fraction, attempt + 1),
+                    () => ScrollToPage(pageNumber, center, attempt + 1, tab),
+                    DispatcherPriority.Loaded);
+            }
+
+            return;
+        }
+
+        var targetPage = Math.Clamp(pageNumber, 1, tab.Pages.Count);
+        var layoutPage = LayoutItemForPage(targetPage);
+        var top = _pageLayout.GetTop(layoutPage);
+        var pageHeight = _pageLayout.GetHeight(layoutPage);
+        var target = center
+            ? top - Math.Max(12, (viewer.Viewport.Height - pageHeight) / 2)
+            : top - 12;
+        var fraction = Math.Clamp((target - top) / Math.Max(1, pageHeight), 0, 1);
+
+        ApplyScrollOffset(target, targetPage, fraction);
+    }
+
+    private void ScrollToReadingPosition(int pageNumber, double fraction) =>
+        ScrollToReadingPosition(pageNumber, fraction, attempt: 0, _viewModel);
+
+    private void ScrollToReadingPosition(int pageNumber, double fraction, int attempt, MainWindowViewModel tab)
+    {
+        if (!ReferenceEquals(_viewModel, tab) || tab.Pages.Count == 0)
+        {
+            return;
+        }
+
+        EnsurePageLayout();
+        var viewer = PagesList.Viewer;
+        if (viewer is null)
+        {
+            if (attempt < 2)
+            {
+                Dispatcher.UIThread.Post(
+                    () => ScrollToReadingPosition(pageNumber, fraction, attempt + 1, tab),
                     DispatcherPriority.Background);
             }
 
             return;
         }
 
-        var pageNumberClamped = Math.Clamp(pageNumber, 1, _viewModel.Pages.Count);
+        var pageNumberClamped = Math.Clamp(pageNumber, 1, tab.Pages.Count);
         var layoutPage = LayoutItemForPage(pageNumberClamped);
         var top = _pageLayout.GetTop(layoutPage);
         var pageHeight = _pageLayout.GetHeight(layoutPage);
@@ -2027,7 +2045,7 @@ public partial class MainWindow : Window
         if (viewer.Extent.Height < target + 1 && attempt < 4)
         {
             Dispatcher.UIThread.Post(
-                () => ScrollToReadingPosition(pageNumber, fraction, attempt + 1),
+                () => ScrollToReadingPosition(pageNumber, fraction, attempt + 1, tab),
                 DispatcherPriority.Background);
             return;
         }
@@ -2489,8 +2507,11 @@ public partial class MainWindow : Window
         {
             began = await _viewModel.BeginTextSelectionAsync(pageNumber, x, y, clickCount);
         }
-        catch
+        catch (Exception unexpected)
         {
+            // The press could not be turned into a selection. Abandon the press, but say so in
+            // the log: a silent stop here looks exactly like a page with no text layer.
+            CrashLog.Write("BeginSelection", unexpected);
             return;
         }
         finally
@@ -2511,8 +2532,11 @@ public partial class MainWindow : Window
         {
             stillPressed = e.GetCurrentPoint(this).Properties.IsLeftButtonPressed;
         }
-        catch
+        catch (Exception unexpected)
         {
+            // Without the button state the drag cannot be started or trusted, so the press is
+            // abandoned; the log is what keeps it from looking like a dead page.
+            CrashLog.Write("SelectionPointerState", unexpected);
             return;
         }
 
@@ -3116,6 +3140,18 @@ public partial class MainWindow : Window
         _contextPoint = null;
     }
 
+    /// <summary>Adds a free-text annotation at the point the context menu was opened from.</summary>
+    private async void OnAddTextClick(object? sender, RoutedEventArgs e)
+    {
+        if (_contextPoint is not { } point)
+        {
+            return;
+        }
+
+        await _viewModel.AddFreeTextAtAsync(point.Page, point.X, point.Y);
+        _contextPoint = null;
+    }
+
     /// <summary>Shows the text of the note that was clicked.</summary>
     private void ShowNotePopup()
     {
@@ -3531,6 +3567,16 @@ public partial class MainWindow : Window
                     }
 
                     canClose = true;
+                }
+                catch (Exception unexpected)
+                {
+                    // Keep the window open. This is the path that discards the annotations the
+                    // prompt existed for, so a failure here must not continue the close. The
+                    // catch also matters because an exception escaping an async void handler
+                    // reaches the dispatcher and ends the process.
+                    CrashLog.Write("CloseWindow", unexpected);
+                    _viewModel.ReportError("L.ErrorCloseAborted");
+                    return;
                 }
                 finally
                 {

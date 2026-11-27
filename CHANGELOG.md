@@ -23,6 +23,10 @@ semantic versioning once it reaches 1.0.
   across tab switches.
 - New markups are appended to an open Markup tab instead of rescanning the whole document;
   undo/redo only mark the list dirty for the next tab activation.
+- The page menu has an **Add text** item: it asks for the text and writes a text annotation at
+  the point that was right-clicked, with the same undo, save, and Markup-tab behaviour as the
+  other annotations. The annotation could be written, undone, and listed before, but nothing in
+  the window could create one.
 
 ### Fixed
 
@@ -33,6 +37,17 @@ semantic versioning once it reaches 1.0.
   settles, so a 9,000-page document lands on the annotation instead of a neighbouring page.
 - Starting an edit during the Markup tab's background scan no longer cancels and restarts
   the scan or blocks rendering behind one long lock.
+- Switching tabs while a deferred page, reading-position, or markup jump is still retrying no
+  longer scrolls the newly selected document to the old document's page. The retry chains now
+  carry the tab they were started for and stop as soon as it is no longer the one on screen.
+- A markup read that finishes after an edit no longer writes its pre-edit result back into the
+  markup cache. That write re-seeded the cache the edit had just cleared, so the next
+  right-click or eraser hit test could target an annotation that was already gone.
+- A failure while confirming or releasing documents on close no longer escapes the window's
+  `async void` close handler. The window stays open with the unsaved markup intact, the failure
+  is logged, and the reader is told why the window did not close.
+- A text prompt that fails while adding a note or a text annotation is reported through the
+  normal error path instead of propagating out of the menu item's `async void` handler.
 
 ## [0.9.0] - 2026-11-14
 
