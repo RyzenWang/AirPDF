@@ -316,10 +316,18 @@ public sealed partial class PdfiumDocument
     }
 
     /// <summary>
-    /// Adds a free-text annotation. The bounds are in unrotated page space and the default
-    /// appearance is Helvetica at <paramref name="fontSize"/> points.
+    /// Adds a free-text annotation. The bounds are in unrotated page space, the default
+    /// appearance is Helvetica at <paramref name="fontSize"/> points, and the glyph colour is
+    /// written both into that appearance and into the font-colour slot.
     /// </summary>
-    public void AddFreeText(int pageNumber, PdfQuad bounds, string text, float fontSize)
+    public void AddFreeText(
+        int pageNumber,
+        PdfQuad bounds,
+        string text,
+        float fontSize,
+        byte red = 0,
+        byte green = 0,
+        byte blue = 0)
     {
         ThrowIfDisposed();
 
@@ -348,20 +356,12 @@ public sealed partial class PdfiumDocument
 
             PdfiumNative.AnnotSetRect(annot, ref rect);
             PdfiumNative.AnnotSetStringValue(annot, "Contents", text);
-            PdfiumNative.AnnotSetStringValue(
-                annot,
-                "DA",
-                $"/Helvetica {fontSize.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)} Tf 0 g");
-            PdfiumNative.AnnotSetStringValue(
-                annot,
-                FontSizeKey,
-                fontSize.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            WriteFreeTextAppearance(annot, fontSize, red, green, blue);
 
-            // Free text uses /C as its page background. Keep that white; the actual glyph
-            // colour is the separate font colour slot.
-            PdfiumNative.AnnotSetColor(annot, PdfiumNative.AnnotColorFill, 255, 255, 255, 255);
-            PdfiumNative.AnnotSetFontColor(annot, 0, 0, 0, 255);
-            PdfiumNative.AnnotSetStringValue(annot, ColourKey, "0,0,0");
+            // Deliberately no /C fill: the text sits straight on the page instead of on a white
+            // patch, which is what makes it read as writing rather than as a pasted box. The
+            // glyph colour is carried by /DA, which is where a FreeText annotation keeps it.
+            PdfiumNative.AnnotSetStringValue(annot, ColourKey, FormatColour(red, green, blue));
             PdfiumNative.AnnotSetBorder(annot, 0, 0, 0);
             PdfiumNative.AnnotSetFlags(annot, PdfiumNative.AnnotFlagPrint);
         }
@@ -375,6 +375,110 @@ public sealed partial class PdfiumDocument
             PdfiumNative.ClosePage(page);
         }
     }
+
+    /// <summary>
+    /// Rewrites a free-text annotation in place: its rectangle, text, size, and colour. The
+    /// annotation is found by the bounds and text the caller last read, the same match removal
+    /// uses, so an edit can never land on a different annotation.
+    /// </summary>
+    public bool UpdateFreeText(int pageNumber, PdfFreeText existing, PdfFreeText updated)
+    {
+        ThrowIfDisposed();
+
+        if (string.IsNullOrWhiteSpace(updated.Text) ||
+            updated.Bounds.Width <= 0 ||
+            updated.Bounds.Height <= 0)
+        {
+            return false;
+        }
+
+        var page = LoadPageOrThrow(pageNumber);
+        try
+        {
+            for (var index = PdfiumNative.PageGetAnnotCount(page) - 1; index >= 0; index--)
+            {
+                if (TryReadFreeText(pageNumber, index) is not { } current ||
+                    !SameFreeText(current, existing))
+                {
+                    continue;
+                }
+
+                var annot = PdfiumNative.PageGetAnnot(page, index);
+                if (annot == IntPtr.Zero)
+                {
+                    return false;
+                }
+
+                try
+                {
+                    var rect = new PdfiumNative.FsRectF
+                    {
+                        Left = (float)updated.Bounds.Left,
+                        Top = (float)updated.Bounds.Top,
+                        Right = (float)updated.Bounds.Right,
+                        Bottom = (float)updated.Bounds.Bottom
+                    };
+
+                    PdfiumNative.AnnotSetRect(annot, ref rect);
+                    PdfiumNative.AnnotSetStringValue(annot, "Contents", updated.Text);
+                    WriteFreeTextAppearance(
+                        annot,
+                        updated.FontSize,
+                        updated.Red,
+                        updated.Green,
+                        updated.Blue);
+                    PdfiumNative.AnnotSetStringValue(
+                        annot,
+                        ColourKey,
+                        FormatColour(updated.Red, updated.Green, updated.Blue));
+                    return true;
+                }
+                finally
+                {
+                    PdfiumNative.PageCloseAnnot(annot);
+                }
+            }
+
+            return false;
+        }
+        finally
+        {
+            PdfiumNative.ClosePage(page);
+        }
+    }
+
+    /// <summary>
+    /// Writes the /DA default appearance: a standard font, the size, and the glyph colour as
+    /// 0..1 channels. Only the PDF standard 14 fonts are reachable this way, which is why the
+    /// UI offers no font or weight picker.
+    /// </summary>
+    private static void WriteFreeTextAppearance(
+        IntPtr annot,
+        float fontSize,
+        byte red,
+        byte green,
+        byte blue)
+    {
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        var size = fontSize.ToString("0.##", culture);
+        var r = (red / 255d).ToString("0.###", culture);
+        var g = (green / 255d).ToString("0.###", culture);
+        var b = (blue / 255d).ToString("0.###", culture);
+
+        PdfiumNative.AnnotSetStringValue(
+            annot,
+            "DA",
+            string.Create(culture, $"/Helvetica {size} Tf {r} {g} {b} rg"));
+        PdfiumNative.AnnotSetStringValue(annot, FontSizeKey, size);
+    }
+
+    /// <summary>Two free-text annotations are the same one when text and bounds agree.</summary>
+    private static bool SameFreeText(PdfFreeText left, PdfFreeText right) =>
+        string.Equals(left.Text, right.Text, StringComparison.Ordinal) &&
+        Math.Abs(left.Bounds.Left - right.Bounds.Left) <= 0.5 &&
+        Math.Abs(left.Bounds.Top - right.Bounds.Top) <= 0.5 &&
+        Math.Abs(left.Bounds.Right - right.Bounds.Right) <= 0.5 &&
+        Math.Abs(left.Bounds.Bottom - right.Bounds.Bottom) <= 0.5;
 
     /// <summary>Reads a free-text annotation back, so it can be hit-tested and undone.</summary>
     public PdfFreeText? TryReadFreeText(int pageNumber, int index)
@@ -422,7 +526,14 @@ public sealed partial class PdfiumDocument
                     Math.Max(rect.Left, rect.Right),
                     Math.Min(rect.Top, rect.Bottom));
 
-                return new PdfFreeText(pageNumber, bounds, text, fontSize);
+                // The glyph colour lives in /DA, which PDFium does not expose as a property, so
+                // it is read back from the key this application writes. A free text made by
+                // another application falls back to black.
+                var (red, green, blue) = TryReadStoredColour(annot, out var storedRed, out var storedGreen, out var storedBlue)
+                    ? (storedRed, storedGreen, storedBlue)
+                    : ((byte)0, (byte)0, (byte)0);
+
+                return new PdfFreeText(pageNumber, bounds, text, fontSize, red, green, blue);
             }
             finally
             {
@@ -613,12 +724,7 @@ public sealed partial class PdfiumDocument
             for (var index = PdfiumNative.PageGetAnnotCount(page) - 1; index >= 0; index--)
             {
                 var existing = TryReadFreeText(pageNumber, index);
-                if (existing is null ||
-                    !string.Equals(existing.Text, freeText.Text, StringComparison.Ordinal) ||
-                    Math.Abs(existing.Bounds.Left - freeText.Bounds.Left) > 0.5 ||
-                    Math.Abs(existing.Bounds.Top - freeText.Bounds.Top) > 0.5 ||
-                    Math.Abs(existing.Bounds.Right - freeText.Bounds.Right) > 0.5 ||
-                    Math.Abs(existing.Bounds.Bottom - freeText.Bounds.Bottom) > 0.5)
+                if (existing is null || !SameFreeText(existing, freeText))
                 {
                     continue;
                 }

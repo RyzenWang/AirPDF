@@ -672,7 +672,7 @@ public sealed class MainWindowViewModelTests : IDisposable
     }
 
     [AvaloniaFact]
-    public async Task AddFreeTextAtAsync_AsksForTheTextAndStoresIt()
+    public async Task CommitTextAsync_WritesTheColourAndSizeAndKeepsTheModeOn()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"airpdf-freetext-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
@@ -684,9 +684,22 @@ public sealed class MainWindowViewModelTests : IDisposable
 
             using var context = new TestContext();
             await context.ViewModel.OpenPathAsync(target);
-            context.Dialog.NextText = "Free text annotation";
 
-            Assert.True(await context.ViewModel.AddFreeTextAtAsync(1, 0.5, 0.5));
+            Assert.True(await context.ViewModel.BeginTextModeAsync());
+            Assert.True(context.ViewModel.IsTextMode);
+
+            var red = context.ViewModel.Palette.Single(color => color.Name == "Red");
+            context.ViewModel.SetTextColor(red);
+            context.ViewModel.TextFontSize = 18;
+
+            Assert.True(await context.ViewModel.CommitTextAsync(
+                1,
+                "  Free text annotation  ",
+                new PdfSearchRect(0.25, 0.25, 0.3, 0.08)));
+
+            // The mode is sticky: committing leaves it on so the next click writes another one.
+            Assert.True(context.ViewModel.IsTextMode);
+            Assert.False(context.ViewModel.IsTextEditing);
             Assert.True(context.ViewModel.HasUnsavedAnnotations);
 
             await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
@@ -697,7 +710,10 @@ public sealed class MainWindowViewModelTests : IDisposable
             Assert.Equal("Free text annotation", freeText.Text);
             Assert.Equal(1, freeText.PageNumber);
             Assert.True(freeText.Bounds.Width > 0);
-            Assert.Equal(12f, freeText.FontSize);
+            Assert.Equal(18f, freeText.FontSize);
+            Assert.Equal(red.Red, freeText.Red);
+            Assert.Equal(red.Green, freeText.Green);
+            Assert.Equal(red.Blue, freeText.Blue);
         }
         finally
         {
@@ -713,26 +729,126 @@ public sealed class MainWindowViewModelTests : IDisposable
     }
 
     /// <summary>
-    /// The text prompt is reached from an async void click handler, so a dialog that throws has
-    /// to be reported through the normal error path instead of escaping and ending the process.
+    /// A re-edit rewrites the annotation in place: same identity, new text, size, and colour.
     /// </summary>
     [AvaloniaFact]
-    public async Task AddFreeTextAtAsync_WhenThePromptFails_ReportsAnError()
+    public async Task BeginReeditAsync_RewritesTheAnnotation()
     {
-        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-freetext-fail-{Guid.NewGuid():N}");
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-freetext-edit-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
 
         try
         {
-            var target = Path.Combine(directory, "freetext-fail.pdf");
+            var target = Path.Combine(directory, "freetext-edit.pdf");
             File.Copy(SamplePath, target);
 
             using var context = new TestContext();
             await context.ViewModel.OpenPathAsync(target);
-            context.Dialog.PromptThrows = true;
 
-            Assert.False(await context.ViewModel.AddFreeTextAtAsync(1, 0.5, 0.5));
-            Assert.True(context.ViewModel.HasError);
+            var display = new PdfSearchRect(0.2, 0.2, 0.4, 0.1);
+            Assert.True(await context.ViewModel.CommitTextAsync(1, "first", display));
+
+            // The annotation lives in the resident session until a save, which is what the
+            // view model reads back here.
+            var existing = Assert.Single(await context.ViewModel.GetFreeTextsAsync(1));
+            Assert.Equal("first", existing.Text);
+
+            Assert.True(await context.ViewModel.BeginReeditAsync(existing));
+            Assert.True(context.ViewModel.IsReediting);
+            Assert.True(context.ViewModel.IsTextEditing);
+            Assert.False(context.ViewModel.IsTextMode);
+
+            var blue = context.ViewModel.Palette.Single(color => color.Name == "Blue");
+            context.ViewModel.SetTextColor(blue);
+            context.ViewModel.TextFontSize = 20;
+
+            Assert.True(await context.ViewModel.CommitTextAsync(1, "second", display));
+            Assert.False(context.ViewModel.IsReediting);
+            Assert.False(context.ViewModel.IsTextEditing);
+            Assert.False(context.ViewModel.IsTextMode);
+
+            await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+
+            using var reread = new PdfDocumentService();
+            await reread.OpenAsync(target);
+            var updated = Assert.Single(await reread.GetFreeTextsAsync(target, 1));
+            Assert.Equal("second", updated.Text);
+            Assert.Equal(20f, updated.FontSize);
+            Assert.Equal(blue.Red, updated.Red);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // A failed cleanup must not hide the assertion that failed first.
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task DeleteReeditTargetAsync_RemovesTheAnnotation()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-freetext-del-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var target = Path.Combine(directory, "freetext-del.pdf");
+            File.Copy(SamplePath, target);
+
+            using var context = new TestContext();
+            await context.ViewModel.OpenPathAsync(target);
+
+            Assert.True(await context.ViewModel.CommitTextAsync(
+                1,
+                "delete me",
+                new PdfSearchRect(0.3, 0.3, 0.2, 0.08)));
+
+            var existing = Assert.Single(await context.ViewModel.GetFreeTextsAsync(1));
+            Assert.True(await context.ViewModel.BeginReeditAsync(existing));
+            Assert.True(await context.ViewModel.DeleteReeditTargetAsync());
+
+            await context.ViewModel.SaveDocumentCommand.ExecuteAsync(null);
+
+            using var probe = new PdfDocumentService();
+            await probe.OpenAsync(target);
+            Assert.Empty(await probe.GetFreeTextsAsync(target, 1));
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+            }
+            catch (IOException)
+            {
+                // A failed cleanup must not hide the assertion that failed first.
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task CommitTextAsync_WithOnlyWhitespace_WritesNothing()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), $"airpdf-freetext-empty-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+
+        try
+        {
+            var target = Path.Combine(directory, "freetext-empty.pdf");
+            File.Copy(SamplePath, target);
+
+            using var context = new TestContext();
+            await context.ViewModel.OpenPathAsync(target);
+
+            Assert.False(await context.ViewModel.CommitTextAsync(
+                1,
+                "   ",
+                new PdfSearchRect(0.3, 0.3, 0.2, 0.08)));
             Assert.False(context.ViewModel.HasUnsavedAnnotations);
         }
         finally

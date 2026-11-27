@@ -914,7 +914,7 @@
                         IsEnabled="{Binding IsDocumentOpen}" />
               <MenuItem Header="{DynamicResource L.AddText}"
                         Click="OnAddTextClick"
-                        IsEnabled="{Binding IsDocumentOpen}" />
+                        IsEnabled="{Binding CanAddTextHere}" />
               <MenuItem Header="{DynamicResource L.AddBookmark}"
                         Command="{Binding AddBookmarkCommand}"
                         IsEnabled="{Binding IsDocumentOpen}" />
@@ -1012,6 +1012,171 @@
             </Button>
           </StackPanel>
         </Border>
+
+        <!-- Text mode: the ghost that follows the pointer while placing, the inline editor that
+             appears where the reader clicks, and the format bar above it. The canvas itself
+             stays transparent to the pointer so only its children take input. -->
+        <Canvas x:Name="TextLayer"
+                IsVisible="{Binding IsTextOverlayVisible}"
+                ClipToBounds="True"
+                ZIndex="48">
+          <Rectangle x:Name="TextGhostBox"
+                     IsVisible="False"
+                     IsHitTestVisible="False"
+                     Stroke="{DynamicResource AccentBrush}"
+                     StrokeThickness="1"
+                     StrokeDashArray="3,3"
+                     Fill="#0DE3563B"
+                     RadiusX="2"
+                     RadiusY="2" />
+          <Rectangle x:Name="TextGhostCaret"
+                     IsVisible="False"
+                     IsHitTestVisible="False"
+                     Width="1.5"
+                     Fill="{DynamicResource AccentBrush}" />
+          <Border x:Name="TextGhostBadge"
+                  IsVisible="False"
+                  IsHitTestVisible="False"
+                  Width="18"
+                  Height="18"
+                  CornerRadius="4"
+                  Background="{DynamicResource AccentSoftBrush}"
+                  BorderBrush="{DynamicResource AccentBrush}"
+                  BorderThickness="1">
+            <TextBlock Text="T"
+                       FontFamily="Georgia, Segoe UI, serif"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource AccentBrush}"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center" />
+          </Border>
+
+          <TextBox x:Name="TextEditor"
+                   IsVisible="False"
+                   AcceptsReturn="True"
+                   TextWrapping="Wrap"
+                   Background="Transparent"
+                   BorderThickness="0"
+                   Padding="2"
+                   MinHeight="0"
+                   FontSize="{Binding TextFontSizePx}"
+                   Foreground="{Binding TextColor.Brush}"
+                   CaretBrush="{DynamicResource AccentBrush}"
+                   SelectionBrush="{DynamicResource AccentSoftBrush}"
+                   VerticalContentAlignment="Top"
+                   SizeChanged="OnTextEditorSizeChanged" />
+
+          <Border x:Name="TextFormatBar"
+                  Classes="markupToolbar"
+                  IsVisible="False">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <Button x:Name="TextColorButton"
+                      Classes="markupTool"
+                      Width="30"
+                      AutomationProperties.Name="{DynamicResource L.TextColourLabel}"
+                      ToolTip.Tip="{DynamicResource L.TextColourLabel}">
+                <Border Width="20"
+                        Height="20"
+                        CornerRadius="10"
+                        Background="{Binding TextColor.Brush}"
+                        BorderBrush="{DynamicResource BorderStrongBrush}"
+                        BorderThickness="1" />
+                <Button.Flyout>
+                  <Flyout Placement="Bottom" Opened="OnTextPaletteOpened">
+                    <ItemsControl ItemsSource="{Binding Palette}" Width="172">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <WrapPanel />
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:MarkupColor">
+                          <Button Classes="swatch"
+                                  Margin="0,0,6,6"
+                                  Background="{Binding Brush}"
+                                  Tag="{Binding}"
+                                  AutomationProperties.Name="{Binding Name}"
+                                  Click="OnTextSwatchClick">
+                            <Panel Width="12" Height="12">
+                              <Path Classes="swatchCheck"
+                                    Data="{StaticResource IconCheck}"
+                                    Stroke="White"
+                                    StrokeThickness="3.2"
+                                    StrokeLineCap="Round"
+                                    StrokeJoin="Round"
+                                    Stretch="Uniform"
+                                    IsHitTestVisible="False" />
+                              <Path Classes="swatchCheck"
+                                    Data="{StaticResource IconCheck}"
+                                    Stroke="#151515"
+                                    StrokeThickness="1.7"
+                                    StrokeLineCap="Round"
+                                    StrokeJoin="Round"
+                                    Stretch="Uniform"
+                                    IsHitTestVisible="False" />
+                            </Panel>
+                          </Button>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </Flyout>
+                </Button.Flyout>
+              </Button>
+              <Border Width="1" Height="20" Margin="3,0" Background="{DynamicResource BorderBrush}" />
+              <Button Classes="markupTool"
+                      Click="OnTextSizeDownClick"
+                      AutomationProperties.Name="{DynamicResource L.TextSizeLabel}"
+                      ToolTip.Tip="{DynamicResource L.TextSizeLabel}">
+                <TextBlock Text="A−" FontSize="12" />
+              </Button>
+              <Button Classes="markupTool"
+                      Width="42"
+                      Click="OnTextSizeCycleClick"
+                      AutomationProperties.Name="{DynamicResource L.TextSizeLabel}"
+                      ToolTip.Tip="{DynamicResource L.TextSizeLabel}">
+                <TextBlock Text="{Binding TextFontSize, StringFormat={}{0:0}}"
+                           FontSize="12"
+                           FontWeight="SemiBold" />
+              </Button>
+              <Button Classes="markupTool"
+                      Click="OnTextSizeUpClick"
+                      AutomationProperties.Name="{DynamicResource L.TextSizeLabel}"
+                      ToolTip.Tip="{DynamicResource L.TextSizeLabel}">
+                <TextBlock Text="A+" FontSize="12" />
+              </Button>
+              <Border Width="1" Height="20" Margin="3,0" Background="{DynamicResource BorderBrush}" />
+              <Button Classes="markupTool"
+                      Click="OnTextCommitClick"
+                      AutomationProperties.Name="{DynamicResource L.TextConfirm}"
+                      ToolTip.Tip="{DynamicResource L.TextConfirm}">
+                <Path Data="{StaticResource IconCheck}"
+                      Width="14"
+                      Height="14"
+                      Stretch="Uniform"
+                      Stroke="{DynamicResource AccentBrush}"
+                      StrokeThickness="2.2"
+                      StrokeLineCap="Round"
+                      StrokeJoin="Round"
+                      IsHitTestVisible="False" />
+              </Button>
+              <Button Classes="markupTool"
+                      Click="OnTextDeleteClick"
+                      AutomationProperties.Name="{DynamicResource L.TextRemoveAnnotation}"
+                      ToolTip.Tip="{DynamicResource L.TextRemoveAnnotation}">
+                <Path Data="{StaticResource IconTrash}"
+                      Width="15"
+                      Height="15"
+                      Stretch="Uniform"
+                      Stroke="{DynamicResource DangerBrush}"
+                      StrokeThickness="1.7"
+                      StrokeLineCap="Round"
+                      StrokeJoin="Round"
+                      IsHitTestVisible="False" />
+              </Button>
+            </StackPanel>
+          </Border>
+        </Canvas>
 
         <!-- Welcome -->
         <ScrollViewer IsVisible="{Binding IsWelcomeVisible}"
@@ -1567,6 +1732,26 @@
                     ToolTip.Tip="{DynamicResource L.Copy}" />
           </StackPanel>
           <Border Width="1" Height="12" Background="{DynamicResource BorderBrush}" IsVisible="{Binding HasSelection}" />
+          <!-- Text mode is sticky, so the reader needs a standing reminder that it is still on. -->
+          <Border IsVisible="{Binding IsTextMode}"
+                  Background="{DynamicResource AccentSoftBrush}"
+                  CornerRadius="6"
+                  Padding="7,2"
+                  AutomationProperties.Name="{DynamicResource L.TextModeChip}">
+            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+              <TextBlock Text="T"
+                         FontFamily="Georgia, Segoe UI, serif"
+                         FontSize="11"
+                         FontWeight="Bold"
+                         Foreground="{DynamicResource AccentBrush}"
+                         VerticalAlignment="Center" />
+              <TextBlock Text="{DynamicResource L.TextModeChip}"
+                         FontSize="10.5"
+                         FontWeight="SemiBold"
+                         Foreground="{DynamicResource AccentTextBrush}"
+                         VerticalAlignment="Center" />
+            </StackPanel>
+          </Border>
           <TextBlock Text="{Binding PageStatusText}"
                      Classes="caption"
                      FontSize="11"

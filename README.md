@@ -96,7 +96,11 @@ share the top row. macOS and Linux keep their native window frame and the tab ba
   Turn on drawing with `Ctrl+Shift+K` or the pen button and write on the page; the arrow beside
   the pen opens the ink colours and the thickness slider, which previews the stroke it will
   draw. Sticky notes come from the page menu, and a text markup can be removed from it too;
-  **Add text** in the same menu writes a text annotation at the point that was right-clicked.
+  **Add text** places a text annotation instead of opening a dialog: the pointer carries a T
+  marker with a preview of the box, a click opens an inline editor there, and the bar above it
+  sets the colour and size. The mode stays on for the next piece until `Esc` leaves it, `Esc`
+  places the text, `Enter` starts a new line, and double-clicking a placed text annotation
+  reopens the editor over it.
   The sidebar's **Markup** tab lists every annotation by page and jumps to it when clicked.
   Every markup change can be undone and redone, from the toolbar or with `Ctrl+Z` and `Ctrl+Y`
   (the last 100 steps are kept), and `Ctrl+S` writes them into the document itself.

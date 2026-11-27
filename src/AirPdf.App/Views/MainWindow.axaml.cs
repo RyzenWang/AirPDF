@@ -233,7 +233,11 @@ public partial class MainWindow : Window
         if (_viewModel is not null)
         {
             CaptureScrollOffset();
+            _viewModel.AbandonTextMode();
             UnhookViewModel(_viewModel);
+
+            // The editor belongs to the tab that opened it, so it never survives a switch.
+            CloseTextEditor(discard: true);
         }
 
         // Freeze scroll sync across the swap. Rebuilding the list for another document emits
@@ -355,6 +359,14 @@ public partial class MainWindow : Window
             // forever on a very long document when the toolbar's margin changes the layout.
             DispatcherTimer.RunOnce(PositionSelectionToolbar, TimeSpan.FromMilliseconds(80));
             DispatcherTimer.RunOnce(PositionSelectionToolbar, TimeSpan.FromMilliseconds(240));
+        }
+        else if (e.PropertyName == nameof(MainWindowViewModel.IsTextOverlayVisible) &&
+                 !_viewModel.IsTextOverlayVisible)
+        {
+            // The view model can leave text mode on its own (a closing document, a tab switch),
+            // and the editor must not outlive the overlay it lives in.
+            HideTextEditorChrome();
+            HideTextGhost();
         }
     }
 
@@ -2400,6 +2412,16 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Text mode owns the press: left places text or commits the open editor, right leaves
+        // the mode and opens the menu as usual.
+        if (_viewModel.IsTextMode)
+        {
+            if (HandleTextModePress(e))
+            {
+                return;
+            }
+        }
+
         // A right click records where the context menu was opened, so "Remove highlight" knows
         // which highlight the reader meant. The menu itself opens as usual.
         if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
@@ -2412,6 +2434,21 @@ public partial class MainWindow : Window
             !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             return;
+        }
+
+        // A double click on an existing text annotation reopens the editor over it. Anything
+        // else keeps the normal word selection, so this never consumes the press.
+        if (e.ClickCount >= 2)
+        {
+            var doubleClickView = FindPageView(e.Source) ?? FindPageViewAt(e.GetPosition(this));
+            if (doubleClickView?.DataContext is PageViewModel doubleClickPage)
+            {
+                var local = e.GetPosition(doubleClickView);
+                if (new Rect(doubleClickView.Bounds.Size).Contains(local))
+                {
+                    _ = TryBeginReeditAsync(doubleClickView, local);
+                }
+            }
         }
 
         if (_viewModel.IsEraserMode && IsInsidePageList(e.Source))
@@ -2589,6 +2626,11 @@ public partial class MainWindow : Window
     {
         UpdateReadingChromeFromPointer(e);
         UpdateToolCursor(e);
+
+        if (_viewModel.IsTextMode)
+        {
+            UpdateTextGhost(e);
+        }
 
         if (_erasing is { } erasing)
         {
@@ -3140,16 +3182,457 @@ public partial class MainWindow : Window
         _contextPoint = null;
     }
 
-    /// <summary>Adds a free-text annotation at the point the context menu was opened from.</summary>
+    // -------------------------------------------------------------------------------------
+    // Text mode
+    //
+    // The mode is sticky: a commit leaves it on, so the next click starts another piece of
+    // text, and only Esc leaves it. The ghost is drawn in the overlay rather than as a custom
+    // cursor so it can preview the box as well as the insertion point.
+    // -------------------------------------------------------------------------------------
+
+    private static readonly double[] TextSizePresets = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48];
+    private static readonly Cursor HiddenCursor = new(StandardCursorType.None);
+
+    private PdfPageView? _textEditorPage;
+
+    /// <summary>Menu item: toggles the sticky text mode.</summary>
     private async void OnAddTextClick(object? sender, RoutedEventArgs e)
     {
-        if (_contextPoint is not { } point)
+        _contextPoint = null;
+
+        if (_viewModel.IsTextMode)
+        {
+            CloseTextEditor(discard: true);
+            _viewModel.ExitTextMode();
+            return;
+        }
+
+        if (await _viewModel.BeginTextModeAsync())
+        {
+            CloseTextEditor(discard: true);
+            UpdateTextCursor(overPage: false);
+        }
+    }
+
+    private void UpdateTextGhost(PointerEventArgs e)
+    {
+        if (!_viewModel.IsTextMode || TextEditor.IsVisible)
+        {
+            HideTextGhost();
+            return;
+        }
+
+        var pageView = FindPageView(e.Source) ?? FindPageViewAt(e.GetPosition(this));
+        if (pageView?.DataContext is not PageViewModel ||
+            pageView.TranslatePoint(new Point(0, 0), TextLayer) is not { } origin)
+        {
+            HideTextGhost();
+            return;
+        }
+
+        var point = e.GetPosition(pageView);
+        if (!new Rect(pageView.Bounds.Size).Contains(point))
+        {
+            HideTextGhost();
+            return;
+        }
+
+        var line = Math.Max(8, _viewModel.TextFontSizePx * 1.25);
+        var minWidth = 60 * (96.0 / 72.0) * _viewModel.Zoom;
+        var boxWidth = Math.Max(4, Math.Min(minWidth, pageView.Bounds.Width - point.X));
+        var left = origin.X + point.X;
+        var top = origin.Y + point.Y;
+
+        Canvas.SetLeft(TextGhostBox, left);
+        Canvas.SetTop(TextGhostBox, top);
+        TextGhostBox.Width = boxWidth;
+        TextGhostBox.Height = line + 4;
+
+        Canvas.SetLeft(TextGhostCaret, left);
+        Canvas.SetTop(TextGhostCaret, top);
+        TextGhostCaret.Height = line;
+
+        Canvas.SetLeft(TextGhostBadge, left - 2);
+        Canvas.SetTop(TextGhostBadge, Math.Max(0, top - 19));
+
+        SetTextGhostVisible(true);
+    }
+
+    private void HideTextGhost() => SetTextGhostVisible(false);
+
+    private void SetTextGhostVisible(bool visible)
+    {
+        TextGhostBox.IsVisible = visible;
+        TextGhostCaret.IsVisible = visible;
+        TextGhostBadge.IsVisible = visible;
+        UpdateTextCursor(visible);
+    }
+
+    /// <summary>In text mode the ghost is the cursor, so the arrow gets out of the way.</summary>
+    private void UpdateTextCursor(bool overPage)
+    {
+        var wanted = overPage && _viewModel.IsTextMode && !TextEditor.IsVisible
+            ? HiddenCursor
+            : null;
+        if (!ReferenceEquals(PagesList.Cursor, wanted))
+        {
+            PagesList.Cursor = wanted;
+        }
+    }
+
+    private async Task BeginTextAtAsync(PdfPageView pageView, Point inPage)
+    {
+        if (pageView.DataContext is not PageViewModel page)
         {
             return;
         }
 
-        await _viewModel.AddFreeTextAtAsync(point.Page, point.X, point.Y);
-        _contextPoint = null;
+        // Free text is written in unrotated page space, so on a quarter-turned page it would
+        // render a quarter turn away from the page text. Refuse instead of writing that.
+        if (await _viewModel.GetPageRotationForInputAsync(page.Number) != 0)
+        {
+            _viewModel.ReportStatus("L.TextRotatedUnsupported");
+            HideTextGhost();
+            return;
+        }
+
+        var x = Math.Clamp(inPage.X, 0, Math.Max(0, pageView.Bounds.Width - 8));
+        var y = Math.Clamp(inPage.Y, 0, Math.Max(0, pageView.Bounds.Height - 8));
+        OpenTextEditor(pageView, x, y, string.Empty, isReedit: false);
+    }
+
+    /// <summary>
+    /// Double-click on an existing text annotation reopens the editor over it. Only the text
+    /// annotation is claimed; a double-click anywhere else keeps the normal word selection.
+    /// </summary>
+    private async Task TryBeginReeditAsync(PdfPageView pageView, Point inPage)
+    {
+        if (pageView.DataContext is not PageViewModel page ||
+            pageView.Bounds.Width <= 0 ||
+            pageView.Bounds.Height <= 0)
+        {
+            return;
+        }
+
+        var x = inPage.X / pageView.Bounds.Width;
+        var y = inPage.Y / pageView.Bounds.Height;
+
+        if (await _viewModel.FindTextAnnotationAsync(page.Number, x, y) is not { } hit)
+        {
+            return;
+        }
+
+        if (!await _viewModel.BeginReeditAsync(hit.Text))
+        {
+            return;
+        }
+
+        // The double-click also selected a word under the annotation; the editor owns the spot now.
+        _viewModel.ClearTextSelection();
+
+        OpenTextEditor(
+            pageView,
+            hit.Display.X * pageView.Bounds.Width,
+            hit.Display.Y * pageView.Bounds.Height,
+            hit.Text.Text,
+            isReedit: true);
+    }
+
+    private void OpenTextEditor(
+        PdfPageView pageView,
+        double pageX,
+        double pageY,
+        string text,
+        bool isReedit)
+    {
+        if (pageView.TranslatePoint(new Point(0, 0), TextLayer) is not { } origin)
+        {
+            return;
+        }
+
+        _textEditorPage = pageView;
+        HideTextGhost();
+
+        if (!isReedit)
+        {
+            _viewModel.BeginTextEditing();
+        }
+
+        var minWidth = 60 * (96.0 / 72.0) * _viewModel.Zoom;
+        TextEditor.Text = text;
+        TextEditor.MinWidth = minWidth;
+        TextEditor.MaxWidth = Math.Max(minWidth, pageView.Bounds.Width - pageX - 6);
+        TextEditor.IsVisible = true;
+        Canvas.SetLeft(TextEditor, origin.X + pageX);
+        Canvas.SetTop(TextEditor, origin.Y + pageY);
+
+        TextFormatBar.IsVisible = true;
+        LayoutTextEditor();
+
+        TextEditor.Focus();
+        TextEditor.CaretIndex = TextEditor.Text?.Length ?? 0;
+        UpdateTextCursor(overPage: false);
+    }
+
+    private void HideTextEditorChrome()
+    {
+        TextEditor.IsVisible = false;
+        TextFormatBar.IsVisible = false;
+        _textEditorPage = null;
+        _viewModel.IsTextEditing = false;
+    }
+
+    private void CloseTextEditor(bool discard)
+    {
+        HideTextEditorChrome();
+        if (discard)
+        {
+            _viewModel.CancelTextEditing();
+        }
+
+        UpdateTextCursor(overPage: false);
+    }
+
+    private void OnTextEditorSizeChanged(object? sender, SizeChangedEventArgs e) => LayoutTextEditor();
+
+    /// <summary>
+    /// Keeps the editor inside the page and the format bar near it. Driven by SizeChanged rather
+    /// than a layout-updated handler: moving the editor cannot change its size, so this settles
+    /// in one pass instead of looping.
+    /// </summary>
+    private void LayoutTextEditor()
+    {
+        if (!TextEditor.IsVisible || _textEditorPage is not { } pageView ||
+            pageView.TranslatePoint(new Point(0, 0), TextLayer) is not { } origin)
+        {
+            return;
+        }
+
+        var left = Canvas.GetLeft(TextEditor);
+        var top = Canvas.GetTop(TextEditor);
+        var width = TextEditor.Bounds.Width;
+        var height = TextEditor.Bounds.Height;
+
+        var minLeft = origin.X + 2;
+        var minTop = origin.Y + 2;
+        var maxRight = origin.X + pageView.Bounds.Width - 2;
+        var maxBottom = origin.Y + pageView.Bounds.Height - 2;
+
+        if (left + width > maxRight)
+        {
+            left = Math.Max(minLeft, maxRight - width);
+        }
+
+        if (top + height > maxBottom)
+        {
+            top = Math.Max(minTop, maxBottom - height);
+        }
+
+        if (Math.Abs(Canvas.GetLeft(TextEditor) - left) > 0.5)
+        {
+            Canvas.SetLeft(TextEditor, left);
+        }
+
+        if (Math.Abs(Canvas.GetTop(TextEditor) - top) > 0.5)
+        {
+            Canvas.SetTop(TextEditor, top);
+        }
+
+        PositionTextFormatBar(origin, pageView, left, top, height);
+    }
+
+    private void PositionTextFormatBar(
+        Point origin,
+        PdfPageView pageView,
+        double editorLeft,
+        double editorTop,
+        double editorHeight)
+    {
+        var barWidth = TextFormatBar.Bounds.Width > 0 ? TextFormatBar.Bounds.Width : 224;
+        var barHeight = TextFormatBar.Bounds.Height > 0 ? TextFormatBar.Bounds.Height : 38;
+
+        var minLeft = origin.X + 2;
+        var maxLeft = Math.Max(minLeft, origin.X + pageView.Bounds.Width - barWidth - 2);
+        var left = Math.Clamp(editorLeft, minLeft, maxLeft);
+
+        var top = editorTop - barHeight - 8;
+        if (top < origin.Y + 2)
+        {
+            top = editorTop + editorHeight + 8;
+        }
+
+        Canvas.SetLeft(TextFormatBar, left);
+        Canvas.SetTop(TextFormatBar, top);
+    }
+
+    private async Task CommitTextFromEditorAsync()
+    {
+        if (!TextEditor.IsVisible || _textEditorPage is not { } pageView ||
+            pageView.DataContext is not PageViewModel page ||
+            pageView.TranslatePoint(new Point(0, 0), TextLayer) is not { } origin ||
+            pageView.Bounds.Width <= 0 ||
+            pageView.Bounds.Height <= 0)
+        {
+            return;
+        }
+
+        var display = new PdfSearchRect(
+            Math.Clamp((Canvas.GetLeft(TextEditor) - origin.X) / pageView.Bounds.Width, 0, 1),
+            Math.Clamp((Canvas.GetTop(TextEditor) - origin.Y) / pageView.Bounds.Height, 0, 1),
+            Math.Clamp(TextEditor.Bounds.Width / pageView.Bounds.Width, 0.001, 1),
+            Math.Clamp(TextEditor.Bounds.Height / pageView.Bounds.Height, 0.001, 1));
+
+        var text = TextEditor.Text;
+        HideTextEditorChrome();
+
+        await _viewModel.CommitTextAsync(page.Number, text, display);
+        UpdateTextCursor(overPage: false);
+    }
+
+    private void OnTextCommitClick(object? sender, RoutedEventArgs e) => _ = CommitTextFromEditorAsync();
+
+    private async void OnTextDeleteClick(object? sender, RoutedEventArgs e)
+    {
+        if (!TextEditor.IsVisible)
+        {
+            return;
+        }
+
+        var wasReedit = _viewModel.IsReediting;
+        HideTextEditorChrome();
+
+        if (wasReedit)
+        {
+            await _viewModel.DeleteReeditTargetAsync();
+        }
+        else
+        {
+            _viewModel.CancelTextEditing();
+            _viewModel.ReportStatus("L.TextDiscarded");
+        }
+
+        UpdateTextCursor(overPage: false);
+    }
+
+    private void OnTextSizeDownClick(object? sender, RoutedEventArgs e) => NudgeTextSize(-1);
+
+    private void OnTextSizeUpClick(object? sender, RoutedEventArgs e) => NudgeTextSize(1);
+
+    private void OnTextSizeCycleClick(object? sender, RoutedEventArgs e)
+    {
+        var current = _viewModel.TextFontSize;
+        var next = TextSizePresets.FirstOrDefault(size => size > current + 0.01, TextSizePresets[0]);
+        _viewModel.TextFontSize = next;
+        LayoutTextEditor();
+    }
+
+    private void NudgeTextSize(double delta)
+    {
+        _viewModel.NudgeTextSize(delta);
+        LayoutTextEditor();
+    }
+
+    private void OnTextPaletteOpened(object? sender, EventArgs e)
+    {
+        if (TextColorButton.Flyout is not Flyout { Content: Control content })
+        {
+            return;
+        }
+
+        // ItemsControl containers are generated during the flyout's layout pass.
+        Dispatcher.UIThread.Post(
+            () =>
+            {
+                foreach (var button in content.GetVisualDescendants().OfType<Button>())
+                {
+                    if (button.Tag is MarkupColor color)
+                    {
+                        button.Classes.Set("selected", Equals(color, _viewModel.TextColor));
+                    }
+                }
+            },
+            DispatcherPriority.Loaded);
+    }
+
+    private void OnTextSwatchClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is Control { Tag: MarkupColor color })
+        {
+            _viewModel.SetTextColor(color);
+            TextColorButton.Flyout?.Hide();
+        }
+    }
+
+    /// <summary>
+    /// Routes a press while text mode is on. Returns true when the press was consumed; a right
+    /// click falls through so the page menu still opens at that point. Presses on the chrome are
+    /// never consumed, so the sidebar and toolbar keep working while the mode is on.
+    /// </summary>
+    private bool HandleTextModePress(PointerPressedEventArgs e)
+    {
+        var properties = e.GetCurrentPoint(this).Properties;
+
+        if (properties.IsRightButtonPressed)
+        {
+            CloseTextEditor(discard: true);
+            _viewModel.ExitTextMode();
+            return false;
+        }
+
+        if (!properties.IsLeftButtonPressed)
+        {
+            return true;
+        }
+
+        var source = e.Source as Visual;
+
+        if (TextEditor.IsVisible)
+        {
+            // The editor and its bar own their presses; marking those handled would stop the
+            // TextBox from placing its caret.
+            if (source is not null && (IsWithin(source, TextEditor) || IsWithin(source, TextFormatBar)))
+            {
+                return true;
+            }
+
+            if (source is not null && IsWithin(source, PagesList))
+            {
+                e.Handled = true;
+                _ = CommitTextFromEditorAsync();
+                return true;
+            }
+
+            return false;
+        }
+
+        var pageView = FindPageView(e.Source) ?? FindPageViewAt(e.GetPosition(this));
+        if (pageView?.DataContext is not PageViewModel)
+        {
+            return false;
+        }
+
+        var local = e.GetPosition(pageView);
+        if (new Rect(pageView.Bounds.Size).Contains(local))
+        {
+            e.Handled = true;
+            _ = BeginTextAtAsync(pageView, local);
+        }
+
+        return true;
+    }
+
+    /// <summary>True when <paramref name="visual"/> is <paramref name="ancestor"/> or inside it.</summary>
+    private static bool IsWithin(Visual? visual, Visual ancestor)
+    {
+        for (var current = visual; current is not null; current = current.GetVisualParent())
+        {
+            if (ReferenceEquals(current, ancestor))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Shows the text of the note that was clicked.</summary>
@@ -3429,6 +3912,23 @@ public partial class MainWindow : Window
 
         if (e.Key == Key.Escape)
         {
+            // Text mode owns Esc: it places what is typed, and leaves the mode when nothing is
+            // being typed. That is the only way out of the sticky mode.
+            if (TextEditor.IsVisible)
+            {
+                _ = CommitTextFromEditorAsync();
+                e.Handled = true;
+                return;
+            }
+
+            if (_viewModel.IsTextMode)
+            {
+                _viewModel.ExitTextMode();
+                HideTextGhost();
+                e.Handled = true;
+                return;
+            }
+
             if (_viewModel.IsInkMode)
             {
                 _viewModel.ToggleInkModeCommand.Execute(null);

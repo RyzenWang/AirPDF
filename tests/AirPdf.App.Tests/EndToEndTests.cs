@@ -449,12 +449,12 @@ public sealed class EndToEndTests : IDisposable
     }
 
     /// <summary>
-    /// "Add text" is the only way into the free-text annotation path, so this drives the page
-    /// menu a reader actually opens instead of the view-model method behind it. The view-model
-    /// method was implemented and tested while nothing in the window called it.
+    /// The whole placement path through the real window: the page menu arms text mode, a click on
+    /// the page opens the inline editor there, and Escape writes the annotation. The mode is
+    /// sticky, so it stays armed afterwards.
     /// </summary>
     [AvaloniaFact]
-    public async Task PageMenuAddText_WritesTheTypedTextAsAnAnnotation()
+    public async Task PageMenuAddText_PlacesTextWhereThePageIsClicked()
     {
         var document = await OpenSampleAsync();
         await WaitAsync(() => document.Pages.Count > 1 && document.Pages[0].Image is not null);
@@ -474,7 +474,7 @@ public sealed class EndToEndTests : IDisposable
             _window);
         Assert.NotNull(center);
 
-        // The right click is what records the page point the menu acts on.
+        // Right-click opens the page menu at the point; "Add text" arms the mode.
         _window.MouseDown(center!.Value, MouseButton.Right);
         _window.MouseUp(center.Value, MouseButton.Right);
         await Task.Delay(100);
@@ -490,10 +490,39 @@ public sealed class EndToEndTests : IDisposable
             .FirstOrDefault(item => Equals(item.Header, _services.Localization.T("L.AddText")));
         Assert.NotNull(addText);
 
-        _dialogs.NextText = "Typed from the page menu";
         addText!.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent, addText));
+        await WaitAsync(() => document.IsTextMode);
+        Assert.True(document.IsTextMode);
 
-        await WaitAsync(() => document.HasUnsavedAnnotations);
+        // A real menu closes itself when an item is invoked; raising the event does not, and the
+        // next press would only dismiss it.
+        menu.Close();
+        Dispatcher.UIThread.RunJobs();
+
+        // A left click on the page opens the editor exactly there.
+        _window.MouseDown(center.Value, MouseButton.Left);
+        _window.MouseUp(center.Value, MouseButton.Left);
+
+        var editor = _window.FindControl<TextBox>("TextEditor");
+        Assert.NotNull(editor);
+        await WaitAsync(() => editor!.IsVisible, 5_000);
+        Assert.True(editor!.IsVisible);
+        Assert.True(document.IsTextEditing);
+
+        editor.Text = "Typed on the page";
+        Dispatcher.UIThread.RunJobs();
+
+        // The editor has to size itself to its content: an unmeasured box would place a
+        // zero-width annotation.
+        Assert.True(editor.Bounds.Width > 20, $"editor width was {editor.Bounds.Width}");
+        Assert.True(editor.Bounds.Height > 8, $"editor height was {editor.Bounds.Height}");
+
+        // Escape places the text; the sticky mode stays armed for the next click.
+        _window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        await WaitAsync(() => !editor.IsVisible && document.HasUnsavedAnnotations, 5_000);
+
+        Assert.False(editor.IsVisible);
+        Assert.True(document.IsTextMode);
         Assert.True(document.HasUnsavedAnnotations);
 
         document.ShowAnnotationsTabCommand.Execute(null);
@@ -501,7 +530,22 @@ public sealed class EndToEndTests : IDisposable
         Assert.Contains(
             document.Annotations,
             annotation => annotation.Kind == AirPdf.Core.Models.PdfMarkupKind.FreeText &&
-                          annotation.Detail == "Typed from the page menu");
+                          annotation.Detail == "Typed on the page");
+    }
+
+    /// <summary>A second Escape, with no editor open, is the only way out of the sticky mode.</summary>
+    [AvaloniaFact]
+    public async Task TextMode_LeavesWhenEscapeIsPressedWithNoEditorOpen()
+    {
+        var document = await OpenSampleAsync();
+        await WaitAsync(() => document.Pages.Count > 0);
+
+        Assert.True(await document.BeginTextModeAsync());
+        Assert.True(document.IsTextMode);
+
+        _window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        await WaitAsync(() => !document.IsTextMode, 5_000);
+        Assert.False(document.IsTextMode);
     }
 
     [AvaloniaFact]

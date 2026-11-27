@@ -669,6 +669,51 @@ public sealed class AnnotationTests : IDisposable
         Assert.Single(await service.GetFreeTextsAsync(blank, 1));
     }
 
+    /// <summary>
+    /// The glyph colour lives in /DA rather than in a font-colour API call, so this checks the
+    /// colour actually reaches the rendered page instead of merely surviving a read-back.
+    /// </summary>
+    [Fact]
+    public async Task AddFreeText_RendersInTheChosenColour()
+    {
+        var blank = Path.Combine(_directory, "coloured-text.pdf");
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "Assets", "outline.pdf"), blank);
+
+        using var service = new PdfDocumentService();
+        await service.OpenAsync(blank);
+
+        await service.AddFreeTextAsync(
+            blank,
+            1,
+            new PdfQuad(72, 700, 430, 620),
+            "Red annotation",
+            24,
+            239,
+            83,
+            80);
+
+        using var rendered = await service.RenderPageAsync(blank, 1, 600);
+        var reddish = 0;
+        for (var y = 0; y < rendered.Height; y += 3)
+        {
+            for (var x = 0; x < rendered.Width; x += 3)
+            {
+                var colour = rendered.GetPixel(x, y);
+                if (colour.Red > 150 && colour.Red > colour.Green + 50 && colour.Red > colour.Blue + 50)
+                {
+                    reddish++;
+                }
+            }
+        }
+
+        Assert.True(reddish > 5, $"no red glyph pixels were rendered ({reddish})");
+
+        var freeText = Assert.Single(await service.GetFreeTextsAsync(blank, 1));
+        Assert.Equal(239, freeText.Red);
+        Assert.Equal(83, freeText.Green);
+        Assert.Equal(80, freeText.Blue);
+    }
+
     [Fact]
     public async Task AddHighlight_WithNoRectangles_ChangesNothing()
     {

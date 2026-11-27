@@ -213,6 +213,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _settings.ReadingPositions ??= [];
         _highlightColor = Palette[0];
         _inkColor = Palette.Single(color => color.Name == "Black");
+        _textColor = Palette.Single(color => color.Name == "Black");
         _documentSubtitle = _localization.T("L.Ready");
         _reading = new ReadingPositionController(
             _settingsService,
@@ -609,6 +610,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             _zoom = clamped;
             OnPropertyChanged();
             OnPropertyChanged(nameof(ZoomText));
+            OnPropertyChanged(nameof(TextFontSizePx));
 
             if (!_suppressPageInteraction)
             {
@@ -1551,6 +1553,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         HasMarkupUnderPointer = false;
         HasNoteUnderPointer = false;
         _noteUnderPointer = null;
+        IsContextPageRotated = false;
 
         if (!IsDocumentOpen)
         {
@@ -1566,6 +1569,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         try
         {
             var rotation = await GetRotationAsync(pageNumber);
+
+            // The page menu greys out "Add text" on a rotated page; the flag has to be set even
+            // when there is no markup under the pointer.
+            IsContextPageRotated = rotation != 0;
+
             var point = PageGeometry.ToPageQuad(
                 new PdfSearchRect(normalizedX, normalizedY, 0, 0),
                 page.WidthPoints,
@@ -1943,14 +1951,151 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
 
+    // ---------------------------------------------------------------------------------------
+    // Text annotation mode
+    //
+    // The mode is sticky, like the pen: committing one piece of text leaves the mode on so the
+    // next click starts another, and only Esc leaves it. That is why the state lives here and
+    // not inside a dialog.
+    // ---------------------------------------------------------------------------------------
+
+    public const float MinTextFontSize = 8;
+    public const float MaxTextFontSize = 48;
+    public const float DefaultTextFontSize = 12;
+
+    /// <summary>True while the reader is in text mode; the window draws the placement ghost.</summary>
+    [ObservableProperty]
+    private bool _isTextMode;
+
+    /// <summary>True while the inline editor is open, for a new piece of text or a re-edit.</summary>
+    [ObservableProperty]
+    private bool _isTextEditing;
+
+    /// <summary>Colour the next piece of text is written in.</summary>
+    [ObservableProperty]
+    private MarkupColor _textColor;
+
+    /// <summary>Point size the next piece of text is written in.</summary>
+    [ObservableProperty]
+    private double _textFontSize = DefaultTextFontSize;
+
+    /// <summary>Set while a rotated page is under the context menu: text cannot be placed there.</summary>
+    [ObservableProperty]
+    private bool _isContextPageRotated;
+
+    /// <summary>The annotation a re-edit is rewriting, if any.</summary>
+    public PdfFreeText? ReeditTarget { get; private set; }
+
+    public bool IsReediting => ReeditTarget is not null;
+
+    /// <summary>Editor font size in screen pixels at the current zoom.</summary>
+    public double TextFontSizePx => TextFontSize * (96.0 / 72.0) * Zoom;
+
+    /// <summary>The overlay canvas has to stay alive for either half of the interaction.</summary>
+    public bool IsTextOverlayVisible => IsTextMode || IsTextEditing;
+
+    public bool CanAddTextHere => IsDocumentOpen && !IsContextPageRotated;
+
+    partial void OnTextFontSizeChanged(double value) => OnPropertyChanged(nameof(TextFontSizePx));
+
+    partial void OnIsContextPageRotatedChanged(bool value) => OnPropertyChanged(nameof(CanAddTextHere));
+
+    partial void OnIsTextModeChanged(bool value) => OnPropertyChanged(nameof(IsTextOverlayVisible));
+
+    partial void OnIsTextEditingChanged(bool value) => OnPropertyChanged(nameof(IsTextOverlayVisible));
+
     /// <summary>
-    /// Asks for text and writes a free-text annotation whose top-left corner is the page
-    /// point that was right-clicked. The box is kept inside the page.
+    /// Enters text mode. A rotated page is refused with an explanation, because free text is
+    /// written in unrotated page space and would render a quarter turn away from the page text.
     /// </summary>
-    public async Task<bool> AddFreeTextAtAsync(int pageNumber, double normalizedX, double normalizedY)
+    public async Task<bool> BeginTextModeAsync()
     {
         if (!IsDocumentOpen)
         {
+            return false;
+        }
+
+        if (await GetRotationAsync(CurrentPage) != 0)
+        {
+            ShowStatus(_localization.T("L.TextRotatedUnsupported"));
+            return false;
+        }
+
+        CancelReedit();
+        IsTextMode = true;
+        ShowStatus(_localization.T("L.TextPlacementHint"));
+        return true;
+    }
+
+    /// <summary>Leaves text mode.</summary>
+    public void ExitTextMode()
+    {
+        CancelReedit();
+        IsTextEditing = false;
+        IsTextMode = false;
+        ShowStatus(_localization.T("L.TextModeExited"));
+    }
+
+    /// <summary>Leaves text mode quietly, for a tab switch or a closing document.</summary>
+    public void AbandonTextMode()
+    {
+        CancelReedit();
+        IsTextEditing = false;
+        IsTextMode = false;
+    }
+
+    public void SetTextColor(MarkupColor? color)
+    {
+        if (color is not null)
+        {
+            TextColor = color;
+        }
+    }
+
+    public void NudgeTextSize(double delta) =>
+        TextFontSize = Math.Clamp(TextFontSize + delta, MinTextFontSize, MaxTextFontSize);
+
+    /// <summary>
+    /// Starts rewriting an existing annotation. Returns false on a rotated page.
+    /// </summary>
+    public async Task<bool> BeginReeditAsync(PdfFreeText freeText)
+    {
+        if (!IsDocumentOpen || freeText.PageNumber < 1 || freeText.PageNumber > PageCount)
+        {
+            return false;
+        }
+
+        if (await GetRotationAsync(freeText.PageNumber) != 0)
+        {
+            ShowStatus(_localization.T("L.TextRotatedUnsupported"));
+            return false;
+        }
+
+        ReeditTarget = freeText;
+        TextFontSize = Math.Clamp(freeText.FontSize, MinTextFontSize, MaxTextFontSize);
+        TextColor = MatchPaletteColour(freeText.Red, freeText.Green, freeText.Blue);
+        IsTextEditing = true;
+        OnPropertyChanged(nameof(IsReediting));
+        ShowStatus(_localization.T("L.TextReeditHint"));
+        return true;
+    }
+
+    /// <summary>
+    /// Turns the inline editor into an annotation: a new one, or a rewrite of
+    /// <see cref="ReeditTarget"/>. The bounds are normalized display coordinates, which is what
+    /// the overlays already speak; the rotation-aware conversion happens here.
+    /// </summary>
+    public async Task<bool> CommitTextAsync(int pageNumber, string? text, PdfSearchRect displayBounds)
+    {
+        var trimmed = text?.Trim() ?? string.Empty;
+        if (!IsDocumentOpen)
+        {
+            return false;
+        }
+
+        if (trimmed.Length == 0)
+        {
+            ShowStatus(_localization.T("L.TextEmptyDiscarded"));
             return false;
         }
 
@@ -1962,39 +2107,62 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         try
         {
-            // The prompt is inside the try because it is awaited from an async void click
-            // handler: a dialog that throws would otherwise end the process.
-            var title = _localization.T("L.AddText");
-            var text = await _dialogs.PromptTextAsync(
-                title,
-                title,
-                _localization.T("L.TextContentLabel"),
-                string.Empty);
-
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                return false;
-            }
-
-            var rotation = await _documentService.GetPageRotationAsync(FilePath, pageNumber);
-            var displayWidth = rotation is 90 or 270 ? page.HeightPoints : page.WidthPoints;
-            var displayHeight = rotation is 90 or 270 ? page.WidthPoints : page.HeightPoints;
-
-            // Roughly 260 x 72 points, clamped to the remaining space from the click point.
-            var width = Math.Clamp(260 / Math.Max(1, displayWidth), 0.12, 0.8);
-            var height = Math.Clamp(72 / Math.Max(1, displayHeight), 0.05, 0.35);
-            var x = Math.Clamp(Math.Min(normalizedX, 1 - width), 0, 1 - width);
-            var y = Math.Clamp(Math.Min(normalizedY, 1 - height), 0, 1 - height);
-
+            var rotation = await GetRotationAsync(pageNumber);
             var bounds = PageGeometry.ToPageQuad(
-                new PdfSearchRect(x, y, width, height),
+                displayBounds,
                 page.WidthPoints,
                 page.HeightPoints,
                 rotation);
+            var (red, green, blue) = (TextColor.Red, TextColor.Green, TextColor.Blue);
 
-            var freeText = new PdfFreeText(pageNumber, bounds, text.Trim(), 12);
+            if (ReeditTarget is { } existing)
+            {
+                var updated = new PdfFreeText(
+                    pageNumber,
+                    bounds,
+                    trimmed,
+                    (float)TextFontSize,
+                    red,
+                    green,
+                    blue);
+
+                if (SameTextAnnotation(existing, updated))
+                {
+                    CancelReedit();
+                    IsTextEditing = false;
+                    ShowStatus(_localization.T("L.TextReeditUnchanged"));
+                    return false;
+                }
+
+                if (!await _documentService.UpdateFreeTextAsync(FilePath, existing, updated))
+                {
+                    SetError(_localization.T("L.ErrorEditFailed"));
+                    return false;
+                }
+
+                PushStep(FreeTextUpdatedStep(existing, updated));
+                CancelReedit();
+                IsTextEditing = false;
+                HasUnsavedAnnotations = true;
+                RenderPage(pageNumber);
+                RefreshAnnotationsIfOpen();
+                ShowStatus(_localization.T("L.TextUpdated"));
+                return true;
+            }
+
+            var freeText = new PdfFreeText(
+                pageNumber,
+                bounds,
+                trimmed,
+                (float)TextFontSize,
+                red,
+                green,
+                blue);
+
             await AddFreeTextAsync(freeText);
             PushStep(FreeTextAddedStep(freeText));
+            AddNewAnnotationsToSidebar([new PdfMarkup(PdfMarkupKind.FreeText, FreeText: freeText)]);
+            IsTextEditing = false;
             HasUnsavedAnnotations = true;
             ShowStatus(_localization.T("L.TextAdded"));
             return true;
@@ -2006,11 +2174,162 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         catch (Exception unexpected)
         {
-            CrashLog.Write("AddFreeText", unexpected);
+            CrashLog.Write("CommitText", unexpected);
             SetError(_localization.T("L.ErrorEditFailed"));
             return false;
         }
     }
+
+    /// <summary>Deletes the annotation a re-edit is working on.</summary>
+    public async Task<bool> DeleteReeditTargetAsync()
+    {
+        if (ReeditTarget is not { } target)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (!await _documentService.RemoveFreeTextMatchingAsync(FilePath, target))
+            {
+                SetError(_localization.T("L.ErrorEditFailed"));
+                CancelReedit();
+                IsTextEditing = false;
+                return false;
+            }
+
+            PushStep(FreeTextRemovedStep(target));
+            CancelReedit();
+            IsTextEditing = false;
+            HasUnsavedAnnotations = true;
+            RefreshAnnotationsIfOpen();
+            ShowStatus(_localization.T("L.TextDeleted"));
+            return true;
+        }
+        catch (PdfDocumentException failure)
+        {
+            SetError(_localization.GetPdfFailureMessage(failure.Failure));
+            return false;
+        }
+        catch (Exception unexpected)
+        {
+            CrashLog.Write("DeleteText", unexpected);
+            SetError(_localization.T("L.ErrorEditFailed"));
+            return false;
+        }
+    }
+
+    /// <summary>Closes the editor without writing anything; a re-edit keeps its annotation.</summary>
+    public void CancelTextEditing()
+    {
+        CancelReedit();
+        IsTextEditing = false;
+    }
+
+    /// <summary>The view opens the editor; it owns the visual, this flag only drives visibility.</summary>
+    public void BeginTextEditing() => IsTextEditing = true;
+
+    /// <summary>Shows a catalog message in the status bar for a failure the view detected.</summary>
+    public void ReportStatus(string messageKey) => ShowStatus(_localization.T(messageKey));
+
+    /// <summary>
+    /// Finds the text annotation under a point on a page, together with its display rectangle so
+    /// the window can reopen the inline editor exactly over it.
+    /// </summary>
+    public async Task<TextAnnotationHit?> FindTextAnnotationAsync(
+        int pageNumber,
+        double normalizedX,
+        double normalizedY)
+    {
+        if (!IsDocumentOpen || pageNumber < 1 || pageNumber > PageCount)
+        {
+            return null;
+        }
+
+        var page = Pages.FirstOrDefault(candidate => candidate.Number == pageNumber);
+        if (page is null)
+        {
+            return null;
+        }
+
+        var rotation = await GetRotationAsync(pageNumber);
+        if (rotation != 0)
+        {
+            return null;
+        }
+
+        var point = PageGeometry.ToPageQuad(
+            new PdfSearchRect(normalizedX, normalizedY, 0, 0),
+            page.WidthPoints,
+            page.HeightPoints,
+            rotation);
+
+        foreach (var markup in await GetMarkupAsync(pageNumber))
+        {
+            if (markup.Kind != PdfMarkupKind.FreeText ||
+                markup.FreeText is not { } freeText ||
+                !HitTest(markup, point.Left, point.Top))
+            {
+                continue;
+            }
+
+            var display = PageGeometry.ToDisplayRect(
+                freeText.Bounds.Left,
+                freeText.Bounds.Top,
+                freeText.Bounds.Right,
+                freeText.Bounds.Bottom,
+                page.WidthPoints,
+                page.HeightPoints,
+                rotation);
+
+            return new TextAnnotationHit(freeText, display);
+        }
+
+        return null;
+    }
+
+    /// <summary>Exposed for the view, which asks before it offers text placement on a page.</summary>
+    public Task<int> GetPageRotationForInputAsync(int pageNumber) => GetRotationAsync(pageNumber);
+
+    /// <summary>The free-text annotations currently on a page, as the resident session sees them.</summary>
+    public Task<IReadOnlyList<PdfFreeText>> GetFreeTextsAsync(int pageNumber) =>
+        _documentService.GetFreeTextsAsync(FilePath, pageNumber);
+
+    private void CancelReedit()
+    {
+        if (ReeditTarget is null)
+        {
+            return;
+        }
+
+        ReeditTarget = null;
+        OnPropertyChanged(nameof(IsReediting));
+    }
+
+    private MarkupColor MatchPaletteColour(byte red, byte green, byte blue) =>
+        Palette.FirstOrDefault(color => color.Red == red && color.Green == green && color.Blue == blue)
+        ?? new MarkupColor("Custom", red, green, blue);
+
+    private static bool SameTextAnnotation(PdfFreeText left, PdfFreeText right) =>
+        string.Equals(left.Text, right.Text, StringComparison.Ordinal) &&
+        Math.Abs(left.FontSize - right.FontSize) < 0.01 &&
+        left.Red == right.Red &&
+        left.Green == right.Green &&
+        left.Blue == right.Blue;
+
+    /// <summary>
+    /// Refreshes the Markup tab when it is on screen, because an edit changes an existing row
+    /// rather than appending one.
+    /// </summary>
+    private void RefreshAnnotationsIfOpen()
+    {
+        _annotationsDirty = true;
+        if (IsAnnotationsTabSelected && !IsLoadingAnnotations)
+        {
+            _ = LoadAnnotationsAsync();
+        }
+    }
+
     private bool CanHighlightSelection() => IsDocumentOpen && HasSelection && !IsBusy;
 
     /// <summary>Writes the document, annotations included, to a file the reader chooses.</summary>
@@ -2390,6 +2709,27 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         },
         Redo: async () => await AddFreeTextAsync(freeText));
 
+    /// <summary>A rewrite is undone by rewriting it back, so the annotation keeps its identity.</summary>
+    private UndoStep FreeTextUpdatedStep(PdfFreeText before, PdfFreeText after) => new(
+        Undo: async () =>
+        {
+            await _documentService.UpdateFreeTextAsync(FilePath, after, before);
+            RenderPage(before.PageNumber);
+        },
+        Redo: async () =>
+        {
+            await _documentService.UpdateFreeTextAsync(FilePath, before, after);
+            RenderPage(after.PageNumber);
+        });
+
+    private UndoStep FreeTextRemovedStep(PdfFreeText freeText) => new(
+        Undo: async () => await AddFreeTextAsync(freeText),
+        Redo: async () =>
+        {
+            await _documentService.RemoveFreeTextMatchingAsync(FilePath, freeText);
+            RenderPage(freeText.PageNumber);
+        });
+
     private async Task AddHighlightAsync(PdfHighlight highlight)
     {
         await _documentService.AddHighlightAsync(
@@ -2456,7 +2796,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             freeText.PageNumber,
             freeText.Bounds,
             freeText.Text,
-            freeText.FontSize);
+            freeText.FontSize,
+            freeText.Red,
+            freeText.Green,
+            freeText.Blue);
         RenderPage(freeText.PageNumber);
     }
 
@@ -3583,6 +3926,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // The caches are keyed by page number, so they cannot outlive the document.
         InvalidateMarkupCache();
         _rotationCache.Clear();
+        AbandonTextMode();
         CancelSafely(_annotationsCancellation);
         _annotationsCancellation = null;
         _annotationsVersion++;
@@ -4067,6 +4411,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsSidebarShown));
         OnPropertyChanged(nameof(CanGoPrevious));
         OnPropertyChanged(nameof(CanGoNext));
+        OnPropertyChanged(nameof(CanAddTextHere));
     }
 
     partial void OnIsSidebarVisibleChanged(bool value) => OnPropertyChanged(nameof(IsSidebarShown));

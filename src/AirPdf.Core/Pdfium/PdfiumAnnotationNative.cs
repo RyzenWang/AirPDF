@@ -131,8 +131,10 @@ internal static partial class PdfiumNative
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_SetColor")]
     internal static extern int AnnotSetColor(IntPtr annot, int colorType, uint red, uint green, uint blue, uint alpha);
 
-    [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_SetFontColor")]
-    internal static extern int AnnotSetFontColor(IntPtr annot, uint red, uint green, uint blue, uint alpha);
+    // FPDFAnnot_SetFontColor is deliberately not bound: its FPDF_COLOR argument is not the
+    // (r, g, b, a) shape this file would have declared, and calling it through a wrong signature
+    // faults inside PDFium. A FreeText annotation carries its glyph colour in /DA anyway, which
+    // WriteFreeTextAppearance writes, so nothing needs it.
 
     [DllImport(Library, CallingConvention = CallingConvention.Cdecl, EntryPoint = "FPDFAnnot_SetFlags")]
     internal static extern int AnnotSetFlags(IntPtr annot, int flags);

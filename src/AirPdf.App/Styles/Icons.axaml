@@ -16,6 +16,7 @@
   <StreamGeometry x:Key="IconMinus">M5 12h14</StreamGeometry>
   <StreamGeometry x:Key="IconPlus">M12 5v14M5 12h14</StreamGeometry>
   <StreamGeometry x:Key="IconClose">M18 6L6 18M6 6l12 12</StreamGeometry>
+  <StreamGeometry x:Key="IconTrash">M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6</StreamGeometry>
   <StreamGeometry x:Key="IconFitWidth">M3 12h18M7 8l-4 4 4 4M17 8l4 4-4 4</StreamGeometry>
   <StreamGeometry x:Key="IconFitPage">M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3</StreamGeometry>
   <StreamGeometry x:Key="IconActualSize">M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3M9 12h6M12 9v6</StreamGeometry>

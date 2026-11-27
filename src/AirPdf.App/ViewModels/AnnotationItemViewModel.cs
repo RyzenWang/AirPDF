@@ -6,6 +6,12 @@ namespace AirPdf.App.ViewModels;
 /// <summary>Where a markup-list click should scroll: page plus normalized display bounds.</summary>
 public sealed record MarkupNavigationPoint(int PageNumber, PdfSearchRect Bounds);
 
+/// <summary>
+/// A text annotation found under the pointer, with the display rectangle the inline editor has
+/// to reopen over.
+/// </summary>
+public sealed record TextAnnotationHit(PdfFreeText Text, PdfSearchRect Display);
+
 /// <summary>One row in the sidebar's markup list.</summary>
 public sealed class AnnotationItemViewModel
 {

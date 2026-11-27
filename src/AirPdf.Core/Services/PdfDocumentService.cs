@@ -879,6 +879,9 @@ public sealed class PdfDocumentService : IDisposable
         PdfQuad bounds,
         string text,
         float fontSize = 12,
+        byte red = 0,
+        byte green = 0,
+        byte blue = 0,
         CancellationToken cancellationToken = default)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(pageNumber, 1);
@@ -893,7 +896,41 @@ public sealed class PdfDocumentService : IDisposable
                 try
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    ResidentSession(fullPath).AddFreeText(pageNumber, bounds, text ?? string.Empty, fontSize);
+                    ResidentSession(fullPath)
+                        .AddFreeText(pageNumber, bounds, text ?? string.Empty, fontSize, red, green, blue);
+                }
+                finally
+                {
+                    RenderGate.Release();
+                }
+            },
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Rewrites an existing free-text annotation. Returns false when the annotation is no longer
+    /// on the page, which is what a second edit after an undo would look like.
+    /// </summary>
+    public Task<bool> UpdateFreeTextAsync(
+        string filePath,
+        PdfFreeText existing,
+        PdfFreeText updated,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(existing);
+        ArgumentNullException.ThrowIfNull(updated);
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var fullPath = NormalizePath(filePath);
+
+        return Task.Run(
+            async () =>
+            {
+                await RenderGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return ResidentSession(fullPath).UpdateFreeText(existing.PageNumber, existing, updated);
                 }
                 finally
                 {

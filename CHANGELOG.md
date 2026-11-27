@@ -23,10 +23,16 @@ semantic versioning once it reaches 1.0.
   across tab switches.
 - New markups are appended to an open Markup tab instead of rescanning the whole document;
   undo/redo only mark the list dirty for the next tab activation.
-- The page menu has an **Add text** item: it asks for the text and writes a text annotation at
-  the point that was right-clicked, with the same undo, save, and Markup-tab behaviour as the
-  other annotations. The annotation could be written, undone, and listed before, but nothing in
-  the window could create one.
+- The page menu has an **Add text** item, and text is placed on the page instead of typed into a
+  dialog: the pointer becomes a T marker with a live preview of the box, a click opens an inline
+  editor at that spot, and the format bar above it sets the colour and the point size. The mode
+  is sticky, so the next click writes another piece until Esc leaves it; Esc places the text,
+  Enter starts a new line, and the bin discards a draft or deletes the annotation being edited.
+- Double-clicking a text annotation reopens the same editor over it. The wording, colour and size
+  can be changed in place, and each rewrite is a single undo step.
+- Text annotations carry their own colour and no longer paint a white box behind themselves, and
+  "Add text" is disabled on a rotated page, where free text would render a quarter turn away from
+  the page text.
 
 ### Fixed
 
