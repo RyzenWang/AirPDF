@@ -1084,7 +1084,7 @@
                         BorderThickness="1" />
                 <Button.Flyout>
                   <Flyout Placement="Bottom" Opened="OnTextPaletteOpened">
-                    <ItemsControl ItemsSource="{Binding Palette}" Width="172">
+                    <ItemsControl ItemsSource="{Binding TextPalette}" Width="172">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                           <WrapPanel />
