@@ -1941,23 +1941,13 @@ public sealed class MainWindowViewModelTests : IDisposable
         /// <summary>Text the next prompt returns; null simulates the reader cancelling.</summary>
         public string? NextText { get; set; }
 
-        /// <summary>Makes the text prompt fail, as a dialog that cannot open would.</summary>
-        public bool PromptThrows { get; set; }
-
         /// <summary>Path the save picker returns; null simulates the reader cancelling.</summary>
         public string? NextSavePath { get; set; }
 
         public Task<string?> PickSavePathAsync(string suggestedName) => Task.FromResult(NextSavePath);
 
-        public Task<string?> PromptTextAsync(string title, string heading, string fieldLabel, string initialValue)
-        {
-            if (PromptThrows)
-            {
-                throw new InvalidOperationException("The text prompt failed.");
-            }
-
-            return Task.FromResult(NextText);
-        }
+        public Task<string?> PromptTextAsync(string title, string heading, string fieldLabel, string initialValue) =>
+            Task.FromResult(NextText);
 
         /// <summary>What the unsaved-changes prompt returns.</summary>
         public UnsavedChangesChoice NextUnsavedChoice { get; set; } = UnsavedChangesChoice.Cancel;
