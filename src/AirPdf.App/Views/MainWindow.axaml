@@ -415,7 +415,7 @@
             <Path Classes="icon" Data="{StaticResource IconEraser}" />
           </Button>
           <!-- Text mode sits next to the pen: both are sticky markup modes, and the button stays
-               lit while the mode is on. -->
+               lit while the mode is on. The glyph is the same serif T the placement ghost shows. -->
           <Button x:Name="TextToolButton"
                   Classes="icon"
                   Classes.active="{Binding IsTextMode}"
@@ -423,7 +423,13 @@
                   IsVisible="{Binding IsDocumentOpen}"
                   AutomationProperties.Name="{DynamicResource L.AddText}"
                   ToolTip.Tip="{DynamicResource L.AddText}">
-            <Path Classes="icon" Data="{StaticResource IconText}" />
+            <TextBlock Text="T"
+                       FontFamily="Georgia, Segoe UI, serif"
+                       FontSize="17"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextPrimaryBrush}"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center" />
           </Button>
           <Border Width="1" Height="19" Background="{DynamicResource BorderBrush}" Margin="8,0" VerticalAlignment="Center" />
 

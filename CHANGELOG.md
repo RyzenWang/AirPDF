@@ -33,8 +33,13 @@ semantic versioning once it reaches 1.0.
 - Text annotations carry their own colour and no longer paint a white box behind themselves, and
   "Add text" is disabled on a rotated page, where free text would render a quarter turn away from
   the page text.
-- The toolbar has a text button next to the pen, so the mode can be entered without the page
-  menu. It stays lit while text mode is on, like the pen does.
+- Text annotations are drawn as page text objects with an embedded font instead of leaving it to
+  PDFium's generated appearance. PDFium only builds that appearance from the standard Latin
+  fonts, so Chinese text used to come out as an empty frame; it also always drew its own thin
+  border, which is gone now. The annotation stays in the file as a hidden metadata carrier, so
+  text is still listed, re-editable and removable.
+- The toolbar has a text button next to the pen, drawn with the same serif T as the placement
+  marker, so the mode can be entered without the page menu. It stays lit while text mode is on.
 - A new piece of text starts in a colour that can be read on the page under the click: white over
   a dark area, black over a light one. Picking a colour in the format bar overrides it for the
   rest of that session.

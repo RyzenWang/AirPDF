@@ -31,6 +31,7 @@ public sealed partial class PdfiumDocument : IDisposable
     private readonly PdfiumNative.FileAccess _fileAccess;
 
     private IntPtr _handle;
+
     private bool _disposed;
 
     private PdfiumDocument(
@@ -750,6 +751,8 @@ public sealed partial class PdfiumDocument : IDisposable
         }
 
         _disposed = true;
+
+        ReleaseTextFont();
 
         if (_handle != IntPtr.Zero)
         {

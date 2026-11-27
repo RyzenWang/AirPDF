@@ -346,26 +346,28 @@ public sealed partial class PdfiumDocument
                 throw new PdfDocumentException(PdfFailure.Unsupported, "This page does not accept annotations.");
             }
 
+            // A sub-pixel rectangle on purpose: the annotation carries metadata only, and its
+            // generated appearance is exactly the empty frame that non-Latin text leaves behind.
             var rect = new PdfiumNative.FsRectF
             {
-                Left = (float)bounds.Left,
-                Top = (float)bounds.Top,
-                Right = (float)bounds.Right,
-                Bottom = (float)bounds.Bottom
+                Left = 0f,
+                Bottom = 0f,
+                Right = 0.01f,
+                Top = 0.01f
             };
 
             PdfiumNative.AnnotSetRect(annot, ref rect);
             PdfiumNative.AnnotSetStringValue(annot, "Contents", text);
             WriteFreeTextAppearance(annot, fontSize, red, green, blue);
 
-            // No /C fill: the text sits straight on the page instead of on a white patch. The
-            // zero border width is all this PDFium build offers; it still draws its own thin frame
-            // around a FreeText appearance, and making a colour fully transparent makes PDFium
-            // skip the whole annotation instead, so the frame stays.
+            // The annotation is metadata only. PDFium generates a FreeText appearance with a
+            // standard Latin font, which draws an empty frame for Chinese, and the frame cannot be
+            // switched off; the visible words are page text objects added below instead.
+            PdfiumNative.AnnotSetStringValue(annot, BoundsKey, FormatBounds(bounds));
             PdfiumNative.AnnotSetStringValue(annot, ColourKey, FormatColour(red, green, blue));
             PdfiumNative.AnnotSetBorder(annot, 0, 0, 0);
-
-            PdfiumNative.AnnotSetFlags(annot, PdfiumNative.AnnotFlagPrint);
+            AddTextObjects(page, bounds, text, fontSize, red, green, blue);
+            PdfiumNative.AnnotSetFlags(annot, PdfiumNative.AnnotFlagHidden);
         }
         finally
         {
@@ -415,10 +417,10 @@ public sealed partial class PdfiumDocument
                 {
                     var rect = new PdfiumNative.FsRectF
                     {
-                        Left = (float)updated.Bounds.Left,
-                        Top = (float)updated.Bounds.Top,
-                        Right = (float)updated.Bounds.Right,
-                        Bottom = (float)updated.Bounds.Bottom
+                        Left = 0f,
+                        Bottom = 0f,
+                        Right = 0.01f,
+                        Top = 0.01f
                     };
 
                     PdfiumNative.AnnotSetRect(annot, ref rect);
@@ -431,8 +433,25 @@ public sealed partial class PdfiumDocument
                         updated.Blue);
                     PdfiumNative.AnnotSetStringValue(
                         annot,
+                        BoundsKey,
+                        FormatBounds(updated.Bounds));
+                    PdfiumNative.AnnotSetStringValue(
+                        annot,
                         ColourKey,
                         FormatColour(updated.Red, updated.Green, updated.Blue));
+                    PdfiumNative.AnnotSetFlags(annot, PdfiumNative.AnnotFlagHidden);
+
+                    // Replace the visible words: the old objects are matched against what the
+                    // caller last read, then the new text is laid out in the new box.
+                    RemoveTextObjects(page, current.Bounds, current.Text);
+                    AddTextObjects(
+                        page,
+                        updated.Bounds,
+                        updated.Text,
+                        updated.FontSize,
+                        updated.Red,
+                        updated.Green,
+                        updated.Blue);
                     return true;
                 }
                 finally
@@ -482,6 +501,222 @@ public sealed partial class PdfiumDocument
         Math.Abs(left.Bounds.Right - right.Bounds.Right) <= 0.5 &&
         Math.Abs(left.Bounds.Bottom - right.Bounds.Bottom) <= 0.5;
 
+    // ---- visible text ----------------------------------------------------------------------
+    // PDFium generates a FreeText appearance with the standard Latin fonts only, so Chinese text
+    // comes out as an empty frame. The annotation therefore only carries the metadata (hidden, so
+    // its own appearance is never drawn) and the words are written as page text objects with an
+    // embedded font, which renders any script and leaves no frame behind.
+
+    private IntPtr _textFont = IntPtr.Zero;
+    private IntPtr _textFontData = IntPtr.Zero;
+    private int _textFontDataSize;
+
+    /// <summary>
+    /// Loads a font that covers CJK, once per document. SimHei ships with Windows; the Latin
+    /// fallbacks only matter on a machine without it.
+    /// </summary>
+    private IntPtr EnsureTextFont()
+    {
+        if (_textFont != IntPtr.Zero)
+        {
+            return _textFont;
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            return IntPtr.Zero;
+        }
+
+        foreach (var file in new[] { "simhei.ttf", "Deng.ttf", "msyh.ttc", "arial.ttf" })
+        {
+            var path = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Fonts),
+                file);
+            if (!File.Exists(path))
+            {
+                continue;
+            }
+
+            byte[] bytes;
+            try
+            {
+                bytes = File.ReadAllBytes(path);
+            }
+            catch (IOException)
+            {
+                continue;
+            }
+
+            var data = Marshal.AllocHGlobal(bytes.Length);
+            Marshal.Copy(bytes, 0, data, bytes.Length);
+
+            // PDFium keeps the buffer for the life of the font, so it is only released by
+            // ReleaseTextFont when the document goes away.
+            var font = PdfiumNative.TextLoadFont(
+                _handle,
+                data,
+                (uint)bytes.Length,
+                PdfiumNative.FontTrueType,
+                cid: 1);
+
+            if (font == IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(data);
+                continue;
+            }
+
+            _textFont = font;
+            _textFontData = data;
+            _textFontDataSize = bytes.Length;
+            return font;
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private void ReleaseTextFont()
+    {
+        _textFont = IntPtr.Zero;
+
+        if (_textFontData != IntPtr.Zero)
+        {
+            Marshal.FreeHGlobal(_textFontData);
+            _textFontData = IntPtr.Zero;
+            _textFontDataSize = 0;
+        }
+    }
+
+    /// <summary>Writes the lines of <paramref name="text"/> as page text objects inside the box.</summary>
+    private void AddTextObjects(IntPtr page, PdfQuad bounds, string text, float fontSize, byte red, byte green, byte blue)
+    {
+        var font = EnsureTextFont();
+        if (font == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var lineHeight = fontSize * 1.25;
+        var lines = SplitLines(text);
+        var baseline = bounds.Top - (fontSize * 0.8);
+
+        for (var line = 0; line < lines.Count; line++)
+        {
+            var content = lines[line];
+            if (content.Length == 0)
+            {
+                continue;
+            }
+
+            var pageObject = PdfiumNative.PageObjCreateTextObj(_handle, font, fontSize);
+            if (pageObject == IntPtr.Zero)
+            {
+                continue;
+            }
+
+            if (PdfiumNative.TextSetText(pageObject, content) == 0)
+            {
+                PdfiumNative.PageObjDestroy(pageObject);
+                continue;
+            }
+
+            PdfiumNative.PageObjSetFillColor(pageObject, red, green, blue, 255);
+            PdfiumNative.PageObjTransform(
+                pageObject,
+                1,
+                0,
+                0,
+                1,
+                bounds.Left,
+                baseline - (line * lineHeight));
+
+            // The page owns the object from here on.
+            PdfiumNative.PageInsertObject(page, pageObject);
+        }
+
+        PdfiumNative.PageGenerateContent(page);
+    }
+
+    /// <summary>Removes the page text objects that made up the given annotation.</summary>
+    private static void RemoveTextObjects(IntPtr page, PdfQuad bounds, string text)
+    {
+        var lines = SplitLines(text);
+        var removed = false;
+
+        for (var index = PdfiumNative.PageCountObjects(page) - 1; index >= 0; index--)
+        {
+            var pageObject = PdfiumNative.PageGetObject(page, index);
+            if (pageObject == IntPtr.Zero ||
+                PdfiumNative.PageObjGetType(pageObject) != PdfiumNative.PageObjText ||
+                !ObjectBelongsTo(pageObject, bounds, lines))
+            {
+                continue;
+            }
+
+            if (PdfiumNative.PageRemoveObject(page, pageObject) != 0)
+            {
+                PdfiumNative.PageObjDestroy(pageObject);
+                removed = true;
+            }
+        }
+
+        if (removed)
+        {
+            PdfiumNative.PageGenerateContent(page);
+        }
+    }
+
+    /// <summary>
+    /// True when the object's words are one of the annotation's lines and its box sits inside the
+    /// annotation rectangle. Bounds are compared with slack because PDFium recomputes them from
+    /// the content stream, which rounds.
+    /// </summary>
+    private static bool ObjectBelongsTo(IntPtr pageObject, PdfQuad bounds, IReadOnlyList<string> lines)
+    {
+        var objectText = ReadObjectText(pageObject);
+        if (objectText.Length == 0 || !lines.Contains(objectText, StringComparer.Ordinal))
+        {
+            return false;
+        }
+
+        if (PdfiumNative.PageObjGetBounds(pageObject, out var left, out var bottom, out var right, out var top) == 0)
+        {
+            return true;
+        }
+
+        return left >= bounds.Left - 4 &&
+               right <= bounds.Right + 4 &&
+               bottom >= bounds.Bottom - 6 &&
+               top <= bounds.Top + 6;
+    }
+
+    private static string ReadObjectText(IntPtr pageObject)
+    {
+        var bytes = (int)PdfiumNative.TextObjGetText(pageObject, IntPtr.Zero, IntPtr.Zero, 0);
+        if (bytes <= 2)
+        {
+            return string.Empty;
+        }
+
+        var buffer = Marshal.AllocHGlobal(bytes);
+        try
+        {
+            var written = (int)PdfiumNative.TextObjGetText(pageObject, IntPtr.Zero, buffer, (uint)bytes);
+            if (written <= 2)
+            {
+                return string.Empty;
+            }
+
+            return Marshal.PtrToStringUni(buffer, (written / 2) - 1) ?? string.Empty;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
+    private static IReadOnlyList<string> SplitLines(string text) =>
+        text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+
     /// <summary>Reads a free-text annotation back, so it can be hit-tested and undone.</summary>
     public PdfFreeText? TryReadFreeText(int pageNumber, int index)
     {
@@ -522,11 +757,16 @@ public sealed partial class PdfiumDocument
                     fontSize = parsedSize;
                 }
 
-                var bounds = new PdfQuad(
-                    Math.Min(rect.Left, rect.Right),
-                    Math.Max(rect.Top, rect.Bottom),
-                    Math.Max(rect.Left, rect.Right),
-                    Math.Min(rect.Top, rect.Bottom));
+                // The reader's box lives in a key rather than in /Rect, which is kept sub-pixel so
+                // the generated appearance cannot paint a frame. Annotations made by an older
+                // build (or another application) have no key and fall back to /Rect.
+                var bounds = TryReadBounds(ReadStringValue(annot, BoundsKey), out var stored)
+                    ? stored
+                    : new PdfQuad(
+                        Math.Min(rect.Left, rect.Right),
+                        Math.Max(rect.Top, rect.Bottom),
+                        Math.Max(rect.Left, rect.Right),
+                        Math.Min(rect.Top, rect.Bottom));
 
                 // The glyph colour lives in /DA, which PDFium does not expose as a property, so
                 // it is read back from the key this application writes. A free text made by
@@ -567,6 +807,16 @@ public sealed partial class PdfiumDocument
 
     private const string FontSizeKey = "AirPdfFontSize";
 
+    /// <summary>
+    /// The real rectangle of a text annotation, as <c>l,t,r,b</c> in page space.
+    /// </summary>
+    /// <remarks>
+    /// The visible words are page text objects, so the annotation itself must not draw: PDFium
+    /// still paints its generated appearance even when the annotation is flagged hidden, and
+    /// that appearance is the empty frame around Chinese text. Its own rectangle is therefore
+    /// sub-pixel and the box the reader sees is kept here instead.
+    /// </remarks>
+    private const string BoundsKey = "AirPdfBounds";
     /// <summary>
     /// Removes every markup annotation under a page-space point - highlight, ink, note or
     /// free text - and returns what was removed so it can be put back.
@@ -731,7 +981,13 @@ public sealed partial class PdfiumDocument
                     continue;
                 }
 
-                return PdfiumNative.PageRemoveAnnot(page, index) != 0;
+                if (PdfiumNative.PageRemoveAnnot(page, index) == 0)
+                {
+                    return false;
+                }
+
+                RemoveTextObjects(page, existing.Bounds, existing.Text);
+                return true;
             }
 
             return false;
@@ -843,6 +1099,40 @@ public sealed partial class PdfiumDocument
 
     private static string FormatColour(byte red, byte green, byte blue) =>
         string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{red},{green},{blue}");
+
+    private static string FormatBounds(PdfQuad bounds) =>
+        string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"{bounds.Left:0.###},{bounds.Top:0.###},{bounds.Right:0.###},{bounds.Bottom:0.###}");
+
+    private static bool TryReadBounds(string text, out PdfQuad bounds)
+    {
+        bounds = default;
+        if (string.IsNullOrEmpty(text))
+        {
+            return false;
+        }
+
+        var parts = text.Split(',');
+        if (parts.Length != 4)
+        {
+            return false;
+        }
+
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        const System.Globalization.NumberStyles style = System.Globalization.NumberStyles.Float;
+
+        if (!double.TryParse(parts[0], style, culture, out var left) ||
+            !double.TryParse(parts[1], style, culture, out var top) ||
+            !double.TryParse(parts[2], style, culture, out var right) ||
+            !double.TryParse(parts[3], style, culture, out var bottom))
+        {
+            return false;
+        }
+
+        bounds = new PdfQuad(left, top, right, bottom);
+        return bounds.Width > 0 && bounds.Height > 0;
+    }
     private static bool SameStrokes(IReadOnlyList<PdfInkStroke> left, IReadOnlyList<PdfInkStroke> right)
     {
         if (left.Count != right.Count)

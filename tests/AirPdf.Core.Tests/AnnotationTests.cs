@@ -714,6 +714,84 @@ public sealed class AnnotationTests : IDisposable
         Assert.Equal(80, freeText.Blue);
     }
 
+    /// <summary>
+    /// The visible words are page text objects with an embedded font, because PDFium's own
+    /// FreeText appearance uses a standard Latin font and draws an empty frame for Chinese.
+    /// </summary>
+    [Fact]
+    public async Task AddFreeText_RendersChineseTextWithoutAFrame()
+    {
+        var blank = Path.Combine(_directory, "chinese-text.pdf");
+        File.Copy(Path.Combine(AppContext.BaseDirectory, "Assets", "outline.pdf"), blank);
+
+        using var service = new PdfDocumentService();
+        await service.OpenAsync(blank);
+
+        // Tall enough that the glyphs stay clear of every edge, so the bottom edge measures a
+        // frame and nothing else.
+        var quad = new PdfQuad(90, 700, 430, 660);
+        await service.AddFreeTextAsync(blank, 1, quad, "这里需要复核", 24, 20, 20, 20);
+
+        using var rendered = await service.RenderPageAsync(blank, 1, 900);
+
+        // Interior: the glyphs have to be there.
+        var interior = CountInk(rendered, quad, 6);
+        Assert.True(interior > 200, $"the Chinese annotation rendered {interior} interior samples");
+
+        // Bottom edge: a generated appearance would draw its rectangle along it.
+        var edge = CountBottomEdgeInk(rendered, quad);
+        Assert.True(edge < 20, $"the annotation still draws a frame ({edge} samples)");
+    }
+
+    private static int CountInk(SKBitmap bitmap, PdfQuad quad, int inset)
+    {
+        var scale = bitmap.Width / 612.0;
+        var left = (int)((quad.Left + inset) * scale);
+        var right = (int)((quad.Right - inset) * scale);
+        var top = (int)((792 - quad.Top + inset) * scale);
+        var bottom = (int)((792 - quad.Bottom - inset) * scale);
+
+        var count = 0;
+        for (var y = top; y <= bottom; y++)
+        {
+            for (var x = left; x <= right; x++)
+            {
+                if (IsInk(bitmap, x, y))
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static int CountBottomEdgeInk(SKBitmap bitmap, PdfQuad quad)
+    {
+        var scale = bitmap.Width / 612.0;
+        var left = (int)(quad.Left * scale);
+        var right = (int)(quad.Right * scale);
+        var bottom = (int)((792 - quad.Bottom) * scale);
+
+        var count = 0;
+        for (var x = left; x <= right; x++)
+        {
+            for (var y = bottom - 1; y <= bottom + 1; y++)
+            {
+                if (IsInk(bitmap, x, y))
+                {
+                    count++;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static bool IsInk(SKBitmap bitmap, int x, int y) =>
+        x >= 0 && y >= 0 && x < bitmap.Width && y < bitmap.Height &&
+        bitmap.GetPixel(x, y).Red < 160 && bitmap.GetPixel(x, y).Green < 160;
+
     [Fact]
     public async Task AddHighlight_WithNoRectangles_ChangesNothing()
     {

@@ -762,7 +762,7 @@ public sealed class MainWindowViewModelTests : IDisposable
             context.ViewModel.SetTextColor(blue);
             context.ViewModel.TextFontSize = 20;
 
-            Assert.True(await context.ViewModel.CommitTextAsync(1, "second", display));
+            Assert.True(await context.ViewModel.CommitTextAsync(1, "second", display), context.ViewModel.ErrorMessage);
             Assert.False(context.ViewModel.IsReediting);
             Assert.False(context.ViewModel.IsTextEditing);
             Assert.False(context.ViewModel.IsTextMode);
